@@ -81,8 +81,23 @@ set with the keyboard.
 
 Pre-built binaries for Linux, Windows, and macOS are published on the
 [Releases page](https://github.com/frathe/imagedrop/releases) — no Go
-toolchain required. See [Building](#building) below to build from source
-instead.
+toolchain required. macOS builds are published for both Apple Silicon
+(`image_drop-macos-arm64.zip`) and Intel (`image_drop-macos-x86_64.zip`); grab
+the one matching your Mac. See [Building](#building) below to build from
+source instead.
+
+### macOS: "app is damaged" warning
+
+![macOS dialog reading "Image Drop.app" is damaged and can't be opened. You should move it to the Bin.](assets/gatekeeper-warning.png)
+
+The release build isn't signed with an Apple Developer ID or notarized, so
+Gatekeeper quarantines it after download and shows this message. The app
+isn't actually corrupted — to open it anyway:
+
+- Right-click (Control-click) `Image Drop.app` → **Open** → confirm in the
+  dialog that appears, or
+- Run `xattr -cr "/path/to/Image Drop.app"` in Terminal to clear the
+  quarantine flag, then open it normally.
 
 ## Requirements
 
