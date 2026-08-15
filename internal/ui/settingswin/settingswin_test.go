@@ -32,15 +32,17 @@ type fakeHost struct {
 	mergeMode    bool
 	slideShuffle bool
 	slideInt     time.Duration
-	infoVisible  bool
 	maxScan      int
+	maxWinW      float32
+	maxWinH      float32
 
 	sortModeCalls     []filesort.Mode
 	mergeModeCalls    []bool
 	slideShuffleCalls []bool
 	slideIntCalls     []time.Duration
-	infoVisibleCalls  []bool
 	maxScanCalls      []int
+	maxWinWCalls      []float32
+	maxWinHCalls      []float32
 }
 
 func (f *fakeHost) SortMode() filesort.Mode { return f.sortMode }
@@ -63,13 +65,18 @@ func (f *fakeHost) SetSlideInterval(d time.Duration) {
 	f.slideInt = d
 	f.slideIntCalls = append(f.slideIntCalls, d)
 }
-func (f *fakeHost) InfoVisible() bool { return f.infoVisible }
-func (f *fakeHost) SetInfoVisible(b bool) {
-	f.infoVisible = b
-	f.infoVisibleCalls = append(f.infoVisibleCalls, b)
+func (f *fakeHost) MaxScan() int            { return f.maxScan }
+func (f *fakeHost) SetMaxScan(n int)        { f.maxScan = n; f.maxScanCalls = append(f.maxScanCalls, n) }
+func (f *fakeHost) MaxWindowWidth() float32 { return f.maxWinW }
+func (f *fakeHost) SetMaxWindowWidth(w float32) {
+	f.maxWinW = w
+	f.maxWinWCalls = append(f.maxWinWCalls, w)
 }
-func (f *fakeHost) MaxScan() int     { return f.maxScan }
-func (f *fakeHost) SetMaxScan(n int) { f.maxScan = n; f.maxScanCalls = append(f.maxScanCalls, n) }
+func (f *fakeHost) MaxWindowHeight() float32 { return f.maxWinH }
+func (f *fakeHost) SetMaxWindowHeight(h float32) {
+	f.maxWinH = h
+	f.maxWinHCalls = append(f.maxWinHCalls, h)
+}
 
 // TestShow_SeedsEveryControlFromHostWithoutRoundTripping checks both halves
 // of build's own contract: every control reflects the host's current value,
@@ -79,7 +86,7 @@ func (f *fakeHost) SetMaxScan(n int) { f.maxScan = n; f.maxScanCalls = append(f.
 func TestShow_SeedsEveryControlFromHostWithoutRoundTripping(t *testing.T) {
 	host := &fakeHost{
 		sortMode: filesort.BySize, mergeMode: true, slideShuffle: true,
-		slideInt: 42 * time.Second, infoVisible: true, maxScan: 777,
+		slideInt: 42 * time.Second, maxScan: 777, maxWinW: 1800, maxWinH: 1100,
 	}
 	w := New(testApp, host)
 
@@ -95,18 +102,21 @@ func TestShow_SeedsEveryControlFromHostWithoutRoundTripping(t *testing.T) {
 	if !w.shuffleCheck.Checked {
 		t.Error("shuffleCheck should be checked, seeded from host.SlideShuffle() = true")
 	}
-	if !w.infoCheck.Checked {
-		t.Error("infoCheck should be checked, seeded from host.InfoVisible() = true")
-	}
 	if got, want := w.intervalEntry.Text, "42"; got != want {
 		t.Errorf("intervalEntry.Text = %q, want %q", got, want)
 	}
 	if got, want := w.maxScanEntry.Text, "777"; got != want {
 		t.Errorf("maxScanEntry.Text = %q, want %q", got, want)
 	}
+	if got, want := w.maxWidthEntry.Text, "1800"; got != want {
+		t.Errorf("maxWidthEntry.Text = %q, want %q", got, want)
+	}
+	if got, want := w.maxHeightEntry.Text, "1100"; got != want {
+		t.Errorf("maxHeightEntry.Text = %q, want %q", got, want)
+	}
 
 	if len(host.sortModeCalls)+len(host.mergeModeCalls)+len(host.slideShuffleCalls)+
-		len(host.slideIntCalls)+len(host.infoVisibleCalls)+len(host.maxScanCalls) != 0 {
+		len(host.slideIntCalls)+len(host.maxScanCalls)+len(host.maxWinWCalls)+len(host.maxWinHCalls) != 0 {
 		t.Errorf("seeding the controls should not call any Set* method on the host, got calls: %+v", host)
 	}
 }
@@ -146,16 +156,12 @@ func TestChecks_ChangeCallTheMatchingSetter(t *testing.T) {
 
 	w.mergeCheck.SetChecked(true)
 	w.shuffleCheck.SetChecked(true)
-	w.infoCheck.SetChecked(true)
 
 	if len(host.mergeModeCalls) != 1 || !host.mergeModeCalls[0] {
 		t.Errorf("SetMergeMode calls = %v, want one call with true", host.mergeModeCalls)
 	}
 	if len(host.slideShuffleCalls) != 1 || !host.slideShuffleCalls[0] {
 		t.Errorf("SetSlideShuffle calls = %v, want one call with true", host.slideShuffleCalls)
-	}
-	if len(host.infoVisibleCalls) != 1 || !host.infoVisibleCalls[0] {
-		t.Errorf("SetInfoVisible calls = %v, want one call with true", host.infoVisibleCalls)
 	}
 }
 
@@ -215,6 +221,62 @@ func TestMaxScanEntry_InvalidTextIsIgnored(t *testing.T) {
 
 	if len(host.maxScanCalls) != 0 {
 		t.Errorf("SetMaxScan calls = %v, want none for invalid input", host.maxScanCalls)
+	}
+}
+
+func TestMaxWidthEntry_ValidChangeCallsSetMaxWindowWidth(t *testing.T) {
+	host := &fakeHost{}
+	w := New(testApp, host)
+	w.Show()
+	t.Cleanup(func() { w.win.Window().Close() })
+
+	w.maxWidthEntry.SetText("1600")
+
+	if len(host.maxWinWCalls) != 1 || host.maxWinWCalls[0] != 1600 {
+		t.Errorf("SetMaxWindowWidth calls = %v, want one call with 1600", host.maxWinWCalls)
+	}
+}
+
+func TestMaxWidthEntry_InvalidTextIsIgnored(t *testing.T) {
+	host := &fakeHost{}
+	w := New(testApp, host)
+	w.Show()
+	t.Cleanup(func() { w.win.Window().Close() })
+
+	for _, text := range []string{"", "abc", "-1", "0"} {
+		w.maxWidthEntry.SetText(text)
+	}
+
+	if len(host.maxWinWCalls) != 0 {
+		t.Errorf("SetMaxWindowWidth calls = %v, want none for invalid input", host.maxWinWCalls)
+	}
+}
+
+func TestMaxHeightEntry_ValidChangeCallsSetMaxWindowHeight(t *testing.T) {
+	host := &fakeHost{}
+	w := New(testApp, host)
+	w.Show()
+	t.Cleanup(func() { w.win.Window().Close() })
+
+	w.maxHeightEntry.SetText("1000")
+
+	if len(host.maxWinHCalls) != 1 || host.maxWinHCalls[0] != 1000 {
+		t.Errorf("SetMaxWindowHeight calls = %v, want one call with 1000", host.maxWinHCalls)
+	}
+}
+
+func TestMaxHeightEntry_InvalidTextIsIgnored(t *testing.T) {
+	host := &fakeHost{}
+	w := New(testApp, host)
+	w.Show()
+	t.Cleanup(func() { w.win.Window().Close() })
+
+	for _, text := range []string{"", "abc", "-1", "0"} {
+		w.maxHeightEntry.SetText(text)
+	}
+
+	if len(host.maxWinHCalls) != 0 {
+		t.Errorf("SetMaxWindowHeight calls = %v, want none for invalid input", host.maxWinHCalls)
 	}
 }
 

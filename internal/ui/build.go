@@ -226,10 +226,19 @@ func buildViewer(application fyne.App) (*viewer, fyne.Window) {
 	// maxScan falls back to the shipped default when nothing was ever
 	// saved (prefs.MaxScanFiles's zero value - see preferences.State's own
 	// comment on that field), the same zero-means-unset pattern
-	// prefs.SlideInterval already uses below.
+	// prefs.SlideInterval already uses below. maxWinW/maxWinH do the same
+	// for the window-size cap resizeToImage (load.go) enforces.
 	maxScan := defaultMaxScannedFiles
 	if prefs.MaxScanFiles > 0 {
 		maxScan = prefs.MaxScanFiles
+	}
+	maxWinW := float32(defaultMaxWindowWidth)
+	if prefs.MaxWindowWidth > 0 {
+		maxWinW = prefs.MaxWindowWidth
+	}
+	maxWinH := float32(defaultMaxWindowHeight)
+	if prefs.MaxWindowHeight > 0 {
+		maxWinH = prefs.MaxWindowHeight
 	}
 
 	view = &viewer{
@@ -252,13 +261,14 @@ func buildViewer(application fyne.App) (*viewer, fyne.Window) {
 		exifLink:      info.exifLink,
 		sortMode:      filesort.FromPref(prefs.SortMode),
 		mergeMode:     prefs.MergeMode,
-		infoVisible:   prefs.InfoVisible,
 		baseTitle:     appTitle,
 		help:          help.New(application, appTitle, assets.WelcomeWebP),
 		exif:          exifwin.New(application, func() (fyne.URI, bool) { return view.displayedFile() }),
 		imgCache:      imaging.NewImgCache(),
 		preloadSem:    make(chan struct{}, preloadConcurrency),
 		maxScan:       maxScan,
+		maxWinW:       maxWinW,
+		maxWinH:       maxWinH,
 		keyModifiers:  defaultKeyModifiers,
 	}
 

@@ -77,7 +77,8 @@ type viewer struct {
 	// settings is the Settings window (File menu) - see
 	// internal/ui/settingswin, which reaches back through the Host
 	// interface this viewer satisfies (SortMode/MergeMode/SlideShuffle/
-	// SlideInterval/InfoVisible/MaxScan and their setters).
+	// SlideInterval/MaxScan/MaxWindowWidth/MaxWindowHeight and their
+	// setters).
 	settings *settingswin.Window
 
 	// restoreLink offers to reload the file set saved when the window last
@@ -298,6 +299,13 @@ type viewer struct {
 	// var it used to be, so tests shrink it per-viewer instead of
 	// mutating a global.
 	maxScan int
+
+	// maxWinW/maxWinH cap how large the window is ever allowed to
+	// auto-grow to fit a loaded image - see resizeToImage (load.go),
+	// which never resizes past them. Fields rather than the constants
+	// they used to be, so the settings window can change them per-viewer
+	// and tests can shrink/grow them without touching a global.
+	maxWinW, maxWinH float32
 
 	// keyModifiers reports the keyboard modifiers currently held -
 	// defaultKeyModifiers (keys.go) in production, stubbed by tests (the

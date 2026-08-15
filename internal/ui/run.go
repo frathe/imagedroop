@@ -16,9 +16,6 @@ const (
 	// size of the empty drop zone
 	startW = 520.0
 	startH = 340.0
-	// never grow the window beyond this
-	maxW = 1500.0
-	maxH = 950.0
 
 	// height of the "loading next image" bar pinned to the top edge
 	loadingBarHeight = 5.0
@@ -75,8 +72,9 @@ func Run(application fyne.App, initial []fyne.URI) {
 			MergeMode:         view.mergeMode,
 			SlideInterval:     view.slides.Interval(),
 			SlideShuffle:      view.slides.Shuffle(),
-			InfoVisible:       view.infoVisible,
 			MaxScanFiles:      view.maxScan,
+			MaxWindowWidth:    view.maxWinW,
+			MaxWindowHeight:   view.maxWinH,
 			WindowSize:        view.windowSize,
 			WindowPosX:        posX,
 			WindowPosY:        posY,

@@ -1,11 +1,11 @@
 // Package settingswin is the Settings window, reachable from the File menu:
 // one place to see and change every standing preference the app has - sort
-// order, merge mode, picture-frame shuffle and interval, the info overlay,
-// and the folder-scan cap - instead of only discovering them by stumbling
-// onto their keyboard shortcuts.
+// order, merge mode, picture-frame shuffle and interval, the folder-scan
+// cap, and the window-size cap - instead of only discovering them by
+// stumbling onto their keyboard shortcuts.
 //
 // Every control applies live, through its own OnChanged, the same
-// immediate-effect behavior the S/M/I/Shift+P keys already give their own
+// immediate-effect behavior the S/M/Shift+P keys already give their own
 // preferences - there is no separate Save/Apply step and so nothing here
 // needs to track a "dirty" draft state.
 package settingswin
@@ -47,11 +47,14 @@ type Host interface {
 	SlideInterval() time.Duration
 	SetSlideInterval(time.Duration)
 
-	InfoVisible() bool
-	SetInfoVisible(bool)
-
 	MaxScan() int
 	SetMaxScan(int)
+
+	MaxWindowWidth() float32
+	SetMaxWindowWidth(float32)
+
+	MaxWindowHeight() float32
+	SetMaxWindowHeight(float32)
 }
 
 // Window is the settings panel. At most one is open at a time (widgets.
@@ -68,9 +71,10 @@ type Window struct {
 	// as fields rather than locals inside build so this package's own tests
 	// can drive them directly, the same way internal/ui/deletion's tests
 	// drive that confirmation card's widgets.
-	sortSelect                          *widget.Select
-	mergeCheck, shuffleCheck, infoCheck *widget.Check
-	intervalEntry, maxScanEntry         *widget.Entry
+	sortSelect                    *widget.Select
+	mergeCheck, shuffleCheck      *widget.Check
+	intervalEntry, maxScanEntry   *widget.Entry
+	maxWidthEntry, maxHeightEntry *widget.Entry
 }
 
 // New returns the settings window for application, reading and writing its
@@ -83,8 +87,9 @@ func New(application fyne.App, host Host) *Window {
 func (w *Window) Show() {
 	w.win.Show(w.app, lang.L("Settings"), fyne.NewSize(windowW, windowH), w.build, func() {
 		w.sortSelect = nil
-		w.mergeCheck, w.shuffleCheck, w.infoCheck = nil, nil, nil
+		w.mergeCheck, w.shuffleCheck = nil, nil
 		w.intervalEntry, w.maxScanEntry = nil, nil
+		w.maxWidthEntry, w.maxHeightEntry = nil, nil
 	})
 }
 
@@ -139,10 +144,30 @@ func (w *Window) build() fyne.CanvasObject {
 	maxScanItem := widget.NewFormItem(lang.L("Max files per folder scan"), w.maxScanEntry)
 	maxScanItem.HintText = lang.L("Caps how many images a single recursive folder scan will gather")
 
+	w.maxWidthEntry = widget.NewEntry()
+	w.maxWidthEntry.Validator = positiveInt
+	w.maxWidthEntry.Text = strconv.Itoa(int(w.host.MaxWindowWidth()))
+	w.maxWidthEntry.OnChanged = func(s string) {
+		if n, err := strconv.Atoi(s); err == nil && n > 0 {
+			w.host.SetMaxWindowWidth(float32(n))
+		}
+	}
+
+	w.maxHeightEntry = widget.NewEntry()
+	w.maxHeightEntry.Validator = positiveInt
+	w.maxHeightEntry.Text = strconv.Itoa(int(w.host.MaxWindowHeight()))
+	w.maxHeightEntry.OnChanged = func(s string) {
+		if n, err := strconv.Atoi(s); err == nil && n > 0 {
+			w.host.SetMaxWindowHeight(float32(n))
+		}
+	}
+
 	form := widget.NewForm(
 		widget.NewFormItem(lang.L("Sort order"), w.sortSelect),
 		widget.NewFormItem(lang.L("Picture-frame interval (seconds)"), w.intervalEntry),
 		maxScanItem,
+		widget.NewFormItem(lang.L("Max window width"), w.maxWidthEntry),
+		widget.NewFormItem(lang.L("Max window height"), w.maxHeightEntry),
 	)
 
 	w.mergeCheck = widget.NewCheck(lang.L("Merge newly dropped files into the current set"), w.host.SetMergeMode)
@@ -151,8 +176,5 @@ func (w *Window) build() fyne.CanvasObject {
 	w.shuffleCheck = widget.NewCheck(lang.L("Shuffle picture-frame order"), w.host.SetSlideShuffle)
 	w.shuffleCheck.Checked = w.host.SlideShuffle()
 
-	w.infoCheck = widget.NewCheck(lang.L("Show info overlay"), w.host.SetInfoVisible)
-	w.infoCheck.Checked = w.host.InfoVisible()
-
-	return container.NewPadded(container.NewVBox(form, widget.NewSeparator(), w.mergeCheck, w.shuffleCheck, w.infoCheck))
+	return container.NewPadded(container.NewVBox(form, widget.NewSeparator(), w.mergeCheck, w.shuffleCheck))
 }

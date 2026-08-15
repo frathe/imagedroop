@@ -58,7 +58,7 @@ func (v *viewer) applyRotationLayout() {
 
 	if !v.slides.Active() {
 		v.undoGridMaximize()
-		resizeToImage(v.win, v.img.Image.Bounds())
+		resizeToImage(v.win, v.img.Image.Bounds(), v.maxWinW, v.maxWinH)
 	}
 
 	v.updateInfoOverlay()

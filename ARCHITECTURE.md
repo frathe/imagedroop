@@ -34,7 +34,7 @@ interface.
 
 | File(s) | Responsibility |
 |---|---|
-| `run.go` | `Run` — the only exported symbol: builds the window, wires the startup drop (CLI arguments) and the shutdown save of session + preferences, then hands control to Fyne's event loop. Also the app-level constants (`appTitle`, the window size floors/caps) |
+| `run.go` | `Run` — the only exported symbol: builds the window, wires the startup drop (CLI arguments) and the shutdown save of session + preferences, then hands control to Fyne's event loop. Also the app-level constants (`appTitle`, the drop-zone size floor `startW`/`startH` — the window-size *ceiling* is `defaultMaxWindowWidth`/`defaultMaxWindowHeight` in `load.go`, next to the code that enforces it) |
 | `build.go` | `buildViewer` — constructs and wires the whole UI, composed from per-feature widget constructors (`newDropzoneUI`/`newScanUI`/`newInfoOverlayUI` here, `newToast` in toast.go, each returning a small widget-cluster struct/component); also the keyboard-shortcut wiring (`wireOpenShortcuts`/`wireClipboardShortcuts`/`wireDeleteShortcut`) |
 | `windowtrack.go` | The two window-geometry trackers: `windowSizeTracker` (a layout that records the window's current size on every pass) and `startWindowPosPolling` (a background poller keeping `viewer.winPos` current via `internal/winpos`, skipped while the slideshow is full-screen; returns a stop func `Run` calls at shutdown) |
 | `testdata/` | Golden-master screenshots for the e2e suite (moved here with the code that reads them, since a relative path can't reach a parent directory) |
@@ -42,9 +42,9 @@ interface.
 | `keys.go` | `handleKeyEvent` — the single keyboard dispatcher every unmodified key press runs through |
 | `menu.go` | `buildMainMenu` — the window's menu bar: a File menu (Open Files…/Close Files/Settings…, built here) composed with `help.Menu()`'s Help menu. The one place that decides how the two compose, per the cross-feature-composition rule below |
 | `drop.go` | Drop handling and the recursive folder scan: `handleDrop`, its shared completion step `applyScanResult`, `cancelScan`, `realPathOf`, the `maxScan` cap and its `MaxScan`/`SetMaxScan` get/set (the settings window's binding) |
-| `load.go` | Loading and displaying images: `ShowImage`/`attemptLoad`/`finishLoad`/`retryAfterLoadFailure`, neighbor preloading, the GIF `animate` loop, `resizeToImage` |
+| `load.go` | Loading and displaying images: `ShowImage`/`attemptLoad`/`finishLoad`/`retryAfterLoadFailure`, neighbor preloading, the GIF `animate` loop, `resizeToImage` (takes its `maxW`/`maxH` cap as parameters rather than reading a package constant, so each call site passes the viewer's own `maxWinW`/`maxWinH`) plus `defaultMaxWindowWidth`/`defaultMaxWindowHeight` and the `MaxWindowWidth`/`SetMaxWindowWidth`/`MaxWindowHeight`/`SetMaxWindowHeight` get/set pairs (the settings window's binding) |
 | `toast.go` | The `toast` component - owns its widgets and a cancellable auto-hide lifecycle (atomic generation, per-show stop/done channels, injected duration) - plus the viewer's `showToast` wrapper |
-| `info.go` | The persistent info overlay (I key): toggle/sync/update, `formatFileSize`, `InfoVisible`/`SetInfoVisible` (the settings window's binding) |
+| `info.go` | The persistent info overlay (I key): toggle/sync/update, `formatFileSize` |
 | `sort.go` | `toggleSort` (the `S` key) and `SetSortMode`/`SortMode` (the settings window's binding — jumps directly to a mode rather than cycling, and is safe to call before any files are loaded) and the one-line `orderedFiles` binding — the orderings themselves live in `internal/filesort` |
 | `rotate.go` | View-only 90°-step image rotation (`rotateBy`/`resetRotation`/`redrawRotatedFrame`), composed with EXIF orientation at render time - never written to disk. Stays here rather than becoming a package: it writes `img.Image` on the core load/animation path, which is the app's own side of the contract `zoom/` is written against |
 | `slideshow.go` | `togglePictureFrameMode` — the five-line glue that closes the grid before handing over to `slideshow.Toggle`, i.e. the one thing the slideshow package must not know — plus `toggleSlideshowShuffle` and the `SlideShuffle`/`SetSlideShuffle`/`SlideInterval`/`SetSlideInterval` get/set pairs (the settings window's binding) |
@@ -70,7 +70,7 @@ interface, which is the honest measure of how coupled each still is.
 | `slideshow/` | Picture-frame mode (`P` key): the full-screen switch, the auto-advance goroutine, the interval `Up`/`Down` tunes, and the `winpos.Tracker` capture/restore that puts the window back where the user left it | 2-method `Host` (`FileCount`, `Advance`) — the smallest in the split; knows nothing about the grid — see below |
 | `exifwin/` | The EXIF metadata panel (`E` key and the info overlay's "Show EXIF data" link) over `internal/imaging`'s `ReadMetadata` | One `func() (fyne.URI, bool)` accessor — a single function is a smaller, more honest dependency than a one-method interface |
 | `help/` | The manual, the About box, and the Help menu, plus the embedded `manual.md`/`manual_de.md` (`currentManual` picks by system locale - German for `de*`, English otherwise). `Menu()` returns the Help `*fyne.Menu` on its own (not a whole `*fyne.MainMenu`) so `internal/ui`'s `menu.go` can compose it with the File menu | **Nothing at all** — no interface, no callbacks: everything it draws comes from `New(app, title, art)` |
-| `settingswin/` | The Settings window (File > Settings…): one `widget.Form` (sort order, picture-frame interval, folder-scan cap) plus three `widget.Check`s (merge mode, picture-frame shuffle, info overlay) below it. Every control seeds from its `Host` getter and pushes a change straight back through the matching setter on its own `OnChanged` — no Save/Apply step, no draft state of its own | `Host`: a getter/setter pair per preference (`SortMode`/`SetSortMode`, `MergeMode`/`SetMergeMode`, `SlideShuffle`/`SetSlideShuffle`, `SlideInterval`/`SetSlideInterval`, `InfoVisible`/`SetInfoVisible`, `MaxScan`/`SetMaxScan`) |
+| `settingswin/` | The Settings window (File > Settings…): one `widget.Form` (sort order, picture-frame interval, folder-scan cap, max window width, max window height) plus two `widget.Check`s (merge mode, picture-frame shuffle) below it. Every control seeds from its `Host` getter and pushes a change straight back through the matching setter on its own `OnChanged` — no Save/Apply step, no draft state of its own. The three numeric entries validate via `fyne.io/fyne/v2/data/validation.NewRegexp` (positive whole numbers only) on top of each `Host` setter's own domain clamp (e.g. `SetMaxWindowWidth` flooring at the drop-zone size) | `Host`: a getter/setter pair per preference (`SortMode`/`SetSortMode`, `MergeMode`/`SetMergeMode`, `SlideShuffle`/`SetSlideShuffle`, `SlideInterval`/`SetSlideInterval`, `MaxScan`/`SetMaxScan`, `MaxWindowWidth`/`SetMaxWindowWidth`, `MaxWindowHeight`/`SetMaxWindowHeight`) |
 | `widgets/` | Viewer-free UI mechanics shared across the packages above: `TappableArea` (the drop zone's tap target), `Singleton` (the raise-or-build lifecycle behind every secondary window), and the app's hardcoded style values (`CardRadius`, the dropzone/toast/scrim colors, `NewFocusRing`) | Nothing — it is a leaf |
 | `assets/` | `WelcomeWebP`/`PlaceholderWebP`, the two images the UI embeds. They live beside the code that draws them because `//go:embed` cannot reach a parent directory; the root `assets/` keeps the icon and README artwork, which the build consumes rather than the program | Nothing — it is a leaf |
 
@@ -142,11 +142,11 @@ glue that hands `v.savedSession` to `handleDrop`.
 ### `internal/preferences`
 
 Persists and restores standing UI preferences (sort order, merge mode, the
-picture-frame slideshow interval and shuffle order, the info overlay's
-on/off state, the folder-scan cap, window size and position) across
-launches, via Fyne's app-scoped `Preferences` store (`fyne.App.Preferences()`
-— distinct from `internal/session`'s app *cache*, which is the transient
-file-set store). Zero dependency on `viewer`.
+picture-frame slideshow interval and shuffle order, the folder-scan cap,
+the window-size cap, window size and position) across launches, via Fyne's
+app-scoped `Preferences` store (`fyne.App.Preferences()` — distinct from
+`internal/session`'s app *cache*, which is the transient file-set store).
+Zero dependency on `viewer`.
 
 | File | Responsibility |
 |---|---|
@@ -166,13 +166,15 @@ be imported here without a cycle. `internal/filesort` (stage 5) removed
 that constraint, but the string stays on purpose — it's the on-disk format,
 and keeping it decoupled from the enum's declaration order means reordering
 or renaming a mode can't silently reinterpret a saved preference.
-`filesort.FromPref`/`Mode.PrefValue` are the translation. `InfoVisible` and
-`MaxScanFiles` were added alongside the Settings window
-(`internal/ui/settingswin`) so those two standing preferences persist
-across launches the same way the others already did; `MaxScanFiles` uses
-the same zero-means-unset sentinel `WindowSize` does, since the viewer
-itself never accepts a zero scan cap (see `internal/ui/drop.go`'s
-`defaultMaxScannedFiles` fallback in `buildViewer`).
+`filesort.FromPref`/`Mode.PrefValue` are the translation. `MaxScanFiles`
+and `MaxWindowWidth`/`MaxWindowHeight` were added alongside the Settings
+window (`internal/ui/settingswin`) so those standing preferences persist
+across launches the same way the others already did; all three use the
+same zero-means-unset sentinel `WindowSize` does, since the viewer itself
+never accepts a zero cap for any of them (see `internal/ui/drop.go`'s
+`defaultMaxScannedFiles` and `internal/ui/load.go`'s
+`defaultMaxWindowWidth`/`defaultMaxWindowHeight` fallbacks in
+`buildViewer`).
 
 ### `internal/winpos`
 
@@ -332,7 +334,7 @@ the embedded FS, so they check what actually ships.
 - "How are native file-open dialogs implemented?" → `internal/filepicker/` (per-OS chooser) + `openfiles.go` (`*viewer` glue)
 - "How is the last session saved/restored?" → `internal/session/session.go` (persistence) + `session.go` (`restoreSession` glue)
 - "Where is the File menu / Settings window?" → `internal/ui/menu.go`'s `buildMainMenu` (Open Files…/Close Files/Settings…, composed with `help.Menu()`) + `internal/ui/settingswin` (the Settings window itself) + `viewer.go`'s `closeFiles` (what "Close Files" runs)
-- "How are preferences (sort order, merge mode, slideshow interval/shuffle, info overlay, folder-scan cap, window size/position) persisted?" → `internal/preferences/preferences.go` (persistence) + `internal/ui`'s `build.go` (`buildViewer`) and `windowtrack.go` (the size/position trackers) and `run.go` (the shutdown save)
+- "How are preferences (sort order, merge mode, slideshow interval/shuffle, folder-scan cap, window-size cap, window size/position) persisted?" → `internal/preferences/preferences.go` (persistence) + `internal/ui`'s `build.go` (`buildViewer`) and `windowtrack.go` (the size/position trackers) and `run.go` (the shutdown save)
 - "How is the window's on-screen position read back, since Fyne has no getter for it?" → `internal/winpos/` (per-OS native handle read + the `Tracker` that remembers the last good one) + `internal/ui/windowtrack.go`'s `startWindowPosPolling` + `internal/ui/slideshow`'s capture-restore around full-screen
 - "How does copy-image-to-clipboard work?" → `internal/clipboard/clipboard.go` (per-OS shell-out) + `clipboard.go` (`*viewer` glue)
 - "How does the grid overview / thumbnail generation work?" → `internal/imaging/thumbnail.go` (decode + downsample) + `internal/ui/grid` (`widget.GridWrap` wiring, bounded-concurrency requests, generation/cell-recycling guards)

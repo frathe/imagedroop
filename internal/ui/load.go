@@ -104,7 +104,7 @@ func (v *viewer) attemptLoad(i int, gen uint64, done chan struct{}) {
 				// resize below.
 				if gen == v.gen.Load() && !v.slides.Active() {
 					v.undoGridMaximize()
-					resizeToImage(v.win, bounds)
+					resizeToImage(v.win, bounds, v.maxWinW, v.maxWinH)
 				}
 			})
 		}
@@ -196,7 +196,7 @@ func (v *viewer) finishLoad(i int, u fyne.URI, loaded *imaging.LoadedImage, gen 
 	// asking for platform-specific trouble.
 	if !v.slides.Active() {
 		v.undoGridMaximize()
-		resizeToImage(v.win, b)
+		resizeToImage(v.win, b, v.maxWinW, v.maxWinH)
 	}
 
 	title := fmt.Sprintf("%s — %d x %d", u.Name(), b.Dx(), b.Dy())
@@ -407,7 +407,43 @@ func (v *viewer) animate(gen uint64, frames []image.Image, delays []time.Duratio
 	}
 }
 
-func resizeToImage(w fyne.Window, b image.Rectangle) {
+// defaultMaxWindowWidth/defaultMaxWindowHeight cap how large the window is
+// ever allowed to auto-grow to fit a loaded image, until the settings
+// window (internal/ui/settingswin) changes them - see the viewer's
+// maxWinW/maxWinH fields and MaxWindowWidth/MaxWindowHeight below.
+const (
+	defaultMaxWindowWidth  = 1500.0
+	defaultMaxWindowHeight = 950.0
+)
+
+// MaxWindowWidth/MaxWindowHeight report the current window-size cap - the
+// settings window's getters.
+func (v *viewer) MaxWindowWidth() float32  { return v.maxWinW }
+func (v *viewer) MaxWindowHeight() float32 { return v.maxWinH }
+
+// SetMaxWindowWidth/SetMaxWindowHeight set the window-size cap directly -
+// the settings window's binding. Floored at the drop-zone size
+// (startW/startH): resizeToImage already never shrinks the window below
+// that regardless of the cap, so a lower value would silently have no
+// effect - flooring here instead of just letting that happen keeps what
+// the settings window shows in sync with what the window actually does.
+func (v *viewer) SetMaxWindowWidth(w float32) {
+	if w < startW {
+		w = startW
+	}
+	v.maxWinW = w
+}
+
+func (v *viewer) SetMaxWindowHeight(h float32) {
+	if h < startH {
+		h = startH
+	}
+	v.maxWinH = h
+}
+
+// resizeToImage resizes w to fit b, scaled down (preserving aspect ratio)
+// so neither dimension exceeds maxW/maxH, and never below startW/startH.
+func resizeToImage(w fyne.Window, b image.Rectangle, maxW, maxH float32) {
 	width := float32(b.Dx())
 	height := float32(b.Dy())
 

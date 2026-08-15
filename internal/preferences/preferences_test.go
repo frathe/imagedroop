@@ -25,11 +25,14 @@ func TestLoadPreferences_NothingSavedReturnsDefaults(t *testing.T) {
 	if got.SlideShuffle {
 		t.Error("SlideShuffle = true, want false")
 	}
-	if got.InfoVisible {
-		t.Error("InfoVisible = true, want false")
-	}
 	if got.MaxScanFiles != 0 {
 		t.Errorf("MaxScanFiles = %d, want 0", got.MaxScanFiles)
+	}
+	if got.MaxWindowWidth != 0 {
+		t.Errorf("MaxWindowWidth = %v, want 0", got.MaxWindowWidth)
+	}
+	if got.MaxWindowHeight != 0 {
+		t.Errorf("MaxWindowHeight = %v, want 0", got.MaxWindowHeight)
 	}
 	if got.WindowSize != (fyne.Size{}) {
 		t.Errorf("WindowSize = %v, want zero value", got.WindowSize)
@@ -47,8 +50,9 @@ func TestSavePreferences_RoundTrip(t *testing.T) {
 		MergeMode:         true,
 		SlideInterval:     7 * time.Second,
 		SlideShuffle:      true,
-		InfoVisible:       true,
 		MaxScanFiles:      5000,
+		MaxWindowWidth:    1800,
+		MaxWindowHeight:   1100,
 		WindowSize:        fyne.NewSize(640, 480),
 		WindowPosX:        120,
 		WindowPosY:        340,
@@ -93,6 +97,18 @@ func TestSavePreferences_ZeroMaxScanFilesDoesNotOverwritePreviouslySaved(t *test
 
 	if got := Load(app).MaxScanFiles; got != 500 {
 		t.Errorf("MaxScanFiles = %d, want 500 (should survive a zero-value Save)", got)
+	}
+}
+
+func TestSavePreferences_ZeroMaxWindowSizeDoesNotOverwritePreviouslySaved(t *testing.T) {
+	app := test.NewApp()
+
+	Save(app, State{MaxWindowWidth: 1600, MaxWindowHeight: 1000})
+	Save(app, State{MaxWindowWidth: 0, MaxWindowHeight: 0})
+
+	got := Load(app)
+	if got.MaxWindowWidth != 1600 || got.MaxWindowHeight != 1000 {
+		t.Errorf("MaxWindowWidth/Height = %v/%v, want 1600/1000 (should survive a zero-value Save)", got.MaxWindowWidth, got.MaxWindowHeight)
 	}
 }
 
