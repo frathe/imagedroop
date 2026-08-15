@@ -233,6 +233,14 @@ Makefile              Build, package, and dev-workflow tasks
 ARCHITECTURE.md       Package map - start here to find anything
 ```
 
+## Contributing
+
+Bug reports, feature requests, and pull requests are welcome — see
+[CONTRIBUTING.md](.github/CONTRIBUTING.md) for how to get set up and what CI
+checks for. This project follows a
+[Code of Conduct](.github/CODE_OF_CONDUCT.md). Found a security issue? See
+[SECURITY.md](.github/SECURITY.md) instead of opening a public issue.
+
 ## License
 
 MIT — see [LICENSE](LICENSE). Third-party dependencies are listed with their
