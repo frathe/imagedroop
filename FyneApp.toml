@@ -1,0 +1,8 @@
+[Details]
+Name = "Image Drop"
+ID = "image_drop"
+Version = "0.1.0"
+Build = 252
+
+[Migrations]
+fyneDo = true

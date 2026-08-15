@@ -1,0 +1,5 @@
+bin/
+.DS_Store
+fyne-cross/
+internal/ui/testdata/failed/
+.idea

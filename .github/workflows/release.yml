@@ -1,0 +1,95 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Install fyne CLI
+        run: go install fyne.io/fyne/v2/cmd/fyne@latest
+
+      - name: Package macOS app
+        run: make package-mac
+
+      - name: Archive macOS app bundle
+        run: |
+          cd bin
+          zip -r -y "image_drop-macos-$(uname -m).zip" "Image Drop.app"
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: image_drop-macos
+          path: bin/image_drop-macos-*.zip
+          if-no-files-found: error
+
+  build-cross:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache-dependency-path: go.sum
+
+      - name: Install fyne-cross CLI
+        run: go install github.com/fyne-io/fyne-cross@latest
+
+      - name: Package Windows binary
+        run: make package-windows
+
+      - name: Package Linux binaries
+        run: make package-linux
+
+      - name: Archive artifacts
+        run: |
+          cd bin
+          zip "image_drop-windows-amd64.zip" "image_drop.exe"
+          for arch in amd64 arm64; do
+            tar -czf "image_drop-linux-$arch.tar.gz" "image_drop-linux-$arch"
+          done
+
+      - name: Upload Windows/Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: image_drop-cross
+          path: |
+            bin/image_drop-windows-amd64.zip
+            bin/image_drop-linux-amd64.tar.gz
+            bin/image_drop-linux-arm64.tar.gz
+          if-no-files-found: error
+
+  release:
+    needs: [build-macos, build-cross]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true

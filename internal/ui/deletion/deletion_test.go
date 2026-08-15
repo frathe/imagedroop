@@ -1,0 +1,276 @@
+package deletion
+
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/storage"
+	"fyne.io/fyne/v2/test"
+)
+
+func TestMain(m *testing.M) {
+	// The confirmation card is built from real widgets, so these need an
+	// app for the theme and driver - but never a window: everything below
+	// drives the component directly.
+	test.NewApp()
+	os.Exit(m.Run())
+}
+
+// fakeHost records what the confirmation asked the app to do. It is the
+// whole point of Host being a consumer-side interface: the state machine
+// can be driven, and every effect observed, without a viewer, a window, or
+// a decode.
+type fakeHost struct {
+	files []fyne.URI
+	index int
+
+	removed  []int
+	shown    []int
+	toasts   []string
+	emptied  []string
+	repaints int
+}
+
+func (f *fakeHost) CurrentFile() (fyne.URI, int, bool) {
+	if len(f.files) == 0 {
+		return nil, 0, false
+	}
+
+	return f.files[f.index], f.index, true
+}
+
+func (f *fakeHost) RemoveFile(i int) {
+	f.removed = append(f.removed, i)
+	f.files = append(f.files[:i], f.files[i+1:]...)
+	if f.index >= len(f.files) {
+		f.index = 0
+	}
+}
+
+func (f *fakeHost) ShowImage(i int)              { f.shown = append(f.shown, i) }
+func (f *fakeHost) ShowToast(msg string)         { f.toasts = append(f.toasts, msg) }
+func (f *fakeHost) ShowEmptyStateError(m string) { f.emptied = append(f.emptied, m) }
+func (f *fakeHost) ForceRepaint()                { f.repaints++ }
+
+// tempFiles writes n real files (the delete path calls os.Remove, so they
+// have to exist) and returns their URIs.
+func tempFiles(t *testing.T, names ...string) []fyne.URI {
+	t.Helper()
+
+	dir := t.TempDir()
+
+	uris := make([]fyne.URI, 0, len(names))
+	for _, name := range names {
+		path := filepath.Join(dir, name)
+		if err := os.WriteFile(path, []byte("not really an image"), 0o644); err != nil {
+			t.Fatalf("write %s: %v", name, err)
+		}
+		uris = append(uris, storage.NewFileURI(path))
+	}
+
+	return uris
+}
+
+func TestRequest_ShowsCardWithMessageAndCancelSelectedByDefault(t *testing.T) {
+	host := &fakeHost{files: tempFiles(t, "sunset.jpg")}
+	c := New(host)
+
+	c.Request()
+
+	if !c.Visible() || !c.overlay.Visible() {
+		t.Fatal("the card should be visible after Request")
+	}
+	if !strings.Contains(c.message.Text, "sunset.jpg") {
+		t.Errorf("message = %q, want it to name the current file", c.message.Text)
+	}
+	if c.dangerSelected {
+		t.Error("Cancel should be selected by default, not the danger button")
+	}
+	if !c.cancelRing.Visible() || c.dangerRing.Visible() {
+		t.Error("the Cancel ring should be visible and the danger ring hidden by default")
+	}
+}
+
+func TestRequest_NoOpWithNothingLoaded(t *testing.T) {
+	c := New(&fakeHost{})
+
+	c.Request()
+
+	if c.Visible() || c.overlay.Visible() {
+		t.Error("Request should do nothing with no files loaded")
+	}
+}
+
+func TestRequest_ReopeningDoesNotResetAnAlreadyMadeSelection(t *testing.T) {
+	c := New(&fakeHost{files: tempFiles(t, "a.jpg")})
+
+	c.Request()
+	c.setSelection(true)
+
+	c.Request() // re-triggering the shortcut mid-prompt
+
+	if !c.dangerSelected {
+		t.Error("a second Request while already showing should not reset the selection back to Cancel")
+	}
+}
+
+func TestSetSelection_TogglesRingVisibility(t *testing.T) {
+	c := New(&fakeHost{})
+
+	c.setSelection(true)
+	if c.cancelRing.Visible() || !c.dangerRing.Visible() {
+		t.Error("selecting the danger button should show its ring and hide Cancel's")
+	}
+
+	c.setSelection(false)
+	if !c.cancelRing.Visible() || c.dangerRing.Visible() {
+		t.Error("selecting Cancel should show its ring and hide the danger button's")
+	}
+}
+
+func TestHandleKey_MovesSelectionAndCancels(t *testing.T) {
+	c := New(&fakeHost{files: tempFiles(t, "a.jpg")})
+	c.Request()
+
+	c.HandleKey(&fyne.KeyEvent{Name: fyne.KeyRight})
+	if !c.dangerSelected {
+		t.Error("Right should move the selection to the danger button")
+	}
+
+	c.HandleKey(&fyne.KeyEvent{Name: fyne.KeyLeft})
+	if c.dangerSelected {
+		t.Error("Left should move the selection back to Cancel")
+	}
+
+	c.HandleKey(&fyne.KeyEvent{Name: fyne.KeyEscape})
+	if c.Visible() {
+		t.Error("Escape should dismiss the card")
+	}
+}
+
+func TestHandleKey_ReturnWithCancelSelectedJustHidesTheCard(t *testing.T) {
+	host := &fakeHost{files: tempFiles(t, "a.jpg")}
+	c := New(host)
+	c.Request()
+
+	c.HandleKey(&fyne.KeyEvent{Name: fyne.KeyReturn})
+
+	if c.Visible() {
+		t.Error("Return with Cancel selected should dismiss the card")
+	}
+	if len(host.removed) != 0 {
+		t.Error("Return with Cancel selected must not delete anything")
+	}
+	if _, err := os.Stat(host.files[0].Path()); err != nil {
+		t.Errorf("the file should still exist on disk: %v", err)
+	}
+}
+
+func TestPerformDelete_RemovesFileAndAdvances(t *testing.T) {
+	files := tempFiles(t, "a.jpg", "b.jpg")
+	host := &fakeHost{files: files}
+	c := New(host)
+
+	// Captured before the delete: RemoveFile shifts the survivor down over
+	// the removed entry, and files here shares its backing array, so
+	// files[0] would name b.jpg by the time we checked.
+	deletedPath := files[0].Path()
+
+	c.Request()
+
+	c.HandleKey(&fyne.KeyEvent{Name: fyne.KeyRight}) // select danger
+	c.HandleKey(&fyne.KeyEvent{Name: fyne.KeyReturn})
+
+	if c.Visible() {
+		t.Error("confirming should dismiss the card")
+	}
+	if _, err := os.Stat(deletedPath); !os.IsNotExist(err) {
+		t.Error("the confirmed file should be gone from disk")
+	}
+	if want := []int{0}; len(host.removed) != 1 || host.removed[0] != want[0] {
+		t.Errorf("RemoveFile calls = %v, want %v", host.removed, want)
+	}
+	if len(host.shown) != 1 || host.shown[0] != 0 {
+		t.Errorf("ShowImage calls = %v, want the same index re-shown so the next file takes its place", host.shown)
+	}
+	if len(host.toasts) != 1 || !strings.Contains(host.toasts[0], "a.jpg") {
+		t.Errorf("toasts = %v, want one naming the deleted file", host.toasts)
+	}
+}
+
+func TestPerformDelete_LastFileFallsBackToEmptyState(t *testing.T) {
+	files := tempFiles(t, "only.jpg")
+	host := &fakeHost{files: files}
+	c := New(host)
+	c.Request()
+
+	c.setSelection(true)
+	c.confirmSelection()
+
+	if _, err := os.Stat(files[0].Path()); !os.IsNotExist(err) {
+		t.Error("the confirmed file should be gone from disk")
+	}
+	if len(host.emptied) != 1 || !strings.Contains(host.emptied[0], "only.jpg") {
+		t.Errorf("ShowEmptyStateError calls = %v, want one naming the deleted file", host.emptied)
+	}
+	if len(host.shown) != 0 {
+		t.Error("nothing should be shown once the last file is gone")
+	}
+}
+
+func TestPerformDelete_OSFailureKeepsTheFileAndToastsAnError(t *testing.T) {
+	// A directory that isn't empty can't be removed, which is the simplest
+	// portable way to make os.Remove fail against a path that still exists
+	// afterwards.
+	dir := t.TempDir()
+	stubborn := filepath.Join(dir, "notafile")
+	if err := os.MkdirAll(filepath.Join(stubborn, "child"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	host := &fakeHost{files: []fyne.URI{storage.NewFileURI(stubborn)}}
+	c := New(host)
+	c.Request()
+
+	c.setSelection(true)
+	c.confirmSelection()
+
+	if _, err := os.Stat(stubborn); err != nil {
+		t.Errorf("the file should survive a failed delete: %v", err)
+	}
+	if len(host.removed) != 0 {
+		t.Error("a failed os.Remove must not drop the file from the app's set")
+	}
+	if len(host.toasts) != 1 || !strings.Contains(host.toasts[0], "could not delete") {
+		t.Errorf("toasts = %v, want one reporting the failure", host.toasts)
+	}
+}
+
+func TestShortcutHandler_OnlySecondaryCutAndOnlyWhenUnblocked(t *testing.T) {
+	host := &fakeHost{files: tempFiles(t, "a.jpg")}
+	c := New(host)
+
+	blocked := false
+	handle := ShortcutHandler(c, func() bool { return blocked })
+
+	// A real Ctrl/Cmd+X: same ShortcutName, not ours.
+	handle(&fyne.ShortcutCut{})
+	if c.Visible() {
+		t.Error("a plain cut shortcut should not open the confirmation")
+	}
+
+	blocked = true
+	handle(&fyne.ShortcutCut{Secondary: true})
+	if c.Visible() {
+		t.Error("Shift+Delete should be ignored while something else claims the screen")
+	}
+
+	blocked = false
+	handle(&fyne.ShortcutCut{Secondary: true})
+	if !c.Visible() {
+		t.Error("Shift+Delete should open the confirmation")
+	}
+}
