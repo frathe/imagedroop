@@ -25,6 +25,12 @@ func TestLoadPreferences_NothingSavedReturnsDefaults(t *testing.T) {
 	if got.SlideShuffle {
 		t.Error("SlideShuffle = true, want false")
 	}
+	if got.InfoVisible {
+		t.Error("InfoVisible = true, want false")
+	}
+	if got.MaxScanFiles != 0 {
+		t.Errorf("MaxScanFiles = %d, want 0", got.MaxScanFiles)
+	}
 	if got.WindowSize != (fyne.Size{}) {
 		t.Errorf("WindowSize = %v, want zero value", got.WindowSize)
 	}
@@ -41,6 +47,8 @@ func TestSavePreferences_RoundTrip(t *testing.T) {
 		MergeMode:         true,
 		SlideInterval:     7 * time.Second,
 		SlideShuffle:      true,
+		InfoVisible:       true,
+		MaxScanFiles:      5000,
 		WindowSize:        fyne.NewSize(640, 480),
 		WindowPosX:        120,
 		WindowPosY:        340,
@@ -74,6 +82,17 @@ func TestSavePreferences_ZeroSlideIntervalDoesNotOverwritePreviouslySaved(t *tes
 
 	if got := Load(app).SlideInterval; got != 5*time.Second {
 		t.Errorf("SlideInterval = %v, want 5s (should survive a zero-value Save)", got)
+	}
+}
+
+func TestSavePreferences_ZeroMaxScanFilesDoesNotOverwritePreviouslySaved(t *testing.T) {
+	app := test.NewApp()
+
+	Save(app, State{MaxScanFiles: 500})
+	Save(app, State{MaxScanFiles: 0})
+
+	if got := Load(app).MaxScanFiles; got != 500 {
+		t.Errorf("MaxScanFiles = %d, want 500 (should survive a zero-value Save)", got)
 	}
 }
 

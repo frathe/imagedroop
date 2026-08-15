@@ -53,6 +53,31 @@ func (m Mode) Next() Mode {
 	return (m + 1) % modeCount
 }
 
+// Modes returns every mode in Next's cycle order, for a UI picker like the
+// settings window's sort-order dropdown.
+func Modes() []Mode {
+	return []Mode{ByName, ByCaptureDate, ByModTime, BySize, ByDropOrder}
+}
+
+// DisplayName returns m's full, human-readable name, for the settings
+// window's sort-order dropdown - unlike Label below, which is a short
+// window-title prefix left empty for the default mode, and so unsuited to a
+// picker where every mode needs a visible option.
+func DisplayName(m Mode) string {
+	switch m {
+	case ByCaptureDate:
+		return lang.L("Capture date")
+	case ByModTime:
+		return lang.L("Modified date")
+	case BySize:
+		return lang.L("File size")
+	case ByDropOrder:
+		return lang.L("Drop order")
+	default:
+		return lang.L("Name")
+	}
+}
+
 // Order returns raw arranged according to m. It always returns a fresh
 // slice, so callers never alias the input.
 //

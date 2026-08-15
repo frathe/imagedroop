@@ -80,13 +80,7 @@ func TestCurrentManual_OtherLocaleFallsBackToEnglish(t *testing.T) {
 }
 
 func TestHelpMenu(t *testing.T) {
-	menu := New(nil, "Image Drop", nil).Menu()
-
-	if got := len(menu.Items); got != 1 {
-		t.Fatalf("expected 1 top-level menu, got %d", got)
-	}
-
-	help := menu.Items[0]
+	help := New(nil, "Image Drop", nil).Menu()
 
 	if help.Label != "Help" {
 		t.Errorf("expected menu label %q, got %q", "Help", help.Label)

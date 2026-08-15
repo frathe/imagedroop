@@ -15,9 +15,21 @@ import (
 // but, unlike a toast, it never auto-hides: once on, it stays up across
 // navigation and zoom changes until toggled off again.
 func (v *viewer) toggleInfoOverlay() {
-	v.infoVisible = !v.infoVisible
+	v.SetInfoVisible(!v.infoVisible)
+}
+
+// SetInfoVisible sets the info overlay's on/off state directly - the
+// settings window's binding for the I key's toggle above.
+func (v *viewer) SetInfoVisible(on bool) {
+	v.infoVisible = on
 	v.syncInfoOverlayVisibility()
 	v.ForceRepaint()
+}
+
+// InfoVisible reports whether the info overlay is currently on - the
+// settings window's getter.
+func (v *viewer) InfoVisible() bool {
+	return v.infoVisible
 }
 
 // syncInfoOverlayVisibility shows or hides infoCard to match v.infoVisible,

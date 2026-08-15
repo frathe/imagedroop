@@ -314,6 +314,67 @@ func TestAdvance_ShuffleOnNeverRepeatsCurrentIndex(t *testing.T) {
 	}
 }
 
+// --- settings window Host methods ---------------------------------------
+
+// TestSlideShuffleGetterSetter is SlideShuffle/SetSlideShuffle - the
+// settings window's binding - as opposed to the Shift+P flip already
+// covered above.
+func TestSlideShuffleGetterSetter(t *testing.T) {
+	v := newTestViewer(t)
+
+	if v.SlideShuffle() {
+		t.Fatal("SlideShuffle() = true, want false by default")
+	}
+
+	v.SetSlideShuffle(true)
+	if !v.SlideShuffle() {
+		t.Error("SlideShuffle() = false, want true after SetSlideShuffle(true)")
+	}
+	if title := v.win.Title(); !strings.HasPrefix(title, "[shuffle] ") {
+		t.Errorf("title = %q, want it prefixed right after SetSlideShuffle(true)", title)
+	}
+
+	v.SetSlideShuffle(false)
+	if v.SlideShuffle() {
+		t.Error("SlideShuffle() = true, want false after SetSlideShuffle(false)")
+	}
+}
+
+// TestSlideInterval_DefaultsBeforePictureFrameModeEverRuns checks the
+// getter substitutes slideshow.DefaultInterval for the controller's own
+// "never chosen" zero, so the settings window shows the pace picture-frame
+// mode will actually start at rather than a bare 0s.
+func TestSlideInterval_DefaultsBeforePictureFrameModeEverRuns(t *testing.T) {
+	v := newTestViewer(t)
+
+	if got := v.SlideInterval(); got != slideshow.DefaultInterval {
+		t.Errorf("SlideInterval() = %v, want the default %v before picture-frame mode ever runs", got, slideshow.DefaultInterval)
+	}
+}
+
+func TestSetSlideInterval_TakesEffect(t *testing.T) {
+	v := newTestViewer(t)
+
+	v.SetSlideInterval(30 * time.Second)
+
+	if got := v.SlideInterval(); got != 30*time.Second {
+		t.Errorf("SlideInterval() = %v, want 30s", got)
+	}
+}
+
+// TestSetSlideInterval_ClampsToMinimum mirrors AdjustInterval's own floor
+// (Up/Down while picture-frame mode is active) - a settings-window value
+// below it would otherwise make the auto-advance spin needlessly fast.
+func TestSetSlideInterval_ClampsToMinimum(t *testing.T) {
+	v := newTestViewer(t)
+
+	v.SetSlideInterval(100 * time.Millisecond)
+
+	if got := v.SlideInterval(); got != slideshow.MinInterval {
+		t.Errorf("SlideInterval() = %v, want it clamped to MinInterval (%v)", got, slideshow.MinInterval)
+	}
+}
+
 // --- randomOtherIndex --------------------------------------------------
 
 func TestRandomOtherIndex_EmptyOrSingleReturnsCurrentUnchanged(t *testing.T) {

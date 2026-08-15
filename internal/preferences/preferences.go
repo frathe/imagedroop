@@ -19,6 +19,8 @@ const (
 	keyMergeMode      = "mergeMode"
 	keySlideIntervalS = "slideIntervalSeconds"
 	keySlideShuffle   = "slideShuffle"
+	keyInfoVisible    = "infoVisible"
+	keyMaxScanFiles   = "maxScanFiles"
 	keyWindowWidth    = "windowWidth"
 	keyWindowHeight   = "windowHeight"
 	keyWindowPosX     = "windowPosX"
@@ -47,7 +49,19 @@ type State struct {
 	MergeMode     bool
 	SlideInterval time.Duration
 	SlideShuffle  bool
-	WindowSize    fyne.Size // zero Size means "nothing saved yet"
+
+	// InfoVisible is the persistent info overlay's (I key) standing on/off
+	// state - see internal/ui's infoVisible field.
+	InfoVisible bool
+
+	// MaxScanFiles caps how many images a single recursive folder scan
+	// gathers - see internal/ui's maxScan field. Zero means "nothing
+	// saved yet", the same sentinel WindowSize below uses, since the
+	// viewer never accepts a zero cap itself - internal/ui substitutes
+	// its own built-in default at that point.
+	MaxScanFiles int
+
+	WindowSize fyne.Size // zero Size means "nothing saved yet"
 
 	// WindowPosX/WindowPosY are the on-screen position (see
 	// internal/winpos, the only way to read one back at all) a manual move
@@ -70,9 +84,13 @@ func Save(app fyne.App, s State) {
 	p.SetString(keySortMode, s.SortMode)
 	p.SetBool(keyMergeMode, s.MergeMode)
 	p.SetBool(keySlideShuffle, s.SlideShuffle)
+	p.SetBool(keyInfoVisible, s.InfoVisible)
 
 	if s.SlideInterval > 0 {
 		p.SetFloat(keySlideIntervalS, s.SlideInterval.Seconds())
+	}
+	if s.MaxScanFiles > 0 {
+		p.SetInt(keyMaxScanFiles, s.MaxScanFiles)
 	}
 	if s.WindowSize.Width > 0 && s.WindowSize.Height > 0 {
 		p.SetFloat(keyWindowWidth, float64(s.WindowSize.Width))
@@ -101,6 +119,8 @@ func Load(app fyne.App) State {
 		MergeMode:     p.Bool(keyMergeMode),
 		SlideInterval: time.Duration(p.Float(keySlideIntervalS) * float64(time.Second)),
 		SlideShuffle:  p.Bool(keySlideShuffle),
+		InfoVisible:   p.Bool(keyInfoVisible),
+		MaxScanFiles:  p.Int(keyMaxScanFiles),
 		WindowSize: fyne.NewSize(
 			float32(p.Float(keyWindowWidth)),
 			float32(p.Float(keyWindowHeight)),

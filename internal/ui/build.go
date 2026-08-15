@@ -27,6 +27,7 @@ import (
 	"github.com/frathe/imagedrop/internal/ui/exifwin"
 	"github.com/frathe/imagedrop/internal/ui/grid"
 	"github.com/frathe/imagedrop/internal/ui/help"
+	"github.com/frathe/imagedrop/internal/ui/settingswin"
 	"github.com/frathe/imagedrop/internal/ui/slideshow"
 	"github.com/frathe/imagedrop/internal/ui/widgets"
 	"github.com/frathe/imagedrop/internal/ui/zoom"
@@ -222,6 +223,15 @@ func buildViewer(application fyne.App) (*viewer, fyne.Window) {
 	// applied further below, once view/window exist to apply them to.
 	prefs := preferences.Load(application)
 
+	// maxScan falls back to the shipped default when nothing was ever
+	// saved (prefs.MaxScanFiles's zero value - see preferences.State's own
+	// comment on that field), the same zero-means-unset pattern
+	// prefs.SlideInterval already uses below.
+	maxScan := defaultMaxScannedFiles
+	if prefs.MaxScanFiles > 0 {
+		maxScan = prefs.MaxScanFiles
+	}
+
 	view = &viewer{
 		app:           application,
 		win:           window,
@@ -242,12 +252,13 @@ func buildViewer(application fyne.App) (*viewer, fyne.Window) {
 		exifLink:      info.exifLink,
 		sortMode:      filesort.FromPref(prefs.SortMode),
 		mergeMode:     prefs.MergeMode,
+		infoVisible:   prefs.InfoVisible,
 		baseTitle:     appTitle,
 		help:          help.New(application, appTitle, assets.WelcomeWebP),
 		exif:          exifwin.New(application, func() (fyne.URI, bool) { return view.displayedFile() }),
 		imgCache:      imaging.NewImgCache(),
 		preloadSem:    make(chan struct{}, preloadConcurrency),
-		maxScan:       defaultMaxScannedFiles,
+		maxScan:       maxScan,
 		keyModifiers:  defaultKeyModifiers,
 	}
 
@@ -287,6 +298,11 @@ func buildViewer(application fyne.App) (*viewer, fyne.Window) {
 	}
 	view.slides.SetShuffle(prefs.SlideShuffle)
 
+	// The settings window (File > Settings…), same reason once more:
+	// settingswin.New takes the viewer as its Host, so it can only be built
+	// once view exists.
+	view.settings = settingswin.New(application, view)
+
 	// The bar lives in its own overlay layer on top of the stack, pinned to
 	// the top edge by the VBox layout, so showing/hiding it never resizes
 	// or shifts the image underneath. VBoxLayout sizes each child to its
@@ -309,7 +325,7 @@ func buildViewer(application fyne.App) (*viewer, fyne.Window) {
 
 	window.SetContent(container.New(windowSizeTracker{v: view},
 		view.zoom.Widget(), dz.root, scanContainer, overlay, toastOverlay, infoOverlay, view.deletion.Overlay(), view.grid.Overlay()))
-	window.SetMainMenu(view.help.Menu())
+	window.SetMainMenu(buildMainMenu(view))
 
 	// The saved window size (see internal/preferences) is only ever the
 	// empty-dropzone size in practice: as soon as a file loads,

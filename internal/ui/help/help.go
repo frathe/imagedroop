@@ -40,10 +40,15 @@ func New(application fyne.App, title string, art []byte) *Help {
 }
 
 // Menu is the app's Help menu: the manual, and an About screen below a
-// separator (the usual place for it in a Help menu).
-func (h *Help) Menu() *fyne.MainMenu {
+// separator (the usual place for it in a Help menu). Returns the *fyne.Menu
+// itself rather than a whole *fyne.MainMenu, so internal/ui can combine it
+// with its own File menu into one bar - composing menus is the app's job,
+// not this package's, the same "internal/ui decides how features compose"
+// rule the grid/slideshow full-window-mode guard follows (see
+// ARCHITECTURE.md).
+func (h *Help) Menu() *fyne.Menu {
 	manual := fyne.NewMenuItem(lang.L("Manual"), h.ShowManual)
 	about := fyne.NewMenuItem(lang.L("About"), h.ShowAbout)
 
-	return fyne.NewMainMenu(fyne.NewMenu(lang.L("Help"), manual, fyne.NewMenuItemSeparator(), about))
+	return fyne.NewMenu(lang.L("Help"), manual, fyne.NewMenuItemSeparator(), about)
 }

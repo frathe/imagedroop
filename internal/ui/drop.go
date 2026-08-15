@@ -67,6 +67,26 @@ func realPathOf(u fyne.URI) string {
 // sort/preload paths are meant to handle.
 const defaultMaxScannedFiles = 200_000
 
+// MaxScan is the current recursive-folder-scan cap - the settings window's
+// getter for SetMaxScan below.
+func (v *viewer) MaxScan() int {
+	return v.maxScan
+}
+
+// SetMaxScan sets the recursive-folder-scan cap directly - the settings
+// window's binding. Floored at 1 rather than 0, since a 0 cap would stop a
+// scan before it gathered anything at all - not a "no limit" the rest of
+// the scan path (n >= v.maxScan below) is written to understand. Applies to
+// the next scan; one already in flight keeps running under whatever cap it
+// started with.
+func (v *viewer) SetMaxScan(n int) {
+	if n < 1 {
+		n = 1
+	}
+
+	v.maxScan = n
+}
+
 // handleDrop starts an asynchronous scan for images, recursing into dropped
 // folders and updating a spinner + counter while gathering. The first image
 // is shown once the scan finishes. A plain drop replaces the current set,

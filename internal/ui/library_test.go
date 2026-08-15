@@ -386,6 +386,30 @@ func TestToggleMergeMode_PrefixesTitleAndPersistsAcrossDrops(t *testing.T) {
 	}
 }
 
+// TestMergeModeGetterSetter is MergeMode/SetMergeMode - the settings
+// window's binding - as opposed to toggleMergeMode's own M-key flip already
+// covered above.
+func TestMergeModeGetterSetter(t *testing.T) {
+	v := newTestViewer(t)
+
+	if v.MergeMode() {
+		t.Fatal("MergeMode() = true, want false by default")
+	}
+
+	v.SetMergeMode(true)
+	if !v.MergeMode() {
+		t.Error("MergeMode() = false, want true after SetMergeMode(true)")
+	}
+	if title := v.win.Title(); !strings.HasPrefix(title, "[merge] ") {
+		t.Errorf("title = %q, want it prefixed right after SetMergeMode(true)", title)
+	}
+
+	v.SetMergeMode(false)
+	if v.MergeMode() {
+		t.Error("MergeMode() = true, want false after SetMergeMode(false)")
+	}
+}
+
 // --- info overlay (I) -------------------------------------------------
 
 func TestFormatFileSize(t *testing.T) {
@@ -532,6 +556,33 @@ func TestToggleInfoOverlay_ZoomLineTracksZoomChanges(t *testing.T) {
 	}
 }
 
+// TestInfoVisibleGetterSetter is InfoVisible/SetInfoVisible - the settings
+// window's binding - as opposed to toggleInfoOverlay's own I-key flip
+// covered elsewhere in this section.
+func TestInfoVisibleGetterSetter(t *testing.T) {
+	v := newTestViewer(t)
+
+	a := uitest.TempJPEGURI(t, "a.jpg", 40, 20, color.White)
+	dropAndWait(t, v, a)
+
+	if v.InfoVisible() {
+		t.Fatal("InfoVisible() = true, want false by default")
+	}
+
+	v.SetInfoVisible(true)
+	if !v.InfoVisible() {
+		t.Error("InfoVisible() = false, want true after SetInfoVisible(true)")
+	}
+	if !v.infoCard.Visible() {
+		t.Error("expected the info card to show once InfoVisible is set with an image loaded")
+	}
+
+	v.SetInfoVisible(false)
+	if v.infoCard.Visible() {
+		t.Error("expected the info card to hide once InfoVisible is cleared")
+	}
+}
+
 // TestClearToDropzone_HidesInfoCardButKeepsThePreference guards the reset
 // (Escape) path: the card must disappear along with the image, but the I
 // preference itself is a standing one - like naturalSort/mergeMode - so a
@@ -642,6 +693,39 @@ func TestHandleDrop_CapsFileCountForLargeTrees(t *testing.T) {
 		t.Errorf("toast text = %q, want it to mention the cap (3)", v.toast.text.Text)
 	}
 	settleToast(t, v)
+}
+
+// TestMaxScanGetterSetter is MaxScan/SetMaxScan - the settings window's
+// binding for the same v.maxScan field TestHandleDrop_CapsFileCountForLargeTrees
+// above exercises by writing it directly.
+func TestMaxScanGetterSetter(t *testing.T) {
+	v := newTestViewer(t)
+
+	if got := v.MaxScan(); got != defaultMaxScannedFiles {
+		t.Errorf("MaxScan() = %d, want the shipped default %d", got, defaultMaxScannedFiles)
+	}
+
+	v.SetMaxScan(5)
+	if got := v.MaxScan(); got != 5 {
+		t.Errorf("MaxScan() = %d, want 5 after SetMaxScan(5)", got)
+	}
+}
+
+// TestSetMaxScan_FloorsAtOne guards the scan path's own n >= v.maxScan
+// check (drop.go): a 0 or negative cap would stop a scan before it ever
+// gathered anything, which isn't what a settings-window typo should do.
+func TestSetMaxScan_FloorsAtOne(t *testing.T) {
+	v := newTestViewer(t)
+
+	v.SetMaxScan(0)
+	if got := v.MaxScan(); got != 1 {
+		t.Errorf("MaxScan() = %d, want it floored to 1 for a 0 input", got)
+	}
+
+	v.SetMaxScan(-5)
+	if got := v.MaxScan(); got != 1 {
+		t.Errorf("MaxScan() = %d, want it floored to 1 for a negative input", got)
+	}
 }
 
 // TestCancelScan_NoOpWhenNotScanning covers the guard at the top of
@@ -1226,6 +1310,43 @@ func TestToggleSort_CyclesThroughAllModesAndBackToName(t *testing.T) {
 	}
 	if !strings.Contains(title, "(2/3)") {
 		t.Errorf("title = %q, want it to contain (2/3) after wrapping back to natural order", title)
+	}
+}
+
+// TestSetSortMode_JumpsDirectlyRatherThanCycling is SetSortMode - the
+// settings window's binding - as opposed to toggleSort's own S-key cycle
+// already covered above: it should reach any mode in one call and still
+// keep the current file in view across the switch.
+func TestSetSortMode_JumpsDirectlyRatherThanCycling(t *testing.T) {
+	v := newTestViewer(t)
+
+	img10 := uitest.TempJPEGURI(t, "IMG_10.jpg", 4, 4, color.White)
+	img1 := uitest.TempJPEGURI(t, "IMG_1.jpg", 4, 4, color.White)
+	dropAndWait(t, v, img10, img1) // natural sort: IMG_1.jpg, IMG_10.jpg
+
+	current := v.files[v.index].Name()
+
+	v.SetSortMode(filesort.ByDropOrder)
+
+	if v.sortMode != filesort.ByDropOrder {
+		t.Errorf("sortMode = %v, want ByDropOrder straight after one SetSortMode call", v.sortMode)
+	}
+	if got := v.files[v.index].Name(); got != current {
+		t.Errorf("displayed file = %q, want it to stay on %q across the sort-mode change", got, current)
+	}
+}
+
+// TestSetSortMode_SafeWithNoFilesLoaded guards the settings window's own
+// call site: unlike toggleSort's S key (gated behind handleKeyEvent's
+// len(v.files)<2 guard), the settings window can change the sort order
+// before anything has ever been dropped.
+func TestSetSortMode_SafeWithNoFilesLoaded(t *testing.T) {
+	v := newTestViewer(t)
+
+	v.SetSortMode(filesort.BySize)
+
+	if v.sortMode != filesort.BySize {
+		t.Errorf("sortMode = %v, want BySize", v.sortMode)
 	}
 }
 

@@ -17,6 +17,49 @@ import (
 // cycling and the window-title prefix stay in internal/ui, which is what
 // actually owns those behaviours.
 
+// TestModes_MatchesNextsCycleOrder guards the settings window's sort-order
+// dropdown: Modes must list every mode in exactly the order Next steps
+// through, starting from ByName, so the dropdown's options line up with
+// what pressing S repeatedly would produce.
+func TestModes_MatchesNextsCycleOrder(t *testing.T) {
+	modes := Modes()
+
+	if len(modes) != int(modeCount) {
+		t.Fatalf("len(Modes()) = %d, want %d (modeCount)", len(modes), modeCount)
+	}
+
+	m := ByName
+	for i, want := range modes {
+		if m != want {
+			t.Errorf("Modes()[%d] = %v, want %v to match Next's cycle order", i, want, m)
+		}
+		m = m.Next()
+	}
+	if m != ByName {
+		t.Errorf("cycling Next() len(Modes()) times landed on %v, want back to ByName", m)
+	}
+}
+
+// TestDisplayName_EveryModeHasADistinctNonEmptyName guards the settings
+// window's dropdown against two modes silently sharing a label (which
+// would make them indistinguishable in the picker) - unlike Label, which
+// deliberately returns "" for the default mode, every DisplayName must be
+// non-empty since the dropdown has no "no prefix" equivalent of its own.
+func TestDisplayName_EveryModeHasADistinctNonEmptyName(t *testing.T) {
+	seen := make(map[string]Mode)
+
+	for _, m := range Modes() {
+		name := DisplayName(m)
+		if name == "" {
+			t.Errorf("DisplayName(%v) = \"\", want a non-empty name", m)
+		}
+		if other, ok := seen[name]; ok {
+			t.Errorf("DisplayName(%v) and DisplayName(%v) both = %q, want distinct names", m, other, name)
+		}
+		seen[name] = m
+	}
+}
+
 func TestNaturalLess(t *testing.T) {
 	cases := []struct {
 		a, b string

@@ -18,6 +18,7 @@ import (
 	"github.com/frathe/imagedrop/internal/ui/exifwin"
 	"github.com/frathe/imagedrop/internal/ui/grid"
 	"github.com/frathe/imagedrop/internal/ui/help"
+	"github.com/frathe/imagedrop/internal/ui/settingswin"
 	"github.com/frathe/imagedrop/internal/ui/slideshow"
 	"github.com/frathe/imagedrop/internal/ui/widgets"
 	"github.com/frathe/imagedrop/internal/ui/zoom"
@@ -72,6 +73,12 @@ type viewer struct {
 	// buildViewer hands it. finishLoad calls its Refresh so navigating
 	// while it's open keeps it in sync.
 	exif *exifwin.Window
+
+	// settings is the Settings window (File menu) - see
+	// internal/ui/settingswin, which reaches back through the Host
+	// interface this viewer satisfies (SortMode/MergeMode/SlideShuffle/
+	// SlideInterval/InfoVisible/MaxScan and their setters).
+	settings *settingswin.Window
 
 	// restoreLink offers to reload the file set saved when the window last
 	// closed (see session.go). Shown only while welcomeArt is - and only
@@ -399,12 +406,24 @@ func (v *viewer) undoGridMaximize() {
 }
 
 // toggleMergeMode flips whether the next drop merges into the existing set
-// instead of replacing it, and immediately reflects the new mode in the
-// window title via the "[merge] " prefix so it doesn't wait for a drop to
-// become visible.
+// instead of replacing it - see SetMergeMode below, which does the actual
+// work.
 func (v *viewer) toggleMergeMode() {
-	v.mergeMode = !v.mergeMode
+	v.SetMergeMode(!v.mergeMode)
+}
+
+// SetMergeMode sets merge mode directly - the settings window's binding for
+// the toggle above - and immediately reflects it in the window title via
+// the "[merge] " prefix so it doesn't wait for a drop to become visible.
+func (v *viewer) SetMergeMode(on bool) {
+	v.mergeMode = on
 	v.applyTitle()
+}
+
+// MergeMode reports whether merge mode is on - the settings window's
+// getter.
+func (v *viewer) MergeMode() bool {
+	return v.mergeMode
 }
 
 // showFileIfPresent looks up target in v.files by URI identity and shows it
@@ -428,6 +447,17 @@ func (v *viewer) reset() {
 	v.clearToDropzone()
 	v.showWelcomeState()
 	v.ForceRepaint()
+}
+
+// closeFiles is the File menu's "Close Files" item: it drops the currently
+// loaded set and returns to the welcome drop zone, cancelling a scan still
+// in progress first - unlike Escape (handleKeyEvent), it never closes the
+// window, since File > Close is a distinct action from quitting the app.
+func (v *viewer) closeFiles() {
+	if v.scanning {
+		v.cancelScan()
+	}
+	v.reset()
 }
 
 // showWelcomeState restores the launch-time welcome look: welcome art in
