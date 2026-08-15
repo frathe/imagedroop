@@ -35,10 +35,11 @@ type viewer struct {
 	loadingBar *widget.ProgressBarInfinite
 
 	// windowSize is the window's current content size, kept up to date by
-	// windowSizeTracker (build.go) on every layout of the root content -
-	// Window itself exposes no size getter. Read once, at shutdown, by
-	// main()'s preferences.Save call so the window geometry a user left the
-	// app at carries over to the next launch (see internal/preferences).
+	// windowSizeTracker (windowtrack.go) on every layout of the root
+	// content - Window itself exposes no size getter. Read once, at
+	// shutdown, by Run's preferences.Save call so the window geometry a
+	// user left the app at carries over to the next launch (see
+	// internal/preferences).
 	windowSize fyne.Size
 
 	// dropzoneArt wraps the whole drop zone - the welcome/placeholder art,
@@ -91,7 +92,7 @@ type viewer struct {
 	// background goroutine reads it outside of fyne.Do's synchronization -
 	// under the test driver, fyne.Do runs its closure synchronously on the
 	// calling goroutine instead of handing it off to the UI goroutine, so
-	// that read would otherwise race show()'s write from a different
+	// that read would otherwise race ShowImage()'s write from a different
 	// goroutine.
 	gen atomic.Uint64
 
@@ -146,7 +147,7 @@ type viewer struct {
 	// flag by the time the stale one's closure would run.
 	scanning bool
 
-	// scanDone and loadDone are closed by handleDrop's and show's fyne.Do
+	// scanDone and loadDone are closed by handleDrop's and ShowImage's fyne.Do
 	// completion blocks respectively, once that call's generation has
 	// finished applying its result. Tests wait on them directly instead of
 	// polling widget state, which otherwise races with the fyne test

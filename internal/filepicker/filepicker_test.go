@@ -65,8 +65,8 @@ func TestPowerShellEscape(t *testing.T) {
 // automatic check it gets. Its two subprocess-based predecessors both
 // passed every non-interactive check (osacompile syntax pinning, a
 // self-cancelling NSTimer modal-loop smoke test) and still failed in
-// users' hands, which is exactly why it became in-process cgo - see the
-// repo's todos.md for that history.
+// users' hands, which is exactly why it became in-process cgo - see
+// darwin.go's chooseFilesDarwin comment for the two failed generations.
 func TestBuildPowerShellCmd(t *testing.T) {
 	cmd := buildPowerShellCmd()
 

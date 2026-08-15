@@ -59,7 +59,8 @@ import (
 // also means this must never be called *from* the UI goroutine (DoAndWait
 // would deadlock) - production only reaches it via the viewer's
 // openFileDialog background goroutine. A cancel returns empty output and a
-// nil error, matching the other platforms' cancel contract.
+// nil error, matching chooseFilesWindows; zenity's Linux cancel returns an
+// error instead, which the caller treats the same way (see chooseFilesLinux).
 func chooseFilesDarwin() ([]byte, error) {
 	cMsg := C.CString(lang.L("Open images"))
 	defer C.free(unsafe.Pointer(cMsg))

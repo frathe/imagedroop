@@ -110,7 +110,7 @@ func readRawBytes(u fyne.URI) ([]byte, error) {
 
 // CaptureDate reads u's raw bytes and returns its Exif capture date (see
 // Metadata.DateTakenTime), without decoding pixels or building the rest of
-// Metadata - the one field the root package's capture-date sort mode
+// Metadata - the one field internal/filesort's capture-date sort mode
 // actually needs. ok is false if u can't be read or carries no recognizable
 // capture date, mirroring ReadMetadata's tolerant-failure style; callers
 // are expected to fall back to the file's mtime in that case.

@@ -84,8 +84,8 @@ func Save(app fyne.App, s State) {
 
 // Load returns the previously saved State. SortMode defaults to
 // SortByName, matching the app's shipped default, when nothing has been
-// saved yet - and the root package's sortModeFromPref falls back to the
-// same default for any value it doesn't recognize, so a preferences file
+// saved yet - and internal/filesort's FromPref falls back to the same
+// default for any value it doesn't recognize, so a preferences file
 // written by a newer build with a since-removed mode still loads cleanly.
 // Every other field defaults to its zero value, which callers already treat
 // as "use the built-in default" (a zero SlideInterval falls back to

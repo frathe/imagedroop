@@ -3,7 +3,7 @@
 ## Supported Versions
 
 Image Drop is a desktop application distributed as pre-built binaries on the
-[Releases page](https://github.com/frathe/imagedroop/releases). Only the
+[Releases page](https://github.com/frathe/imagedrop/releases). Only the
 **latest release** is supported with security fixes; please update before
 reporting an issue to confirm it's still reproducible.
 
@@ -13,7 +13,7 @@ Please **do not** open a public GitHub issue for security vulnerabilities.
 
 Instead, report it privately using one of these channels:
 
-- [GitHub Security Advisories](https://github.com/frathe/imagedroop/security/advisories/new)
+- [GitHub Security Advisories](https://github.com/frathe/imagedrop/security/advisories/new)
   for this repository (preferred)
 - Email florianrathe@gmail.com
 

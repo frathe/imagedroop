@@ -1,8 +1,8 @@
 // Construction and wiring: buildViewer and the per-feature widget
-// constructors it composes, plus the window-geometry trackers and the
-// keyboard-shortcut wiring. Each new*UI constructor builds one feature's
-// widget cluster and returns it as a small struct - the widgets themselves
-// still land in the viewer's flat fields for now.
+// constructors it composes, plus the keyboard-shortcut wiring. Each
+// new*UI constructor builds one feature's widget cluster and returns it as
+// a small struct - the widgets themselves still land in the viewer's flat
+// fields for now.
 package ui
 
 import (
@@ -430,7 +430,7 @@ func wireClipboardShortcuts(c shortcutAdder, view *viewer) {
 // KeyModifierShift} registration wouldn't just be shadowed here, it could
 // never be reached by any bare-Shift combo. So this needs an AddShortcut
 // entry for &fyne.ShortcutCut{} instead - see deletion.ShortcutHandler
-// (delete.go) for how it tells a real Shift+Delete apart from a genuine
+// (deletion.go) for how it tells a real Shift+Delete apart from a genuine
 // Ctrl/Cmd+X (which reaches the same handler, Secondary false, and is
 // correctly ignored: this app has no cut action).
 func wireDeleteShortcut(c shortcutAdder, view *viewer) {

@@ -31,11 +31,11 @@ func TestShowExifWindow_NoopWithNothingLoaded(t *testing.T) {
 }
 
 // TestShowExifWindow_OpensAndRaisesSameWindow mirrors
-// TestShowAbout_OpensAndRaisesSameWindow (about_test.go): a plain
+// TestShowAbout_OpensAndRaisesSameWindow (help/about_test.go): a plain
 // widget.Label content, like About's single heading, so it doesn't hit the
 // test theme's font-combination limits the way manual.md's RichText does
-// (see the comment above TestE2E_EscapeQuitsWhenNothingLoaded in
-// e2e_test.go) and can be exercised directly.
+// (see the F1/showManual note at the end of e2e_test.go) and can be
+// exercised directly.
 func TestShowExifWindow_OpensAndRaisesSameWindow(t *testing.T) {
 	v, _, _ := newTestUI(t)
 
@@ -63,11 +63,11 @@ func TestShowExifWindow_OpensAndRaisesSameWindow(t *testing.T) {
 }
 
 // TestShowExifWindow_ContentAndRefreshOnNavigation checks the window shows
-// the current file's metadata (encodeJPEG embeds none, so the no-metadata
-// message - imaging.ReadMetadata's own behavior is covered directly in
-// internal/imaging) and, per refreshExifWindow's comment, keeps itself
-// current across navigation while still open, mirroring how the info
-// overlay behaves (TestToggleInfoOverlay_ContentAndPersistenceAcrossNavigation).
+// the current file's metadata (uitest.EncodeJPEG embeds none, so the
+// no-metadata message - imaging.ReadMetadata's own behavior is covered
+// directly in internal/imaging) and, per exifwin.Window.Refresh's comment,
+// keeps itself current across navigation while still open, mirroring how the
+// info overlay behaves (TestToggleInfoOverlay_ContentAndPersistenceAcrossNavigation).
 func TestShowExifWindow_ContentAndRefreshOnNavigation(t *testing.T) {
 	v, _, _ := newTestUI(t)
 
@@ -91,7 +91,7 @@ func TestShowExifWindow_ContentAndRefreshOnNavigation(t *testing.T) {
 }
 
 // TestHandleKeyEvent_EOpensExifWindow checks the E keybinding reaches
-// showExifWindow, mirroring how the I/M/P keys are each tested against
+// v.exif.Show, mirroring how the I/M/P keys are each tested against
 // their own handler.
 func TestHandleKeyEvent_EOpensExifWindow(t *testing.T) {
 	v, _, _ := newTestUI(t)
@@ -107,7 +107,7 @@ func TestHandleKeyEvent_EOpensExifWindow(t *testing.T) {
 }
 
 // TestExifLink_OpensExifWindow checks the info overlay's "Show EXIF data"
-// link (build.go's infoCard wiring) reaches showExifWindow, mirroring how
+// link (build.go's infoCard wiring) reaches v.exif.Show, mirroring how
 // e2e_test.go drives restoreLink's own OnTapped directly rather than a real
 // simulated click.
 func TestExifLink_OpensExifWindow(t *testing.T) {

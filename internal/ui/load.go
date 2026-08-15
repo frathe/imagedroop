@@ -14,10 +14,10 @@ import (
 	"github.com/frathe/imagedrop/internal/imaging"
 )
 
-// show loads and displays the file at index i, wrapping around at both
-// ends. A file that fails to decode is dropped from the set and the next
-// one is tried automatically - see attemptLoad - so a bad file never gets
-// stuck on screen or left inconsistent with v.index.
+// ShowImage loads and displays the file at index i, wrapping around at
+// both ends. A file that fails to decode is dropped from the set and the
+// next one is tried automatically - see attemptLoad - so a bad file never
+// gets stuck on screen or left inconsistent with v.index.
 func (v *viewer) ShowImage(i int) {
 	if len(v.files) == 0 {
 		return
@@ -46,7 +46,7 @@ func (v *viewer) ShowImage(i int) {
 	// attemptLoad below - for a file that turns out to be broken - shares
 	// this one generation and this one done channel: they're all part of
 	// the same logical navigation, not independent ones, so a genuinely
-	// newer show() call (which bumps gen again) correctly invalidates the
+	// newer ShowImage() call (which bumps gen again) correctly invalidates the
 	// whole chain, and a waiter on done sees the chain as finished only
 	// once it truly settles instead of racing whichever retry closes a
 	// channel first.
@@ -59,7 +59,7 @@ func (v *viewer) ShowImage(i int) {
 }
 
 // attemptLoad decodes and displays v.files[i] (wrapped into range), sharing
-// gen and done with the rest of its retry chain - see show's comment. It
+// gen and done with the rest of its retry chain - see ShowImage's comment. It
 // first reads the file and probes just its header (imaging.ReadAndProbe), which is
 // enough to reject an invalid file instantly, without spending time on a
 // full pixel decode that was only going to be thrown away, and to resize
@@ -77,7 +77,7 @@ func (v *viewer) attemptLoad(i int, gen uint64, done chan struct{}) {
 	// A cache hit - either a file already viewed this session, or one
 	// preloadNeighbors decoded speculatively ahead of time - skips the disk
 	// read and decode entirely and finishes synchronously, right here on
-	// the UI goroutine that called show(). No fyne.Do hop is needed since
+	// the UI goroutine that called ShowImage(). No fyne.Do hop is needed since
 	// we're already on it.
 	if loaded, ok := v.imgCache.Get(u.String()); ok {
 		v.finishLoad(i, u, loaded, gen, done)
@@ -145,7 +145,7 @@ func (v *viewer) attemptLoad(i int, gen uint64, done chan struct{}) {
 // in this file - the real driver runs on the UI goroutine but the fyne
 // test driver runs synchronously on whatever goroutine called it) and its
 // cache-hit path (called directly from attemptLoad, always on whichever
-// goroutine called show()).
+// goroutine called ShowImage()).
 func (v *viewer) finishLoad(i int, u fyne.URI, loaded *imaging.LoadedImage, gen uint64, done chan struct{}) {
 	b := loaded.Frames[0].Bounds()
 
@@ -312,7 +312,7 @@ func (v *viewer) preloadOne(u fyne.URI, gen uint64) {
 
 // stopAnimation wakes the current animate goroutine, if any, out of its
 // frame-delay sleep so it exits right away. Called wherever a gen bump
-// supersedes a possibly-playing animation (show, clearToDropzone,
+// supersedes a possibly-playing animation (ShowImage, clearToDropzone,
 // handleDrop, cancelScan); the nil-out keeps it idempotent, and it only
 // ever runs on the UI goroutine so the field swap needs no
 // synchronization. animStopped still signals the actual exit.
@@ -344,7 +344,7 @@ func (v *viewer) retryAfterLoadFailure(msg string, i int, gen uint64, done chan 
 // animate cycles an animated GIF's frames on their own goroutine, sleeping
 // between frames for each one's delay and updating the canvas image via
 // fyne.Do. It stops on its own once gen no longer matches the viewer's
-// current generation, the same staleness check show's decode goroutine
+// current generation, the same staleness check ShowImage's decode goroutine
 // uses, so a navigation or a fresh drop ends the previous animation without
 // any extra cancellation plumbing. stopped is closed right before it
 // returns, and animFrame is bumped after every frame write, so tests can

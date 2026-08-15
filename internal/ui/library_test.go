@@ -815,10 +815,10 @@ func TestHandleDrop_DedupesDuplicateURIsInDirectDrop(t *testing.T) {
 	}
 }
 
-// --- viewer.show (async decode path) ---------------------------------------
+// --- viewer.ShowImage (async decode path) -----------------------------------
 //
-// show() and handleDrop() decode/scan off the main goroutine and apply their
-// result via fyne.Do, closing loadDone/scanDone as the last thing that
+// ShowImage() and handleDrop() decode/scan off the main goroutine and apply
+// their result via fyne.Do, closing loadDone/scanDone as the last thing that
 // completion block does. Waiting on those channels - rather than polling
 // v.loading or widget visibility - gives the receive a proper
 // happens-before relationship with everything the producer goroutine wrote,
@@ -970,13 +970,14 @@ func settleSlideshow(t *testing.T, v *viewer) {
 
 // warmThumbs decodes every current file's thumbnail synchronously into the
 // grid's cache, so opening the grid afterwards populates each cell from
-// the cache without spawning decode goroutines. That matters under the fyne test driver: a spawned decode's
-// completion paint runs inline on the decode goroutine and can interleave
-// with the very updateGrid walk that spawned it - a race that is already
-// over before any post-hoc wait could begin, so it can only be prevented,
-// not waited out. The async decode path itself is still covered by
-// TestRequestThumbnail_DecodesInBackgroundAndCaches, which drives
-// requestThumbnail directly while the main goroutine stays quiescent.
+// the cache without spawning decode goroutines. That matters under the
+// fyne test driver: a spawned decode's completion paint runs inline on the
+// decode goroutine and can interleave with the very cell-refresh walk that
+// spawned it - a race that is already over before any post-hoc wait could
+// begin, so it can only be prevented, not waited out. The async decode path
+// itself is still covered by TestRequestThumbnail_DecodesInBackgroundAndCaches,
+// which drives requestThumbnail directly while the main goroutine stays
+// quiescent.
 func warmThumbs(t *testing.T, v *viewer) {
 	t.Helper()
 
@@ -1039,7 +1040,7 @@ func TestViewerShow_LoadsAndNavigates(t *testing.T) {
 	v := newTestViewer(t)
 
 	// Named so natural sort (the default) keeps them in drop order - this
-	// test is about show()'s load/navigate/wraparound behavior, not
+	// test is about ShowImage's load/navigate/wraparound behavior, not
 	// sorting, which gets its own test below.
 	first := uitest.TempJPEGURI(t, "1.jpg", 10, 10, color.RGBA{R: 255, A: 255})
 	second := uitest.TempJPEGURI(t, "2.jpg", 20, 10, color.RGBA{G: 255, A: 255})
@@ -1455,9 +1456,9 @@ func TestViewerShow_NavigatingAwayStopsAnimation(t *testing.T) {
 	dropAndWait(t, v, animURI, staticURI)
 
 	// Capture the first image's animate goroutine before superseding it -
-	// once show(1) bumps gen, that goroutine's close(stopped) is the only
-	// signal that it has actually noticed and returned, rather than still
-	// being asleep between frames.
+	// once ShowImage(1) bumps gen, that goroutine's close(stopped) is the
+	// only signal that it has actually noticed and returned, rather than
+	// still being asleep between frames.
 	oldAnimStopped := v.animStopped
 
 	v.ShowImage(1)

@@ -30,17 +30,18 @@ func defaultKeyModifiers() fyne.KeyModifier {
 // handleKeyEvent dispatches a single key press: F1 opens the manual,
 // Escape cancels a scan in progress, resets back to the initial state, or
 // closes the window once there's nothing left to reset/cancel, the
-// arrow/Home/End keys walk through the dropped files, S toggles between
-// natural and scan-order sorting, M toggles merge mode, and 0/1/+/- control
-// zoom (see internal/ui/zoom). Extracted from main()'s canvas key handler
-// so tests can drive the exact same dispatch instead of reimplementing it.
+// arrow/Home/End keys walk through the dropped files, S cycles the sort
+// order (see internal/filesort), M toggles merge mode, and 0/1/+/- control
+// zoom (see internal/ui/zoom). Wired to the window's canvas via
+// SetOnTypedKey in buildViewer (build.go), so tests can drive the exact
+// same dispatch instead of reimplementing it.
 func (v *viewer) handleKeyEvent(ev *fyne.KeyEvent) {
-	// The delete confirmation (Shift+Delete, see delete.go) takes over the
-	// keyboard entirely while it's up: every other key here - navigation,
-	// zoom, S/M/P/I, even Escape's own usual meaning - would either be
-	// confusing (what does "next image" mean with a delete pending?) or
-	// actively dangerous (Escape closing the window instead of just
-	// dismissing the prompt) if it fell through to the switch below.
+	// The delete confirmation (Shift+Delete, see internal/ui/deletion) takes
+	// over the keyboard entirely while it's up: every other key here -
+	// navigation, zoom, S/M/P/I, even Escape's own usual meaning - would
+	// either be confusing (what does "next image" mean with a delete
+	// pending?) or actively dangerous (Escape closing the window instead of
+	// just dismissing the prompt) if it fell through to the switch below.
 	if v.deletion.Visible() {
 		v.deletion.HandleKey(ev)
 		return

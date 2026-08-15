@@ -110,7 +110,7 @@ func TestE2E_BadDropWithNothingLoadedShowsPlaceholder(t *testing.T) {
 // something unsupported after images were already loaded used to leave the
 // last image visible behind the error toast and placeholder art, because
 // the empty-image branches showed the placeholder without ever clearing
-// the previous v.img/v.files. ShowEmptyStateError (library.go) fixes this
+// the previous v.img/v.files. ShowEmptyStateError (viewer.go) fixes this
 // by fully resetting the display before showing the error.
 func TestE2E_BadDropAfterImagesClearsDisplay(t *testing.T) {
 	v, win, _ := newTestUI(t)

@@ -11,9 +11,9 @@ import (
 
 // toggleInfoOverlay is the I key: flips the persistent info card (filename,
 // position, pixel dimensions, file size, zoom level) on or off. Modeled on
-// toastCard - a pinned overlay rather than a new window - but, unlike a
-// toast, it never auto-hides: once on, it stays up across navigation and
-// zoom changes until toggled off again.
+// the toast card (toast.go) - a pinned overlay rather than a new window -
+// but, unlike a toast, it never auto-hides: once on, it stays up across
+// navigation and zoom changes until toggled off again.
 func (v *viewer) toggleInfoOverlay() {
 	v.infoVisible = !v.infoVisible
 	v.syncInfoOverlayVisibility()

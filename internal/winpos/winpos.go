@@ -2,7 +2,7 @@
 // window. fyne.Window can only request a position (driver/desktop.Window's
 // RequestPosition is write-only) and fires no "window moved" event, so
 // there is no supported way to find out where a window currently sits -
-// which main.go needs in order to persist a manually-dragged position
+// which internal/ui needs in order to persist a manually-dragged position
 // across launches (see internal/preferences).
 //
 // Get works around that by reaching past the public API into the raw

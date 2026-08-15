@@ -58,9 +58,9 @@ var (
 
 // NewFocusRing returns one of the manually drawn selection rings used where
 // this app tracks its own selection instead of Fyne's widget-focus system
-// (see deleteUI's comment in internal/ui/build.go for why it never uses
-// that): a transparent rectangle with a colored stroke. Returned visible;
-// callers hide it when the ringed item starts unselected.
+// (see grid.Overview.Close's comment for why it never uses that): a
+// transparent rectangle with a colored stroke. Returned visible; callers
+// hide it when the ringed item starts unselected.
 //
 // The stroke is the theme's *primary* color, not ColorNameFocus: Fyne's
 // focus color is that same hue at 16% alpha (0x2a), a wash meant to be

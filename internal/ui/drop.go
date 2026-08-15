@@ -14,7 +14,7 @@ import (
 )
 
 // cancelScan aborts a scan in progress (Escape while v.scanning is true).
-// It bumps gen the same way clearToDropzone/show already do for loads, so
+// It bumps gen the same way clearToDropzone/ShowImage already do for loads, so
 // the background goroutine in handleDrop notices via the gen check in its
 // directory-walk loop and stops touching the filesystem instead of racing a
 // large tree to completion for a result nobody will see.
@@ -294,7 +294,7 @@ func (v *viewer) applyScanResult(gen uint64, merging bool, uris, images []fyne.U
 		v.ShowToast(fmt.Sprintf(lang.L("stopped scanning after %d images - the dropped folder tree is very large"), v.maxScan))
 	}
 
-	// Deliberately last: show kicks off an async decode chain whose
+	// Deliberately last: ShowImage kicks off an async decode chain whose
 	// completion work (finishLoad/resizeToImage) runs inline on the decode
 	// goroutine under the fyne test driver, so nothing on this goroutine
 	// may touch the UI after it starts - the truncation toast above raced

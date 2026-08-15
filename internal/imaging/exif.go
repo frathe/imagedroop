@@ -132,8 +132,8 @@ func parseExifOrientation(seg []byte) int {
 	return 0
 }
 
-// Metadata is the subset of a photo's Exif tags the EXIF window (see the
-// root package's exif.go) displays: camera make/model, lens, exposure,
+// Metadata is the subset of a photo's Exif tags the EXIF window (see
+// internal/ui/exifwin) displays: camera make/model, lens, exposure,
 // aperture, ISO, focal length, and capture date. GPS is deliberately not
 // read at all - it lives in its own sub-IFD (pointer tag 0x8825) that
 // ReadMetadata never follows - so location data never even reaches this
@@ -151,9 +151,10 @@ type Metadata struct {
 
 	// DateTakenTime is DateTaken's underlying value, parsed from the same
 	// raw Exif tag - for callers that need to compare or sort capture
-	// dates (see the root package's captureOrModTime/CaptureDate below)
-	// rather than just display DateTaken's already-formatted string. Zero
-	// when DateTaken is empty, or set from a raw value that didn't parse.
+	// dates (see CaptureDate in loader.go and internal/filesort's
+	// captureOrModTime) rather than just display DateTaken's
+	// already-formatted string. Zero when DateTaken is empty, or set from a
+	// raw value that didn't parse.
 	DateTakenTime time.Time
 }
 

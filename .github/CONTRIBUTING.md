@@ -17,8 +17,8 @@ participating, you're expected to uphold it.
   the optional tools needed for cross-compiling and security checks
 
 ```sh
-git clone https://github.com/frathe/imagedroop.git
-cd imagedroop
+git clone https://github.com/frathe/imagedrop.git
+cd imagedrop
 make run
 ```
 

@@ -1,6 +1,6 @@
 # Image Drop
 
-[![CI](https://github.com/frathe/imagedroop/actions/workflows/ci.yml/badge.svg)](https://github.com/frathe/imagedroop/actions/workflows/ci.yml)
+[![CI](https://github.com/frathe/imagedrop/actions/workflows/ci.yml/badge.svg)](https://github.com/frathe/imagedrop/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-donate-yellow.svg?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/gcobnk0grj)
 
@@ -76,7 +76,7 @@ set with the keyboard.
 ## Download
 
 Pre-built binaries for Linux, Windows, and macOS are published on the
-[Releases page](https://github.com/frathe/imagedroop/releases) — no Go
+[Releases page](https://github.com/frathe/imagedrop/releases) — no Go
 toolchain required. See [Building](#building) below to build from source
 instead.
 

@@ -7,10 +7,10 @@ import (
 )
 
 // The fyne test driver's windows implement neither driver.NativeWindow nor
-// desktop.Window, mirroring every headless test in the main package (see
-// startWindowPosPolling's own doc comment in main.go) - Get and Set must
-// degrade to a harmless no-op there rather than panicking on a failed type
-// assertion.
+// desktop.Window, mirroring every headless test in internal/ui (see
+// startWindowPosPolling's own doc comment in internal/ui/windowtrack.go) -
+// Get and Set must degrade to a harmless no-op there rather than panicking
+// on a failed type assertion.
 
 func TestGet_NonNativeWindowReportsNotOK(t *testing.T) {
 	win := test.NewWindow(nil)

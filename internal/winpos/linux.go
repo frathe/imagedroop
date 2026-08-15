@@ -83,7 +83,7 @@ import (
 
 // platformPosition only ever succeeds under X11: ctx is a
 // driver.WaylandWindowContext instead on a Wayland session, which the type
-// switch below simply doesn't match, matching RequestPosition's own
+// assertion below simply doesn't match, matching RequestPosition's own
 // documented "may be ignored" stance there - Wayland has no protocol for a
 // client to ask the compositor where its own window sits.
 func platformPosition(ctx any) (x, y int, ok bool) {
@@ -107,7 +107,7 @@ func platformPosition(ctx any) (x, y int, ok bool) {
 
 // platformMaximize only ever succeeds under X11, the same as
 // platformPosition above: ctx is a driver.WaylandWindowContext instead on a
-// Wayland session, which the type switch below simply doesn't match. There
+// Wayland session, which the type assertion below simply doesn't match. There
 // is no equivalent to send there - maximizing is an xdg-shell toplevel
 // request tied to the surface's own protocol object, not something a
 // separate, unrelated connection can ask for from the outside the way X11's

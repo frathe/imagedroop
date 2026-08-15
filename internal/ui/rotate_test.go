@@ -16,8 +16,7 @@ import (
 // modifier state and the test driver can't synthesize any (see
 // defaultKeyModifiers in keys.go). A per-viewer field, so this is just a
 // field write with no global to restore; kept as a helper for the
-// call-site readability and the t.Helper symmetry with stubNativeChooser
-// in openfiles_test.go.
+// call-site readability and the t.Helper symmetry with uitest.StubChooser.
 func stubKeyModifiers(t *testing.T, v *viewer, mods fyne.KeyModifier) {
 	t.Helper()
 
