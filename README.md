@@ -16,7 +16,7 @@ set with the keyboard.
 
 ## usage demo
 
-![Demo](assets/imagedrop_functionality.gif)
+<img src="assets/imagedrop_functionality.gif" alt="Demo" width="100%">
 
 ## Features
 
