@@ -4,6 +4,7 @@
 [![Release](https://img.shields.io/github/v/release/frathe/imagedrop?label=release)](https://github.com/frathe/imagedrop/releases/latest)
 [![Go version](https://img.shields.io/github/go-mod/go-version/frathe/imagedrop)](go.mod)
 [![Last commit](https://img.shields.io/github/last-commit/frathe/imagedrop)](https://github.com/frathe/imagedrop/commits/main)
+[![Downloads](https://img.shields.io/github/downloads/frathe/imagedrop/total)](https://github.com/frathe/imagedrop/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-donate-yellow.svg?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/gcobnk0grj)
 
