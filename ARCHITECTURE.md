@@ -41,11 +41,11 @@ interface.
 | `viewer.go` | The `viewer` struct (UI state, navigation, image cache) — the core of the app — plus its small core-state methods: title handling, `clearToDropzone`/`reset`/`showWelcomeState`, `closeFiles` (the File menu's "Close Files" item — like `reset` but never closes the window), `undoGridMaximize` (undoes a grid-triggered `winpos.Maximize` — see `grid/`'s `ConsumeMaximized` — before a resize elsewhere tries to shrink the window back down), merge-mode toggle/get/set, `showFileIfPresent`, and the exported vocabulary the feature packages' `Host` interfaces bind to (`CurrentFile`, `RemoveFile`, `ShowImage`, `ShowToast`, `ShowEmptyStateError`, `ForceRepaint`, `FileCount`, `FileAt`, `CurrentIndex`, `Generation`, `Unfocus`, `Advance`) |
 | `keys.go` | `handleKeyEvent` — the single keyboard dispatcher every unmodified key press runs through |
 | `menu.go` | `buildMainMenu` — the window's menu bar: a File menu (Open Files…/Close Files/Settings…, built here) composed with `help.Menu()`'s Help menu. The one place that decides how the two compose, per the cross-feature-composition rule below |
-| `drop.go` | Drop handling and the recursive folder scan: `handleDrop`, its shared completion step `applyScanResult`, `cancelScan`, `realPathOf`, the `maxScan` cap and its `MaxScan`/`SetMaxScan` get/set (the settings window's binding) |
+| `drop.go` | Drop handling and the recursive folder scan: `handleDrop`, its shared completion step `applyScanResult`, `applyScannedFiles` (merges or replaces the file set, then reorders and displays it via `sort.go`'s `startSort` instead of sorting inline on the UI goroutine), `cancelScan`, `realPathOf`, the `maxScan` cap and its `MaxScan`/`SetMaxScan` get/set (the settings window's binding) |
 | `load.go` | Loading and displaying images: `ShowImage`/`attemptLoad`/`finishLoad`/`retryAfterLoadFailure`, neighbor preloading, the GIF `animate` loop, `resizeToImage` (takes its `maxW`/`maxH` cap as parameters rather than reading a package constant, so each call site passes the viewer's own `maxWinW`/`maxWinH`) plus `defaultMaxWindowWidth`/`defaultMaxWindowHeight` and the `MaxWindowWidth`/`SetMaxWindowWidth`/`MaxWindowHeight`/`SetMaxWindowHeight` get/set pairs (the settings window's binding) |
 | `toast.go` | The `toast` component - owns its widgets and a cancellable auto-hide lifecycle (atomic generation, per-show stop/done channels, injected duration) - plus the viewer's `showToast` wrapper |
 | `info.go` | The persistent info overlay (I key): toggle/sync/update, `formatFileSize` |
-| `sort.go` | `toggleSort` (the `S` key) and `SetSortMode`/`SortMode` (the settings window's binding — jumps directly to a mode rather than cycling, and is safe to call before any files are loaded) and the one-line `orderedFiles` binding — the orderings themselves live in `internal/filesort` |
+| `sort.go` | `toggleSort` (the `S` key) and `SetSortMode`/`SortMode` (the settings window's binding — jumps directly to a mode rather than cycling, safe to call before any files are loaded), plus `startSort`/`finishSort`: the shared background-reorder mechanism (own spinner/label, staleness generation `sortGen`, completion callback) used by both `SetSortMode` and `drop.go`'s `applyScannedFiles`, so neither freezes the UI on a large stat/Exif-heavy sort — the orderings themselves live in `internal/filesort` |
 | `rotate.go` | View-only 90°-step image rotation (`rotateBy`/`resetRotation`/`redrawRotatedFrame`), composed with EXIF orientation at render time - never written to disk. Stays here rather than becoming a package: it writes `img.Image` on the core load/animation path, which is the app's own side of the contract `zoom/` is written against |
 | `slideshow.go` | `togglePictureFrameMode` — the five-line glue that closes the grid before handing over to `slideshow.Toggle`, i.e. the one thing the slideshow package must not know — plus `toggleSlideshowShuffle` and the `SlideShuffle`/`SetSlideShuffle`/`SlideInterval`/`SetSlideInterval` get/set pairs (the settings window's binding) |
 | `session.go` | `restoreSession` — thin `*viewer` glue over `internal/session` |
@@ -273,9 +273,10 @@ filesystem and the Exif reader.
 Extracted from the root `sort.go` on 2026-08-14. It sits beside
 `internal/imaging` rather than under `internal/ui` because it draws nothing
 and knows about no widget — which is also what resolves the cycle note in
-`internal/preferences` above. `internal/ui/sort.go` keeps only `toggleSort`
-and a one-line `orderedFiles` binding, since both need the viewer's own
-state. The one thing here that isn't pure data is `Label`, which returns
+`internal/preferences` above. `internal/ui/sort.go` keeps only what needs the
+viewer's own state: the `toggleSort`/`SetSortMode` entry points and the
+`startSort`/`finishSort` background-reorder mechanism that calls `Order` off
+the UI goroutine. The one thing here that isn't pure data is `Label`, which returns
 display text and so goes through `lang.L` — see Translations below.
 
 ### `internal/uitest`

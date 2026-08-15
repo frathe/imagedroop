@@ -181,6 +181,7 @@ func TestE2E_LaunchWithSavedSessionShowsRestoreLink(t *testing.T) {
 
 	v.restoreLink.OnTapped()
 	waitForScan(t, v)
+	waitForSort(t, v)
 	waitUntilLoaded(t, v)
 
 	if !v.img.Visible() || v.img.Image == nil {
@@ -226,6 +227,7 @@ func TestE2E_TappingRestoreLinkRestoresNotFileDialog(t *testing.T) {
 	test.TapCanvas(win.Canvas(), pos)
 
 	waitForScan(t, v)
+	waitForSort(t, v)
 	waitUntilLoaded(t, v)
 
 	if chooserCalled {

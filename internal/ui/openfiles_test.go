@@ -41,6 +41,7 @@ func TestRunFileChooser_LoadsSelectedImage(t *testing.T) {
 
 	v.runFileChooser()
 	waitForScan(t, v)
+	waitForSort(t, v)
 	waitUntilLoaded(t, v)
 
 	if !v.img.Visible() || v.img.Image == nil {

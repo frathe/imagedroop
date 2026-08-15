@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"image"
 	"sync"
 	"sync/atomic"
@@ -165,6 +166,52 @@ type viewer struct {
 	// shared state untouched.
 	scanDone chan struct{}
 	loadDone chan struct{}
+
+	sortSpinner *widget.ProgressBarInfinite
+	sortLabel   *widget.Label
+
+	// sorting is true while the current sortGen's reorder is still
+	// meaningfully pending, set by startSort and cleared by whichever of
+	// invalidateSort (a newer sort, Escape via cancelSort, RemoveFile,
+	// clearToDropzone) or finishSort landing that same generation notices
+	// first - see sort.go's invalidateSort, which every one of those but
+	// finishSort itself goes through - so it never gets stuck true once
+	// whatever it was tracking has been superseded, cancelled, or
+	// discarded. Used for two things: gating cancelSort (nothing to cancel
+	// if nothing's in flight) and handleKeyEvent's Escape case (keys.go) -
+	// a first-ever drop clears v.scanning before startSort has actually
+	// populated v.files, so without this Escape would see len(v.files) ==
+	// 0 and quit the window instead of cancelling the still-computing
+	// reorder.
+	sorting bool
+
+	// sortCancel cancels the context.Context behind the reorder v.sorting
+	// is currently tracking - always non-nil whenever v.sorting is true,
+	// since startSort sets both together. Cancelling it is what makes
+	// filesort.Order's per-file stat/Exif loop notice and stop promptly
+	// instead of running to completion in the background for a result
+	// that's already guaranteed to be discarded - see invalidateSort
+	// (sort.go), the one place this is called.
+	sortCancel context.CancelFunc
+
+	// sortGen is a staleness counter dedicated to sort operations, kept
+	// separate from v.gen (the load/decode generation ShowImage/animate/
+	// preload use). Bumping v.gen for a sort would call for pairing with
+	// stopAnimation() the way every other v.gen.Add(1) call site does, which
+	// would spuriously interrupt an unrelated playing GIF or in-flight
+	// preload for no reason connected to sorting - so this feature owns its
+	// own counter instead, the same way toast.gen (toast.go) does. Bumped
+	// by invalidateSort (sort.go) - every startSort call (a sort-mode
+	// change or a drop landing, which supersedes whatever it might still be
+	// computing) and everything else that reassigns v.files/v.unsortedFiles
+	// while a sort could be in flight (Escape, RemoveFile, clearToDropzone)
+	// - so a stale sort result can never clobber newer state.
+	sortGen atomic.Uint64
+
+	// sortDone is closed by finishSort once that generation's reorder has
+	// finished applying (or been discarded as stale), mirroring
+	// scanDone/loadDone so tests can wait on it deterministically.
+	sortDone chan struct{}
 
 	// animFrame counts every write to v.img.Image - attemptLoad's initial
 	// frame plus each one animate cycles to afterwards - and animStopped is
@@ -371,6 +418,7 @@ func (v *viewer) clearToDropzone() {
 
 	v.gen.Add(1) // invalidate any decode or animation still in flight
 	v.stopAnimation()
+	v.invalidateSort() // cancel a sort still in flight - see sortGen's field comment
 
 	v.files = nil
 	v.unsortedFiles = nil
@@ -534,6 +582,8 @@ func (v *viewer) displayedFile() (fyne.URI, bool) {
 // no equivalent index to use, but any matching duplicate there is an
 // equally valid one to drop.
 func (v *viewer) RemoveFile(i int) {
+	v.invalidateSort() // cancel a sort still in flight - see sortGen's field comment
+
 	target := v.files[i]
 	v.files = append(v.files[:i], v.files[i+1:]...)
 	v.imgCache.Remove(target.String())

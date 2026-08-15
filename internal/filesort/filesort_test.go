@@ -1,6 +1,7 @@
 package filesort
 
 import (
+	"context"
 	"image/color"
 	"os"
 	"slices"
@@ -103,7 +104,7 @@ func TestOrderedFiles_SortsByCaptureDate(t *testing.T) {
 		t.Fatalf("os.Chtimes: %v", err)
 	}
 
-	got := Order(mode, []fyne.URI{newer, noExif, older})
+	got := Order(context.Background(), mode, []fyne.URI{newer, noExif, older})
 
 	var names []string
 	for _, u := range got {
@@ -132,9 +133,9 @@ func TestOrderedFiles_SortsByModTime(t *testing.T) {
 		}
 	}
 
-	// Handed to orderedFiles newest-touched first, oldest last - it should
+	// Handed to Order newest-touched first, oldest last - it should
 	// still come back oldest (a) to newest (c).
-	got := Order(mode, []fyne.URI{c, a, b})
+	got := Order(context.Background(), mode, []fyne.URI{c, a, b})
 
 	var names []string
 	for _, u := range got {
@@ -154,7 +155,7 @@ func TestOrderedFiles_SortsBySize(t *testing.T) {
 	medium := storage.NewFileURI(uitest.WriteTempFile(t, "medium.dat", make([]byte, 100)))
 	large := storage.NewFileURI(uitest.WriteTempFile(t, "large.dat", make([]byte, 1000)))
 
-	got := Order(mode, []fyne.URI{large, small, medium})
+	got := Order(context.Background(), mode, []fyne.URI{large, small, medium})
 
 	var names []string
 	for _, u := range got {
@@ -162,5 +163,43 @@ func TestOrderedFiles_SortsBySize(t *testing.T) {
 	}
 	if want := []string{"small.dat", "medium.dat", "large.dat"}; !slices.Equal(names, want) {
 		t.Errorf("Order() = %v, want %v", names, want)
+	}
+}
+
+// TestOrder_StopsEarlyWhenContextIsCancelled checks the contract
+// sortByInt64Key's loop relies on: a cancelled ctx makes Order stop before
+// touching the filesystem, rather than stat-ing every file and discarding
+// the cancellation on the way to a result nobody asked for anymore. Cancels
+// ctx before Order is even called - a deterministic way to exercise the
+// same check the loop makes on every iteration, without depending on
+// timing to catch it mid-sort. internal/ui's cancelSort is what actually
+// cancels a live one; this only checks Order itself honors it.
+func TestOrder_StopsEarlyWhenContextIsCancelled(t *testing.T) {
+	mode := ByModTime
+
+	// b, then a: deliberately not in mtime order, so a real (uncancelled)
+	// ByModTime sort would visibly swap them - if Order ignored ctx, this
+	// test would see that swap instead of the untouched input order.
+	b := uitest.TempJPEGURI(t, "b.jpg", 4, 4, color.White)
+	a := uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White)
+	base := time.Now().Truncate(time.Second)
+	if err := os.Chtimes(a.Path(), base, base); err != nil {
+		t.Fatalf("os.Chtimes: %v", err)
+	}
+	if err := os.Chtimes(b.Path(), base.Add(time.Hour), base.Add(time.Hour)); err != nil {
+		t.Fatalf("os.Chtimes: %v", err)
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	got := Order(ctx, mode, []fyne.URI{b, a})
+
+	var names []string
+	for _, u := range got {
+		names = append(names, u.Name())
+	}
+	if want := []string{"b.jpg", "a.jpg"}; !slices.Equal(names, want) {
+		t.Errorf("Order() with an already-cancelled ctx = %v, want the input order %v untouched", names, want)
 	}
 }

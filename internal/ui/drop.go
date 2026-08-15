@@ -314,21 +314,62 @@ func (v *viewer) applyScanResult(gen uint64, merging bool, uris, images []fyne.U
 		v.ShowToast(fmt.Sprintf(lang.L("stopped scanning after %d images - the dropped folder tree is very large"), v.maxScan))
 	}
 
-	// Deliberately last: ShowImage kicks off an async decode chain whose
-	// completion work (finishLoad/resizeToImage) runs inline on the decode
-	// goroutine under the fyne test driver, so nothing on this goroutine
-	// may touch the UI after it starts - the truncation toast above raced
-	// exactly that way before this ordering was fixed. Under the real
-	// driver the fyne.Do queue serializes both orders identically.
+	// Deliberately last: applyScannedFiles hands the reorder to a background
+	// goroutine that goes on to call ShowImage, which itself kicks off an
+	// async decode chain - and under the fyne test driver both that
+	// goroutine and the decode's completion work (finishLoad/resizeToImage)
+	// run inline rather than being marshaled onto one UI goroutine, so
+	// nothing here may touch the UI once it starts. The truncation toast
+	// above raced exactly that way before this ordering was fixed. Under the
+	// real driver the fyne.Do queue serializes both orders identically.
+	v.applyScannedFiles(merging, images)
+}
+
+// applyScannedFiles merges or replaces the file set with images, then
+// reorders v.unsortedFiles/v.files under the current sort mode in the
+// background via startSort (sort.go) - same reason SetSortMode does: the
+// capture-date/modified/size modes stat or Exif-read every file, which would
+// otherwise freeze the UI for as long as this scan just took to gather them,
+// right as it finishes.
+//
+// v.unsortedFiles and v.files are deliberately only ever written together,
+// atomically, once the reorder lands - never one without the other. This
+// matters because RemoveFile's own comment documents them as required to
+// always hold the same set of files (just possibly different order) so a
+// later sort toggle doesn't resurrect a removed file; updating
+// v.unsortedFiles synchronously here but leaving v.files to catch up later
+// would violate that invariant for as long as the background reorder is
+// still running, and could leave v.index pointing past the end of a v.files
+// a *different*, later-landing reorder (a concurrent SetSortMode call, say)
+// has already replaced out from under it. Keeping both deferred to the same
+// onDone callback means that can't happen: whichever reorder's generation is
+// current when it finishes is the one and only writer of both fields for
+// that landing.
+func (v *viewer) applyScannedFiles(merging bool, images []fyne.URI) {
+	var unsorted []fyne.URI
 	if merging {
-		v.unsortedFiles = append(v.unsortedFiles, images...)
-		v.files = v.orderedFiles(v.unsortedFiles)
-		if !v.showFileIfPresent(images[0]) {
+		// Copied rather than appended onto v.unsortedFiles directly - same
+		// reason SetSortMode's own snapshot is a copy: this slice is about to
+		// be read by a background goroutine, and appending onto
+		// v.unsortedFiles's existing backing array (when it has spare
+		// capacity) would let a concurrent RemoveFile mutate the same memory
+		// the goroutine is reading.
+		unsorted = append(append([]fyne.URI(nil), v.unsortedFiles...), images...)
+	} else {
+		unsorted = images
+	}
+
+	v.startSort(v.sortMode, unsorted, func(ordered []fyne.URI) {
+		v.unsortedFiles = unsorted
+		v.files = ordered
+		v.ForceRepaint()
+
+		if merging {
+			if !v.showFileIfPresent(images[0]) {
+				v.ShowImage(0)
+			}
+		} else {
 			v.ShowImage(0)
 		}
-	} else {
-		v.unsortedFiles = images
-		v.files = v.orderedFiles(images)
-		v.ShowImage(0)
-	}
+	})
 }

@@ -60,19 +60,29 @@ func (v *viewer) handleKeyEvent(ev *fyne.KeyEvent) {
 	switch ev.Name {
 	case fyne.KeyEscape:
 		// Handled before the navigation guard below so Escape still works
-		// while an image is loading or scanning. While picture-frame mode
-		// is on, Escape leaves it (like any other full-screen app) instead
-		// of resetting the session - press it again afterwards for that.
-		// A scan in progress takes priority over both the close and reset
-		// branches below: len(v.files) == 0 is exactly the state a
-		// first-ever drop's scan runs in, so without this check Escape
-		// would close the window out from under a scan the user meant to
-		// cancel instead.
+		// while an image is loading, scanning, or being reordered. While
+		// picture-frame mode is on, Escape leaves it (like any other
+		// full-screen app) instead of resetting the session - press it
+		// again afterwards for that. A scan in progress takes priority over
+		// both the close and reset branches below: len(v.files) == 0 is
+		// exactly the state a first-ever drop's scan runs in, so without
+		// this check Escape would close the window out from under a scan
+		// the user meant to cancel instead. v.sorting takes the same
+		// priority for the same reason, and for the same len(v.files) == 0
+		// risk during a first-ever drop's reorder - but unlike cancelScan,
+		// cancelSort (sort.go) never touches v.files/v.unsortedFiles at
+		// all (they're never written until the reorder's own onDone runs),
+		// so cancelling a resort of an already-loaded set just stops the
+		// background work and leaves what's on screen exactly as it was,
+		// rather than resetting the whole session the way falling through
+		// to the plain v.reset() below would.
 		if v.slides.Active() {
 			v.slides.Exit()
 			v.resetFade()
 		} else if v.scanning {
 			v.cancelScan()
+		} else if v.sorting {
+			v.cancelSort()
 		} else if len(v.files) == 0 {
 			v.win.Close()
 		} else {

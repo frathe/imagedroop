@@ -199,6 +199,7 @@ func drain(t *testing.T, v *viewer) {
 		ch   chan struct{}
 	}{
 		{"scan", v.scanDone},
+		{"sort", v.sortDone},
 		{"load", v.loadDone},
 		{"clipboard copy", v.clipboardDone},
 		{"file chooser", v.chooserDone},
@@ -322,6 +323,7 @@ func TestHandleDrop_FiltersUnsupportedFiles(t *testing.T) {
 		uitest.FakeURI{FileName: "skip.txt", Ext: ".txt"},
 	})
 	waitForScan(t, v)
+	waitForSort(t, v)
 	waitUntilLoaded(t, v)
 
 	if len(v.files) != 1 || v.files[0].Name() != jpegURI.Name() {
@@ -353,6 +355,7 @@ func TestHandleDrop_SecondDropWithoutMergeModeReplaces(t *testing.T) {
 	second := uitest.TempJPEGURI(t, "b.jpg", 4, 4, color.White)
 	v.handleDrop([]fyne.URI{second}) // mergeMode defaults to false
 	waitForScan(t, v)
+	waitForSort(t, v)
 	waitUntilLoaded(t, v)
 
 	if len(v.files) != 1 || v.files[0].Name() != "b.jpg" {
@@ -936,21 +939,27 @@ func TestHandleDrop_DedupesDuplicateURIsInDirectDrop(t *testing.T) {
 // suggested a tuning knob nobody was actually turning.
 const testTimeout = 5 * time.Second
 
-// dropAndWait drops uris and waits for the resulting scan and load to
-// finish - the three-line opening of nearly every test in this suite.
+// dropAndWait drops uris and waits for the resulting scan, reorder and load
+// to finish - the opening lines of nearly every test in this suite. The sort
+// step is part of the chain because applyScanResult hands the scanned files
+// to startSort, which only shows the first image once the reorder lands.
 // Use dropAndWaitScan instead when the drop is expected to load nothing
-// (no supported images), since loadDone never closes in that case.
+// (no supported images), since neither sortDone nor loadDone is touched in
+// that case.
 func dropAndWait(t *testing.T, v *viewer, uris ...fyne.URI) {
 	t.Helper()
 
 	v.handleDrop(uris)
 	waitForScan(t, v)
+	waitForSort(t, v)
 	waitUntilLoaded(t, v)
 }
 
 // dropAndWaitScan drops uris and waits only for the scan, for drops that
 // end with nothing displayable - an unsupported file, an empty folder, a
-// merge that adds nothing.
+// merge that adds nothing. Deliberately no waitForSort: applyScanResult
+// returns before ever reaching startSort in that case, so v.sortDone is left
+// holding whatever channel some earlier call put there.
 func dropAndWaitScan(t *testing.T, v *viewer, uris ...fyne.URI) {
 	t.Helper()
 
@@ -992,6 +1001,16 @@ func waitForScan(t *testing.T, v *viewer) {
 	case <-v.scanDone:
 	case <-time.After(testTimeout):
 		t.Fatal("timed out waiting for scan to finish")
+	}
+}
+
+func waitForSort(t *testing.T, v *viewer) {
+	t.Helper()
+
+	select {
+	case <-v.sortDone:
+	case <-time.After(testTimeout):
+		t.Fatal("timed out waiting for sort to finish")
 	}
 }
 
@@ -1241,6 +1260,7 @@ func TestToggleSort_CyclesThroughAllModesAndBackToName(t *testing.T) {
 	dropOrder := []fyne.URI{img10, img1, img2}
 	v.handleDrop(dropOrder)
 	waitForScan(t, v)
+	waitForSort(t, v)
 	waitUntilLoaded(t, v)
 
 	namesOf := func(files []fyne.URI) []string {
@@ -1287,6 +1307,7 @@ func TestToggleSort_CyclesThroughAllModesAndBackToName(t *testing.T) {
 
 	for _, step := range steps {
 		v.handleKeyEvent(&fyne.KeyEvent{Name: fyne.KeyS})
+		waitForSort(t, v)
 		waitUntilLoaded(t, v)
 
 		if v.sortMode != step.mode {
@@ -1310,6 +1331,7 @@ func TestToggleSort_CyclesThroughAllModesAndBackToName(t *testing.T) {
 
 	// One more S wraps back around to natural (by-name) sort.
 	v.handleKeyEvent(&fyne.KeyEvent{Name: fyne.KeyS})
+	waitForSort(t, v)
 	waitUntilLoaded(t, v)
 
 	if v.sortMode != filesort.ByName {
@@ -1349,6 +1371,10 @@ func TestSetSortMode_JumpsDirectlyRatherThanCycling(t *testing.T) {
 	if v.sortMode != filesort.ByDropOrder {
 		t.Errorf("sortMode = %v, want ByDropOrder straight after one SetSortMode call", v.sortMode)
 	}
+
+	waitForSort(t, v)
+	waitUntilLoaded(t, v)
+
 	if got := v.files[v.index].Name(); got != current {
 		t.Errorf("displayed file = %q, want it to stay on %q across the sort-mode change", got, current)
 	}
@@ -1365,6 +1391,116 @@ func TestSetSortMode_SafeWithNoFilesLoaded(t *testing.T) {
 
 	if v.sortMode != filesort.BySize {
 		t.Errorf("sortMode = %v, want BySize", v.sortMode)
+	}
+}
+
+// TestSetSortMode_SnapshotDoesNotAliasUnsortedFiles is a -race regression
+// test for the snapshot SetSortMode hands to startSort's goroutine: a plain
+// slice-header copy of v.unsortedFiles aliases its backing array, which
+// RemoveFile (a failed-decode retry, a Shift+Delete) then shifts *in place*
+// on the UI goroutine while filesort.Order is still copying it - an
+// unsynchronized read/write on the same memory. Nothing here asserts: the
+// race detector is the assertion, and the test is only meaningful under
+// -race.
+//
+// The file set is built from FakeURIs and assigned directly rather than
+// dropped, since what matters is a set large enough for filesort.Order's
+// initial copy to still be in flight when the removals start - not that the
+// files exist (ByModTime just gets a zero time for each failed stat, in the
+// same loop it would otherwise stat a real one).
+func TestSetSortMode_SnapshotDoesNotAliasUnsortedFiles(t *testing.T) {
+	v := newTestViewer(t)
+
+	const (
+		files    = 4000
+		removals = 200
+	)
+
+	unsorted := make([]fyne.URI, 0, files)
+	for i := 0; i < files; i++ {
+		unsorted = append(unsorted, uitest.FakeURI{FileName: fmt.Sprintf("img_%05d.jpg", i), Ext: ".jpg"})
+	}
+
+	v.files = append([]fyne.URI(nil), unsorted...)
+	v.unsortedFiles = unsorted
+
+	v.SetSortMode(filesort.ByModTime)
+
+	for i := 0; i < removals; i++ {
+		v.RemoveFile(0)
+	}
+
+	waitForSort(t, v)
+}
+
+// TestHandleKeyEvent_EscapeDuringFirstDropReorderDoesNotCloseWindow guards
+// keys.go's Escape branch: a first-ever drop's scan clears v.scanning back
+// to false before applyScannedFiles's startSort (drop.go/sort.go) has
+// actually populated v.files, so for as long as that reorder is still
+// computing, v.files reads exactly like the "nothing left to reset" state
+// Escape otherwise closes the window on. v.sorting is what tells the two
+// apart. Drives the in-flight state directly - v.sorting true, v.files
+// still empty, v.sortCancel a harmless stub standing in for the real one
+// startSort would have paired with it - rather than racing a real drop's
+// background goroutine to reproduce that window, the same approach
+// TestCancelScan_CancelsInFlightScanWithNoFilesYet uses for the gathering
+// phase.
+func TestHandleKeyEvent_EscapeDuringFirstDropReorderDoesNotCloseWindow(t *testing.T) {
+	v, _, closed := newTestUI(t)
+
+	v.sorting = true
+	v.sortCancel = func() {}
+
+	v.handleKeyEvent(&fyne.KeyEvent{Name: fyne.KeyEscape})
+
+	if closed() {
+		t.Error("Escape should not close the window while a first-drop reorder is still in flight")
+	}
+	if v.sorting {
+		t.Error("Escape's cancelSort should clear v.sorting")
+	}
+}
+
+// TestHandleKeyEvent_EscapeDuringResortOfExistingFilesDoesNotClearThem is a
+// regression test: keys.go's Escape branch used to fall through to a plain
+// v.reset() whenever v.sorting was true, which is correct for a first-ever
+// drop's cancelled reorder (there's nothing loaded yet to lose) but wrong
+// for cancelling a resort of files that were already loaded and on
+// screen - v.reset() wipes the whole session, not just the pending sort.
+// cancelSort must leave the existing set and the displayed image alone,
+// mirroring how cancelScan leaves a merge-mode scan's pre-existing files
+// alone.
+func TestHandleKeyEvent_EscapeDuringResortOfExistingFilesDoesNotClearThem(t *testing.T) {
+	v := newTestViewer(t)
+
+	a := uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White)
+	b := uitest.TempJPEGURI(t, "b.jpg", 4, 4, color.White)
+	dropAndWait(t, v, a, b)
+
+	filesBefore := append([]fyne.URI(nil), v.files...)
+	indexBefore := v.index
+
+	v.sorting = true
+	v.sortCancel = func() {}
+
+	v.handleKeyEvent(&fyne.KeyEvent{Name: fyne.KeyEscape})
+
+	if len(v.files) != len(filesBefore) {
+		t.Fatalf("files = %v, want unchanged %v after cancelling a resort", v.files, filesBefore)
+	}
+	for i, u := range v.files {
+		if u.String() != filesBefore[i].String() {
+			t.Errorf("files[%d] = %q, want unchanged %q after cancelling a resort", i, u, filesBefore[i])
+		}
+	}
+	if v.index != indexBefore {
+		t.Errorf("index = %d, want unchanged %d after cancelling a resort", v.index, indexBefore)
+	}
+	if v.img.Image == nil {
+		t.Error("the displayed image should not be cleared by cancelling a resort")
+	}
+	if v.sorting {
+		t.Error("Escape's cancelSort should clear v.sorting")
 	}
 }
 

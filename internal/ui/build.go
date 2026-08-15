@@ -150,6 +150,30 @@ func newScanUI() scanUI {
 	return scanUI{spinner: spinner, label: label}
 }
 
+// sortUI is the background-reorder progress indicator: an infinite spinner
+// over a static "Sorting..." label, both hidden until startSort (sort.go)
+// shows them - for a sort-mode change or for the reorder a finished drop
+// hands over. A dedicated pair rather than reusing scanUI's - a background
+// scan (a merge-mode drop) can still be in flight when a sort-mode change is
+// requested, since handleKeyEvent's S-key guard only checks
+// len(v.files)<2/v.loading, not v.scanning, and the two would otherwise
+// fight over one pair of widgets. Unlike scanUI's label, this one's text
+// never changes: the ask is only to show that a sort is running, not to
+// track its progress the way the scan counter does.
+type sortUI struct {
+	spinner *widget.ProgressBarInfinite
+	label   *widget.Label
+}
+
+func newSortUI() sortUI {
+	spinner := widget.NewProgressBarInfinite()
+	label := widget.NewLabelWithStyle(lang.L("Sorting..."), fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
+	spinner.Hide()
+	label.Hide()
+
+	return sortUI{spinner: spinner, label: label}
+}
+
 // infoUI is the persistent info overlay (I key, see toggleInfoOverlay in
 // info.go) - unlike the toast it never auto-hides itself, and it's several
 // distinct lines rather than one centered message, so it uses the theme's
@@ -206,6 +230,7 @@ func buildViewer(application fyne.App) (*viewer, fyne.Window) {
 		func() { view.restoreSession() },
 	)
 	scan := newScanUI()
+	sortUIC := newSortUI()
 	toastComp := newToast(func() { view.ForceRepaint() })
 	info := newInfoOverlayUI(func() { view.exif.Show() })
 
@@ -255,6 +280,8 @@ func buildViewer(application fyne.App) (*viewer, fyne.Window) {
 		loadingBar:    loadingBar,
 		scanSpinner:   scan.spinner,
 		scanLabel:     scan.label,
+		sortSpinner:   sortUIC.spinner,
+		sortLabel:     sortUIC.label,
 		toast:         toastComp,
 		infoText:      info.text,
 		infoCard:      info.card,
@@ -321,6 +348,7 @@ func buildViewer(application fyne.App) (*viewer, fyne.Window) {
 	overlay := container.New(layout.NewVBoxLayout(), container.New(fixedHeightLayout{height: loadingBarHeight}, loadingBar))
 
 	scanContainer := container.NewCenter(container.NewVBox(scan.spinner, scan.label))
+	sortContainer := container.NewCenter(container.NewVBox(sortUIC.spinner, sortUIC.label))
 
 	// Pinned to the bottom edge, mirroring how loadingBar is pinned to the
 	// top: a leading spacer eats all the slack space in the VBox, leaving
@@ -334,7 +362,7 @@ func buildViewer(application fyne.App) (*viewer, fyne.Window) {
 	infoOverlay := container.New(layout.NewVBoxLayout(), container.NewHBox(info.card, layout.NewSpacer()))
 
 	window.SetContent(container.New(windowSizeTracker{v: view},
-		view.zoom.Widget(), dz.root, scanContainer, overlay, toastOverlay, infoOverlay, view.deletion.Overlay(), view.grid.Overlay()))
+		view.zoom.Widget(), dz.root, scanContainer, sortContainer, overlay, toastOverlay, infoOverlay, view.deletion.Overlay(), view.grid.Overlay()))
 	window.SetMainMenu(buildMainMenu(view))
 
 	// The saved window size (see internal/preferences) is only ever the

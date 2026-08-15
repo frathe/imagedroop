@@ -14,6 +14,7 @@
 package filesort
 
 import (
+	"context"
 	"os"
 	"sort"
 	"strings"
@@ -78,33 +79,36 @@ func DisplayName(m Mode) string {
 	}
 }
 
-// Order returns raw arranged according to m. It always returns a fresh
-// slice, so callers never alias the input.
+// Order returns raw arranged according to m, or however far it got if ctx
+// is cancelled before finishing. It always returns a fresh slice, so
+// callers never alias the input.
 //
 // The capture-date, modified, and size modes each stat or read every file
-// once up front (see sortByInt64Key) rather than rescanning on every
-// comparison, but that's still one disk touch per file with no progress
-// indicator or way to cancel - fine for a normal drop, but a large
-// recursive folder scan will visibly pause here. The same trade-off is
-// already accepted, and left unaddressed, for the "Cancel pending decodes"
-// case (see todos.md's "not deemed worth implementing" section) - this
-// mode just adds three more paths that stat every file instead of one.
-func Order(m Mode, raw []fyne.URI) []fyne.URI {
+// once up front (see sortByInt64Key), one disk touch per file - fine for a
+// normal drop, but a large recursive folder scan will visibly pause here if
+// nothing cancels ctx first. internal/ui's startSort/cancelSort discard any
+// result once their own generation has been superseded regardless
+// (including by a user cancelling), so an interrupted Order only needs to
+// stop touching the filesystem promptly once ctx is done - it doesn't need
+// to return a fully correct partial order, since nothing ever looks at one.
+func Order(ctx context.Context, m Mode, raw []fyne.URI) []fyne.URI {
 	ordered := append([]fyne.URI(nil), raw...)
 
 	switch m {
 	case ByDropOrder:
 		// Already in raw order - nothing to do.
 	case ByCaptureDate:
-		sortByInt64Key(ordered, func(u fyne.URI) int64 { return captureOrModTime(u).UnixNano() })
+		sortByInt64Key(ctx, ordered, func(u fyne.URI) int64 { return captureOrModTime(u).UnixNano() })
 	case ByModTime:
-		sortByInt64Key(ordered, func(u fyne.URI) int64 { return modTimeOf(u).UnixNano() })
+		sortByInt64Key(ctx, ordered, func(u fyne.URI) int64 { return modTimeOf(u).UnixNano() })
 	case BySize:
-		sortByInt64Key(ordered, fileSizeOf)
+		sortByInt64Key(ctx, ordered, fileSizeOf)
 	default: // ByName
-		sort.SliceStable(ordered, func(i, j int) bool {
-			return naturalLess(ordered[i].Name(), ordered[j].Name())
-		})
+		if ctx.Err() == nil {
+			sort.SliceStable(ordered, func(i, j int) bool {
+				return naturalLess(ordered[i].Name(), ordered[j].Name())
+			})
+		}
 	}
 
 	return ordered
@@ -115,7 +119,15 @@ func Order(m Mode, raw []fyne.URI) []fyne.URI {
 // sort.Slice's own Less closure would instead invoke it O(n log n) times,
 // which matters here since every key func in this file costs a stat or a
 // raw file read, not a cheap in-memory comparison.
-func sortByInt64Key(files []fyne.URI, key func(fyne.URI) int64) {
+//
+// ctx is checked once per file, before that file's own stat/read - cheap
+// next to the I/O it guards, so there's no need to throttle it the way
+// drop.go's scan-progress UI update is. A cancellation leaves files in
+// whatever order they arrived in rather than finishing the keys or the
+// sort: the caller discards the whole result on cancellation anyway (see
+// Order's own comment), so there's nothing to gain from finishing
+// correctly, only disk I/O to avoid.
+func sortByInt64Key(ctx context.Context, files []fyne.URI, key func(fyne.URI) int64) {
 	type item struct {
 		u fyne.URI
 		k int64
@@ -123,7 +135,14 @@ func sortByInt64Key(files []fyne.URI, key func(fyne.URI) int64) {
 
 	items := make([]item, len(files))
 	for i, u := range files {
+		if ctx.Err() != nil {
+			return
+		}
 		items[i] = item{u, key(u)}
+	}
+
+	if ctx.Err() != nil {
+		return
 	}
 
 	sort.SliceStable(items, func(i, j int) bool {

@@ -71,6 +71,7 @@ func TestRestoreSession_LoadsSavedFilesAndHidesLink(t *testing.T) {
 
 	v.restoreSession()
 	waitForScan(t, v)
+	waitForSort(t, v)
 	waitUntilLoaded(t, v)
 
 	if len(v.files) != 2 {
@@ -143,6 +144,7 @@ func TestViewerReset_DoesNotReshowRestoreLinkOnceConsumed(t *testing.T) {
 
 	v.restoreSession()
 	waitForScan(t, v)
+	waitForSort(t, v)
 	waitUntilLoaded(t, v)
 
 	v.reset()
