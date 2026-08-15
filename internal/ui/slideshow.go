@@ -13,5 +13,28 @@ package ui
 // costs nothing.
 func (v *viewer) togglePictureFrameMode() {
 	v.grid.Close()
+
+	wasActive := v.slides.Active()
 	v.slides.Toggle()
+
+	// resetFade only matters on the way out - Toggle just called Exit()
+	// internally - since there is nothing to reset on the way in. Handled
+	// here rather than inside slideshow.Exit itself, the same reason
+	// togglePictureFrameMode itself exists: the slideshow package doesn't
+	// know v.img exists.
+	if wasActive {
+		v.resetFade()
+	}
+}
+
+// toggleSlideshowShuffle flips whether picture-frame mode's auto-advance
+// (Shift+P, see handleKeyEvent) picks a random other file instead of the
+// next one in order, and immediately reflects it in the window title via
+// the "[shuffle]" prefix - the same way toggleMergeMode does for merge
+// mode. Works whether picture-frame mode is currently on or off, the same
+// as M and S do for their own standing preferences: it just pre-arms the
+// order for whenever picture-frame mode next runs.
+func (v *viewer) toggleSlideshowShuffle() {
+	v.slides.ToggleShuffle()
+	v.applyTitle()
 }

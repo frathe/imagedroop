@@ -1,6 +1,6 @@
 # Image Drop — User Manual
 
-Version 0.0.8
+Version 0.1.3
 
 Image Drop is a small, fast image viewer for macOS, Windows, and Linux. There
 is no toolbar and no built-in file browser: you drop images onto the window
@@ -292,16 +292,28 @@ photos like a digital picture frame.
   scale-to-fit behavior as the normal window.
 - Every **10 seconds** (by default) the view **automatically advances** to
   the next image, wrapping around at the end just like manual navigation.
+  Each transition **crossfades** — the outgoing image fades to nothing, the
+  incoming one fades in — instead of the instant swap ordinary browsing
+  uses. Manual navigation (`←`/`→`/`Home`/`End`) crossfades the same way
+  while picture-frame mode is on.
 - **`↑`** increases the interval by one second, **`↓`** decreases it (down to
   a floor of one second). While picture-frame mode is on, `↑`/`↓` control the
   timer instead of navigating — use **`←`**/**`→`** (or `Home`/`End`) to
   navigate manually, which still works as usual and restarts the countdown
   from the new image.
+- **`Shift+P`** turns **shuffle** on or off: with it on, auto-advance picks a
+  random other image each time instead of the next one in order (never the
+  one already on screen), and the title bar starts with **`[shuffle]`**.
+  Manual navigation with `←`/`→`/`Home`/`End` is unaffected either way — it
+  always steps through the set in order. Shuffle works as a standing
+  preference like merge mode: `Shift+P` works even before you ever turn
+  picture-frame mode on, and outside it too.
 - **Animated GIFs are always let finish.** If a GIF's full loop takes longer
   than the current interval, picture-frame mode waits for it to play through
   at least once before moving on, rather than cutting it off partway.
-- Your chosen interval is remembered the next time you turn picture-frame
-  mode on — and carries over the next time you launch Image Drop, too.
+- Your chosen interval and shuffle setting are remembered the next time you
+  turn picture-frame mode on — and carry over the next time you launch
+  Image Drop, too.
 - Press **`P`** again, or **`Esc`**, to leave picture-frame mode and return to
   the normal window. `Esc` only leaves picture-frame mode here — it doesn't
   also clear the loaded images; press it again afterwards for that.
@@ -378,7 +390,10 @@ stays in the set.
   clipboard
 - **`Shift+Delete`** — permanently delete the current file from disk, after
   confirming (see "Deleting a file" above)
-- **`P`** — toggle picture-frame mode (full-screen slideshow, see above)
+- **`P`** — toggle picture-frame mode (full-screen slideshow with a
+  crossfade between images, see above)
+- **`Shift+P`** — toggle shuffle order for picture-frame mode's
+  auto-advance; shown in the title bar as a **`[shuffle]`** prefix
 - **`↑`** / **`↓`** *(while in picture-frame mode)* — increase / decrease the
   auto-advance interval by one second
 - **`Esc`** — clear the current images and return to the initial drop screen;
@@ -486,9 +501,10 @@ Press `Esc` in the image window when nothing is loaded, or close it the usual
 way for your platform (the red close button on macOS, the ✕ on Windows and
 Linux). If images are loaded, `Esc` clears them and returns to the initial
 drop screen instead — press it again (now that the set is cleared) to quit.
-Merge mode, sort order, the picture-frame interval, and the window size
-carry over to the next launch (see their sections above); nothing else does
-— zoom, rotation, and which image you were looking at all reset.
+Merge mode, sort order, the picture-frame interval and shuffle setting, and
+the window size carry over to the next launch (see their sections above);
+nothing else does — zoom, rotation, and which image you were looking at all
+reset.
 
 ---
 
@@ -536,8 +552,10 @@ Things Image Drop deliberately does not do (yet):
 - **EXIF data window** — `E`, or the info overlay's "Show EXIF data" link,
   opens camera make/model, lens, exposure, aperture, ISO, focal length, and
   capture date for the current image (no GPS/location)
-- **Picture-frame mode** — `P` toggles a full-screen slideshow; `↑`/`↓` tune
-  the (default 10s) auto-advance interval while it's on
+- **Picture-frame mode** — `P` toggles a full-screen slideshow with a
+  crossfade between images; `↑`/`↓` tune the (default 10s) auto-advance
+  interval while it's on; `Shift+P` toggles shuffle order (`[shuffle]` in
+  the title bar)
 - **Copy** — `Cmd`/`Ctrl+C` copies the current image, `Cmd`/`Ctrl+Shift+C`
   copies its file path
 - **Delete** — `Shift+Delete` opens a confirmation card (`←`/`→` to choose,

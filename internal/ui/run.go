@@ -74,6 +74,7 @@ func Run(application fyne.App, initial []fyne.URI) {
 			SortMode:          view.sortMode.PrefValue(),
 			MergeMode:         view.mergeMode,
 			SlideInterval:     view.slides.Interval(),
+			SlideShuffle:      view.slides.Shuffle(),
 			WindowSize:        view.windowSize,
 			WindowPosX:        posX,
 			WindowPosY:        posY,

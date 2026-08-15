@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"math/rand/v2"
 	"time"
 
 	"fyne.io/fyne/v2"
@@ -31,6 +32,15 @@ func (v *viewer) ShowImage(i int) {
 	// Once an image is on screen we keep showing it until the new one is
 	// ready, instead of blanking out to the drop-hint on every navigation.
 	firstLoad := v.img.Image == nil
+
+	// In picture-frame mode, fade the outgoing image out instead of the
+	// usual instant swap - finishLoad fades the incoming one back in once
+	// it's ready. Skipped on the very first image of a session (nothing on
+	// screen yet to fade from) and left alone everywhere else, so ordinary
+	// browsing stays an instant swap exactly as before.
+	if v.slides.Active() && !firstLoad {
+		v.startFade(0, 1)
+	}
 
 	v.loading.Store(true)
 	v.loadingBar.Show()
@@ -152,7 +162,19 @@ func (v *viewer) finishLoad(i int, u fyne.URI, loaded *imaging.LoadedImage, gen 
 	v.displayFrames = loaded.Frames
 	v.displayFrameIdx = 0
 	v.rotation = 0
+
+	// In picture-frame mode, the outgoing image was left fading toward
+	// invisible by ShowImage's startFade(0, 1) above (or already is, if
+	// that fade had time to finish); forcing it the rest of the way there
+	// right before the swap hides the new pixels landing mid-fade, then
+	// the fade-in below takes over from a clean, fully-invisible start.
+	if v.slides.Active() {
+		v.img.Translucency = 1
+	}
 	v.redrawRotatedFrame()
+	if v.slides.Active() {
+		v.startFade(1, 0)
+	}
 	v.img.Show()
 	v.dropzone.Hide()
 	v.emptyStateArt.Hide()
@@ -398,4 +420,70 @@ func resizeToImage(w fyne.Window, b image.Rectangle) {
 	// otherwise produce a window too small to grab or read the title of.
 	// ImageFillContain letterboxes the image within the larger frame.
 	w.Resize(fyne.NewSize(max(width, startW), max(height, startH)))
+}
+
+// slideshowFadeDuration is how long each half of a picture-frame-mode
+// transition takes: the outgoing image fades to invisible, then the
+// incoming one fades in from invisible - a full transition takes about
+// twice this long, overlapping however much of the load it happens to
+// take. Ordinary browsing (picture-frame mode off) never calls startFade
+// at all, so it stays an instant swap exactly as before.
+const slideshowFadeDuration = 400 * time.Millisecond
+
+// startFade stops whatever fade is already running - a no-op if none is -
+// and starts a fresh one ticking v.img's Translucency from start to end
+// over slideshowFadeDuration, refreshing the canvas on every tick.
+// Stopping the previous animation first matters when a fade-in begins
+// before the fade-out before it has finished (a fast, likely
+// cache-hit load - see attemptLoad): without it, the outgoing animation's
+// next tick could overwrite a value the new one already set. Under the
+// fyne test driver, Start ticks straight to the end state synchronously
+// (see fyne/test's driver.StartAnimation), so a test never observes an
+// in-between value.
+func (v *viewer) startFade(start, end float64) {
+	if v.fadeAnim != nil {
+		v.fadeAnim.Stop()
+	}
+
+	v.fadeAnim = fyne.NewAnimation(slideshowFadeDuration, func(t float32) {
+		v.img.Translucency = start + float64(t)*(end-start)
+		v.img.Refresh()
+	})
+	v.fadeAnim.Start()
+}
+
+// resetFade cancels any fade transition in progress and puts v.img back to
+// fully opaque. Called from every place picture-frame mode ends, so
+// leaving it mid-transition never strands the image invisible or
+// half-faded once it's back in the normal, instant-swap view.
+func (v *viewer) resetFade() {
+	if v.fadeAnim != nil {
+		v.fadeAnim.Stop()
+		v.fadeAnim = nil
+	}
+	v.img.Translucency = 0
+	v.img.Refresh()
+}
+
+// randomOtherIndex picks a uniformly random index in [0,n) other than
+// current - Advance's shuffle-mode step. Picking from the n-1 indices that
+// aren't current and shifting the ones at or past it up by one, rather
+// than rejection-sampling rand.IntN(n) until it misses, keeps this O(1)
+// and never repeats the image already on screen, which a plain
+// rand.IntN(n) would occasionally do. n<=1 has no "other" index to pick,
+// so it returns current unchanged - Advance never calls this in that case
+// (the slideshow doesn't run at all with fewer than two files), but a
+// direct caller (this function's own tests included) gets a safe answer
+// either way instead of a panic or an out-of-range index.
+func randomOtherIndex(n, current int) int {
+	if n <= 1 {
+		return current
+	}
+
+	next := rand.IntN(n - 1)
+	if next >= current {
+		next++
+	}
+
+	return next
 }

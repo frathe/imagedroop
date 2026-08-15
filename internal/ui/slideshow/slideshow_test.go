@@ -212,6 +212,44 @@ func TestAdjustInterval_ClampsToTheMinimum(t *testing.T) {
 	}
 }
 
+// --- shuffle -----------------------------------------------------------
+
+func TestShuffle_DefaultsOff(t *testing.T) {
+	c, _ := newController(t, 2)
+
+	if c.Shuffle() {
+		t.Error("a fresh controller's Shuffle() = true, want false")
+	}
+}
+
+func TestToggleShuffle_Flips(t *testing.T) {
+	c, _ := newController(t, 2)
+
+	c.ToggleShuffle()
+	if !c.Shuffle() {
+		t.Error("Shuffle() = false after one ToggleShuffle, want true")
+	}
+
+	c.ToggleShuffle()
+	if c.Shuffle() {
+		t.Error("Shuffle() = true after two ToggleShuffle calls, want false")
+	}
+}
+
+func TestSetShuffle_SetsOutright(t *testing.T) {
+	c, _ := newController(t, 2)
+
+	c.SetShuffle(true)
+	if !c.Shuffle() {
+		t.Error("Shuffle() = false after SetShuffle(true), want true")
+	}
+
+	c.SetShuffle(false)
+	if c.Shuffle() {
+		t.Error("Shuffle() = true after SetShuffle(false), want false")
+	}
+}
+
 // --- Kick ------------------------------------------------------------------
 
 func TestKick_NonBlockingAndCoalesces(t *testing.T) {

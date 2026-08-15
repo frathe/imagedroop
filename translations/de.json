@@ -22,6 +22,7 @@
    "could not copy the image: %v": "Bild konnte nicht kopiert werden: %v",
    "Zoom: %d%%": "Zoom: %d%%",
    "[merge]": "[Zusammenführen]",
+   "[shuffle]": "[Zufällig]",
    "[sort: date]": "[Sortierung: Datum]",
    "[sort: modified]": "[Sortierung: Geändert]",
    "[sort: size]": "[Sortierung: Größe]",

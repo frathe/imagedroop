@@ -70,6 +70,7 @@ func (v *viewer) handleKeyEvent(ev *fyne.KeyEvent) {
 		// cancel instead.
 		if v.slides.Active() {
 			v.slides.Exit()
+			v.resetFade()
 		} else if v.scanning {
 			v.cancelScan()
 		} else if len(v.files) == 0 {
@@ -95,7 +96,13 @@ func (v *viewer) handleKeyEvent(ev *fyne.KeyEvent) {
 	case fyne.KeyP:
 		// Handled before the navigation guard below so picture-frame mode
 		// can be toggled off even while an image is still loading.
-		v.togglePictureFrameMode()
+		// Shift+P toggles its shuffle order instead of the mode itself,
+		// the same Shift-variant pairing as Shift+R below.
+		if v.keyModifiers()&fyne.KeyModifierShift != 0 {
+			v.toggleSlideshowShuffle()
+		} else {
+			v.togglePictureFrameMode()
+		}
 
 		return
 	case fyne.KeyG:

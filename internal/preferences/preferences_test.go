@@ -22,6 +22,9 @@ func TestLoadPreferences_NothingSavedReturnsDefaults(t *testing.T) {
 	if got.SlideInterval != 0 {
 		t.Errorf("SlideInterval = %v, want 0", got.SlideInterval)
 	}
+	if got.SlideShuffle {
+		t.Error("SlideShuffle = true, want false")
+	}
 	if got.WindowSize != (fyne.Size{}) {
 		t.Errorf("WindowSize = %v, want zero value", got.WindowSize)
 	}
@@ -37,6 +40,7 @@ func TestSavePreferences_RoundTrip(t *testing.T) {
 		SortMode:          SortBySize,
 		MergeMode:         true,
 		SlideInterval:     7 * time.Second,
+		SlideShuffle:      true,
 		WindowSize:        fyne.NewSize(640, 480),
 		WindowPosX:        120,
 		WindowPosY:        340,

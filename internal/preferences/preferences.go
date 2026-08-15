@@ -1,11 +1,11 @@
 // Package preferences persists and restores standing UI preferences - sort
-// order, merge mode, the picture-frame slideshow interval, and window size
-// and position - across launches, via Fyne's app-scoped Preferences store.
-// Unlike
-// internal/session (which persists the transient dropped file set),
-// everything here is a setting the user deliberately chose and expects to
-// stick, so it belongs in fyne.Preferences: unlike the app cache, it's
-// meant for this and survives cache clearing.
+// order, merge mode, the picture-frame slideshow's interval and shuffle
+// order, and window size and position - across launches, via Fyne's
+// app-scoped Preferences store. Unlike internal/session (which persists
+// the transient dropped file set), everything here is a setting the user
+// deliberately chose and expects to stick, so it belongs in
+// fyne.Preferences: unlike the app cache, it's meant for this and survives
+// cache clearing.
 package preferences
 
 import (
@@ -18,6 +18,7 @@ const (
 	keySortMode       = "sortMode"
 	keyMergeMode      = "mergeMode"
 	keySlideIntervalS = "slideIntervalSeconds"
+	keySlideShuffle   = "slideShuffle"
 	keyWindowWidth    = "windowWidth"
 	keyWindowHeight   = "windowHeight"
 	keyWindowPosX     = "windowPosX"
@@ -45,6 +46,7 @@ type State struct {
 	SortMode      string
 	MergeMode     bool
 	SlideInterval time.Duration
+	SlideShuffle  bool
 	WindowSize    fyne.Size // zero Size means "nothing saved yet"
 
 	// WindowPosX/WindowPosY are the on-screen position (see
@@ -67,6 +69,7 @@ func Save(app fyne.App, s State) {
 	p := app.Preferences()
 	p.SetString(keySortMode, s.SortMode)
 	p.SetBool(keyMergeMode, s.MergeMode)
+	p.SetBool(keySlideShuffle, s.SlideShuffle)
 
 	if s.SlideInterval > 0 {
 		p.SetFloat(keySlideIntervalS, s.SlideInterval.Seconds())
@@ -97,6 +100,7 @@ func Load(app fyne.App) State {
 		SortMode:      p.StringWithFallback(keySortMode, SortByName),
 		MergeMode:     p.Bool(keyMergeMode),
 		SlideInterval: time.Duration(p.Float(keySlideIntervalS) * float64(time.Second)),
+		SlideShuffle:  p.Bool(keySlideShuffle),
 		WindowSize: fyne.NewSize(
 			float32(p.Float(keyWindowWidth)),
 			float32(p.Float(keyWindowHeight)),

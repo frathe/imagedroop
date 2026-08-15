@@ -285,6 +285,7 @@ func buildViewer(application fyne.App) (*viewer, fyne.Window) {
 	if prefs.SlideInterval > 0 {
 		view.slides.SetInterval(prefs.SlideInterval)
 	}
+	view.slides.SetShuffle(prefs.SlideShuffle)
 
 	// The bar lives in its own overlay layer on top of the stack, pinned to
 	// the top edge by the VBox layout, so showing/hiding it never resizes

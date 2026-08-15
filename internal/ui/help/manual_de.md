@@ -1,6 +1,6 @@
 # Image Drop — Benutzerhandbuch
 
-Version 0.0.8
+Version 0.1.3
 
 Image Drop ist ein kleiner, schneller Bildbetrachter für macOS, Windows und
 Linux. Es gibt keine Werkzeugleiste und keinen eingebauten Datei-Browser: Sie
@@ -329,19 +329,33 @@ Ordner voller Fotos wie einen digitalen Bilderrahmen laufen zu lassen.
   Fenster.
 - Alle **10 Sekunden** (standardmäßig) wechselt die Ansicht **automatisch**
   zum nächsten Bild, am Ende beginnt es wieder von vorne, genau wie bei
-  manueller Navigation.
+  manueller Navigation. Jeder Wechsel wird **überblendet** — das
+  ausscheidende Bild verblasst, das neue blendet ein — statt des sofortigen
+  Wechsels beim normalen Durchblättern. Auch die manuelle Navigation
+  (`←`/`→`/`Home`/`End`) wird während des Diaschau-Modus auf dieselbe Weise
+  überblendet.
 - **`↑`** erhöht das Intervall um eine Sekunde, **`↓`** verringert es (bis
   zu einer Untergrenze von einer Sekunde). Solange der Diaschau-Modus aktiv
   ist, steuern `↑`/`↓` den Timer statt zu navigieren — nutzen Sie
   **`←`**/**`→`** (oder `Home`/`End`) zum manuellen Navigieren, das
   weiterhin wie gewohnt funktioniert und den Countdown ab dem neuen Bild neu
   startet.
+- **`Shift+P`** schaltet **Zufällige Wiedergabe** ein oder aus: Ist sie
+  aktiv, wählt der automatische Wechsel jedes Mal ein zufälliges anderes
+  Bild statt des nächsten in der Reihenfolge (nie das gerade angezeigte),
+  und die Titelzeile beginnt mit **`[Zufällig]`**. Die manuelle Navigation
+  mit `←`/`→`/`Home`/`End` bleibt davon unberührt — sie durchläuft die
+  Auswahl immer in Reihenfolge. Die Zufällige Wiedergabe verhält sich wie
+  eine dauerhafte Einstellung, genau wie der Zusammenführen-Modus:
+  `Shift+P` funktioniert schon, bevor Sie den Diaschau-Modus überhaupt
+  einschalten, und auch außerhalb davon.
 - **Animierte GIFs werden immer zu Ende abgespielt.** Wenn ein
   GIF-Durchlauf länger dauert als das aktuelle Intervall, wartet der
   Diaschau-Modus, bis er mindestens einmal komplett durchgelaufen ist, statt
   ihn mittendrin abzubrechen.
-- Ihr gewähltes Intervall wird beim nächsten Einschalten des Diaschau-Modus
-  gemerkt — und bleibt auch beim nächsten Start von Image Drop erhalten.
+- Ihr gewähltes Intervall und die Einstellung der Zufälligen Wiedergabe
+  werden beim nächsten Einschalten des Diaschau-Modus gemerkt — und bleiben
+  auch beim nächsten Start von Image Drop erhalten.
 - Drücken Sie **`P`** erneut, oder **`Esc`**, um den Diaschau-Modus zu
   verlassen und zum normalen Fenster zurückzukehren. `Esc` verlässt hier nur
   den Diaschau-Modus — es leert nicht auch die geladenen Bilder; drücken Sie
@@ -429,7 +443,11 @@ ist, und die Datei bleibt in der Auswahl.
   Zwischenablage kopieren
 - **`Shift+Delete`** — die aktuelle Datei nach Bestätigung dauerhaft von der
   Festplatte löschen (siehe „Eine Datei löschen“ oben)
-- **`P`** — Diaschau-Modus ein-/ausschalten (Vollbild-Diaschau, siehe oben)
+- **`P`** — Diaschau-Modus ein-/ausschalten (Vollbild-Diaschau mit
+  Überblendung zwischen den Bildern, siehe oben)
+- **`Shift+P`** — Zufällige Wiedergabe für den automatischen Wechsel im
+  Diaschau-Modus ein-/ausschalten; wird in der Titelzeile mit dem Präfix
+  **`[Zufällig]`** angezeigt
 - **`↑`** / **`↓`** *(im Diaschau-Modus)* — das Auto-Weiterschalt-Intervall
   um eine Sekunde erhöhen/verringern
 - **`Esc`** — die aktuellen Bilder leeren und zum anfänglichen
@@ -555,10 +573,10 @@ Sie es auf die für Ihre Plattform übliche Weise (die rote Schaltfläche unter
 macOS, das ✕ unter Windows und Linux). Sind Bilder geladen, leert `Esc` sie
 zunächst und kehrt zum anfänglichen Ablegebildschirm zurück — drücken Sie es
 erneut (jetzt, da die Auswahl geleert ist), um die App zu beenden. Der
-Zusammenführen-Modus, die Sortierreihenfolge, das Diaschau-Intervall und die
-Fenstergröße bleiben bis zum nächsten Start erhalten (siehe die jeweiligen
-Abschnitte oben); alles andere nicht — Zoom, Rotation und das zuletzt
-betrachtete Bild werden zurückgesetzt.
+Zusammenführen-Modus, die Sortierreihenfolge, das Diaschau-Intervall samt
+Zufälliger Wiedergabe und die Fenstergröße bleiben bis zum nächsten Start
+erhalten (siehe die jeweiligen Abschnitte oben); alles andere nicht — Zoom,
+Rotation und das zuletzt betrachtete Bild werden zurückgesetzt.
 
 ---
 
@@ -615,9 +633,10 @@ Dinge, die Image Drop absichtlich (noch) nicht tut:
   Info-Overlay, öffnet Kamerahersteller/-modell, Objektiv, Belichtung,
   Blende, ISO, Brennweite und Aufnahmedatum für das aktuelle Bild (kein
   GPS/Standort)
-- **Diaschau-Modus** — `P` schaltet eine Vollbild-Diaschau ein/aus; `↑`/`↓`
-  stellen das (standardmäßig 10 s) Auto-Weiterschalt-Intervall ein, solange
-  sie aktiv ist
+- **Diaschau-Modus** — `P` schaltet eine Vollbild-Diaschau mit Überblendung
+  zwischen den Bildern ein/aus; `↑`/`↓` stellen das (standardmäßig 10 s)
+  Auto-Weiterschalt-Intervall ein, solange sie aktiv ist; `Shift+P` schaltet
+  die Zufällige Wiedergabe ein/aus (`[Zufällig]` in der Titelzeile)
 - **Kopieren** — `Cmd`/`Strg+C` kopiert das aktuelle Bild,
   `Cmd`/`Strg+Shift+C` kopiert seinen Dateipfad
 - **Löschen** — `Shift+Delete` öffnet eine Bestätigungskarte (`←`/`→` zum

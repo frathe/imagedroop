@@ -3,11 +3,16 @@
 // image on its own every few seconds - a photo frame rather than a viewer.
 //
 // It owns the auto-advance goroutine, the interval the user tunes with
-// Up/Down, and the window-position capture/restore that makes leaving
-// full-screen put the window back where the user had actually left it (see
-// winpos.Tracker). It reaches back into the app through Host, which is
-// deliberately tiny: the two things a photo frame does are ask how many
-// pictures there are and move to the next one.
+// Up/Down, the shuffle order Shift+P toggles (see the shuffle field - it
+// only changes which file Advance picks next, so it lives here even though
+// the picking itself happens on the viewer's side of Host), and the
+// window-position capture/restore that makes leaving full-screen put the
+// window back where the user had actually left it (see winpos.Tracker). It
+// reaches back into the app through Host, which is deliberately tiny: the
+// two things a photo frame does are ask how many pictures there are and
+// move to the next one. The crossfade between images belongs to that next
+// one too - it's the app's own internal/ui/load.go, since this package
+// never touches a pixel.
 //
 // It knows nothing about the app's other full-window mode (the grid): the
 // two don't compose, but that guard lives in the app's key dispatcher, not
@@ -88,6 +93,19 @@ type Controller struct {
 	// value for as long as possible.
 	intervalNS atomic.Int64
 	animDurNS  atomic.Int64
+
+	// shuffle is a standing preference like intervalNS: on, it makes
+	// Advance (the Host method the run goroutine below calls) pick a
+	// random other file instead of the next one in order. It lives here
+	// rather than on the app's viewer because it's part of the same
+	// "how picture-frame mode paces itself" state as the interval, and
+	// Toggle/enter/Exit don't touch it at all - unlike the interval, a
+	// shuffle order has nothing to reset or substitute a default for.
+	// Atomic for the same reason as the rest of this struct, though in
+	// practice both its reader (the viewer's Advance) and its writers
+	// (Shift+P, and the app seeding it from a saved preference) only ever
+	// run on the UI goroutine.
+	shuffle atomic.Bool
 }
 
 // New builds the controller for win, idle. host supplies the file set, and
@@ -188,6 +206,23 @@ func (c *Controller) AdjustInterval(delta time.Duration) {
 	}
 	c.SetInterval(next)
 	c.Kick()
+}
+
+// Shuffle reports whether auto-advance picks a random other file instead
+// of the next one in order - see the shuffle field.
+func (c *Controller) Shuffle() bool {
+	return c.shuffle.Load()
+}
+
+// SetShuffle sets shuffle mode outright - how the app seeds it from the
+// saved preference at startup.
+func (c *Controller) SetShuffle(on bool) {
+	c.shuffle.Store(on)
+}
+
+// ToggleShuffle flips shuffle mode - Shift+P.
+func (c *Controller) ToggleShuffle() {
+	c.shuffle.Store(!c.shuffle.Load())
 }
 
 // AnimDuration is the current image's full animation loop, 0 for a static

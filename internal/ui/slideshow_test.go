@@ -8,6 +8,7 @@ package ui
 
 import (
 	"image/color"
+	"strings"
 	"testing"
 	"time"
 
@@ -230,5 +231,217 @@ func TestShow_TracksAnimatedGIFLoopDuration(t *testing.T) {
 
 	if got := v.slides.AnimDuration(); got != 0 {
 		t.Errorf("AnimDuration after loading a static image = %v, want 0", got)
+	}
+}
+
+// --- shuffle (Shift+P) -------------------------------------------------
+
+func TestHandleKeyEvent_ShiftPTogglesShuffleAndPrefixesTitle(t *testing.T) {
+	v := newTestViewer(t)
+
+	if title := v.win.Title(); strings.Contains(title, "[shuffle]") {
+		t.Fatalf("title = %q, should not start prefixed before Shift+P is ever pressed", title)
+	}
+
+	// Shift+P works even with nothing loaded yet, and takes effect
+	// immediately, the same as M does for merge mode.
+	stubKeyModifiers(t, v, fyne.KeyModifierShift)
+	v.handleKeyEvent(&fyne.KeyEvent{Name: fyne.KeyP})
+
+	if v.slides.Active() {
+		t.Fatal("Shift+P should toggle shuffle, not enter picture-frame mode")
+	}
+	if !v.slides.Shuffle() {
+		t.Fatal("Shuffle() = false, want true after Shift+P")
+	}
+	if title := v.win.Title(); !strings.HasPrefix(title, "[shuffle] ") {
+		t.Fatalf("title = %q, want it prefixed with [shuffle] right after Shift+P", title)
+	}
+
+	// Shift+P again turns it back off.
+	v.handleKeyEvent(&fyne.KeyEvent{Name: fyne.KeyP})
+	if v.slides.Shuffle() {
+		t.Error("Shuffle() = true, want false after a second Shift+P")
+	}
+	if title := v.win.Title(); strings.Contains(title, "[shuffle]") {
+		t.Errorf("title = %q, want the [shuffle] prefix gone after toggling Shift+P again", title)
+	}
+}
+
+func TestHandleKeyEvent_PlainPStillEntersPictureFrameModeAfterShiftP(t *testing.T) {
+	v := newTestViewer(t)
+
+	a := uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White)
+	b := uitest.TempJPEGURI(t, "b.jpg", 4, 4, color.White)
+	dropAndWait(t, v, a, b)
+
+	stubKeyModifiers(t, v, fyne.KeyModifierShift)
+	v.handleKeyEvent(&fyne.KeyEvent{Name: fyne.KeyP})
+	if v.slides.Active() {
+		t.Fatal("Shift+P should not enter picture-frame mode")
+	}
+
+	stubKeyModifiers(t, v, 0)
+	v.handleKeyEvent(&fyne.KeyEvent{Name: fyne.KeyP})
+	t.Cleanup(func() { settleSlideshow(t, v) })
+
+	if !v.slides.Active() {
+		t.Fatal("plain P should still enter picture-frame mode after an earlier Shift+P set shuffle")
+	}
+}
+
+func TestAdvance_ShuffleOnNeverRepeatsCurrentIndex(t *testing.T) {
+	v := newTestViewer(t)
+
+	a := uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.RGBA{R: 255, A: 255})
+	b := uitest.TempJPEGURI(t, "b.jpg", 4, 4, color.RGBA{G: 255, A: 255})
+	c := uitest.TempJPEGURI(t, "c.jpg", 4, 4, color.RGBA{B: 255, A: 255})
+	dropAndWait(t, v, a, b, c)
+
+	v.slides.SetShuffle(true)
+
+	for i := range 20 {
+		before := v.index
+		v.Advance()
+		waitUntilLoaded(t, v)
+
+		if v.index == before {
+			t.Fatalf("iteration %d: index stayed at %d after Advance with shuffle on", i, before)
+		}
+		if v.index < 0 || v.index >= len(v.files) {
+			t.Fatalf("iteration %d: index = %d out of range", i, v.index)
+		}
+	}
+}
+
+// --- randomOtherIndex --------------------------------------------------
+
+func TestRandomOtherIndex_EmptyOrSingleReturnsCurrentUnchanged(t *testing.T) {
+	if got := randomOtherIndex(0, 0); got != 0 {
+		t.Errorf("randomOtherIndex(0, 0) = %d, want 0 (nothing to pick from)", got)
+	}
+	if got := randomOtherIndex(1, 0); got != 0 {
+		t.Errorf("randomOtherIndex(1, 0) = %d, want 0 (no other index exists)", got)
+	}
+}
+
+func TestRandomOtherIndex_NeverReturnsCurrent(t *testing.T) {
+	for n := 2; n <= 6; n++ {
+		for current := range n {
+			for range 200 {
+				got := randomOtherIndex(n, current)
+				if got == current {
+					t.Fatalf("randomOtherIndex(%d, %d) returned current index %d", n, current, got)
+				}
+				if got < 0 || got >= n {
+					t.Fatalf("randomOtherIndex(%d, %d) = %d, out of range", n, current, got)
+				}
+			}
+		}
+	}
+}
+
+func TestRandomOtherIndex_CoversEveryOtherIndex(t *testing.T) {
+	const n = 4
+	const current = 1
+	seen := make(map[int]bool)
+
+	for range 1000 {
+		seen[randomOtherIndex(n, current)] = true
+	}
+
+	for i := range n {
+		if i == current {
+			continue
+		}
+		if !seen[i] {
+			t.Errorf("index %d never appeared across 1000 draws of randomOtherIndex(%d, %d)", i, n, current)
+		}
+	}
+}
+
+// --- crossfade -----------------------------------------------------------
+
+func TestShowImage_InPictureFrameModeEndsFullyOpaque(t *testing.T) {
+	v := newTestViewer(t)
+
+	a := uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.RGBA{R: 255, A: 255})
+	b := uitest.TempJPEGURI(t, "b.jpg", 4, 4, color.RGBA{G: 255, A: 255})
+	dropAndWait(t, v, a, b)
+
+	v.togglePictureFrameMode()
+	t.Cleanup(func() { settleSlideshow(t, v) })
+
+	v.ShowImage(v.index + 1)
+	waitUntilLoaded(t, v)
+
+	if v.img.Translucency != 0 {
+		t.Errorf("Translucency after a picture-frame-mode navigation = %v, want 0 (fully faded in)", v.img.Translucency)
+	}
+}
+
+func TestTogglePictureFrameMode_ExitResetsFade(t *testing.T) {
+	v := newTestViewer(t)
+
+	a := uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White)
+	b := uitest.TempJPEGURI(t, "b.jpg", 4, 4, color.White)
+	dropAndWait(t, v, a, b)
+
+	v.togglePictureFrameMode()
+	t.Cleanup(func() { settleSlideshow(t, v) })
+
+	// Simulate a fade caught mid-transition, as if leaving picture-frame
+	// mode landed exactly between ShowImage's fade-out and finishLoad's
+	// fade-in.
+	v.img.Translucency = 0.5
+	v.fadeAnim = fyne.NewAnimation(time.Hour, func(float32) {})
+
+	v.togglePictureFrameMode()
+
+	if v.img.Translucency != 0 {
+		t.Errorf("Translucency after leaving picture-frame mode = %v, want 0", v.img.Translucency)
+	}
+	if v.fadeAnim != nil {
+		t.Error("fadeAnim should be cleared after leaving picture-frame mode")
+	}
+}
+
+func TestHandleKeyEvent_EscapeResetsFade(t *testing.T) {
+	v := newTestViewer(t)
+
+	a := uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White)
+	b := uitest.TempJPEGURI(t, "b.jpg", 4, 4, color.White)
+	dropAndWait(t, v, a, b)
+
+	v.togglePictureFrameMode()
+	t.Cleanup(func() { settleSlideshow(t, v) })
+
+	v.img.Translucency = 0.5
+	v.fadeAnim = fyne.NewAnimation(time.Hour, func(float32) {})
+
+	v.handleKeyEvent(&fyne.KeyEvent{Name: fyne.KeyEscape})
+
+	if v.img.Translucency != 0 {
+		t.Errorf("Translucency after Escape out of picture-frame mode = %v, want 0", v.img.Translucency)
+	}
+}
+
+func TestReset_ResetsFadeLeftMidTransition(t *testing.T) {
+	v := newTestViewer(t)
+
+	a := uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White)
+	b := uitest.TempJPEGURI(t, "b.jpg", 4, 4, color.White)
+	dropAndWait(t, v, a, b)
+
+	v.togglePictureFrameMode()
+	t.Cleanup(func() { settleSlideshow(t, v) })
+
+	v.img.Translucency = 0.5
+	v.fadeAnim = fyne.NewAnimation(time.Hour, func(float32) {})
+
+	v.reset()
+
+	if v.img.Translucency != 0 {
+		t.Errorf("Translucency after reset mid-transition = %v, want 0", v.img.Translucency)
 	}
 }

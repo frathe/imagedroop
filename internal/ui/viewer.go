@@ -268,6 +268,16 @@ type viewer struct {
 	// handleKeyEvent's G case and togglePictureFrameMode.
 	slides *slideshow.Controller
 
+	// fadeAnim is the crossfade in progress, if any, between the last
+	// image on screen and the one replacing it - see load.go's
+	// startFade/resetFade. Only ever non-nil while picture-frame mode is
+	// active: ShowImage starts one fading the outgoing image out,
+	// finishLoad starts the next fading the incoming one in, and every
+	// path that ends picture-frame mode calls resetFade so the image is
+	// never left invisible or half-faded once it's back in the normal,
+	// instant-swap view.
+	fadeAnim *fyne.Animation
+
 	// clipboardDone is closed once copyImageToClipboard's background
 	// shell-out goroutine has fully finished, error reporting included -
 	// the same wait-channel discipline scanDone/loadDone give tests for
@@ -314,14 +324,19 @@ func (v *viewer) setTitle(base string) {
 
 // applyTitle (re)applies baseTitle to the window with a sort-mode prefix
 // (see filesort.Label - empty, so invisible, for the default by-name sort)
-// and the "[merge]" prefix when mergeMode is on, so the title always makes
-// the active drop/sort mode visible at a glance. The separating space is
-// added here rather than baked into either prefix, so neither translation
-// key carries trailing whitespace a translator could silently drop.
+// and the "[merge]"/"[shuffle]" prefixes when merge mode or the
+// slideshow's shuffle order (Shift+P) are on, so the title always makes
+// the active drop/sort/slideshow mode visible at a glance. The separating
+// space is added here rather than baked into either prefix, so neither
+// translation key carries trailing whitespace a translator could silently
+// drop.
 func (v *viewer) applyTitle() {
 	title := v.baseTitle
 	if v.mergeMode {
 		title = lang.L("[merge]") + " " + title
+	}
+	if v.slides.Shuffle() {
+		title = lang.L("[shuffle]") + " " + title
 	}
 	if p := filesort.Label(v.sortMode); p != "" {
 		title = p + " " + title
@@ -337,6 +352,7 @@ func (v *viewer) clearToDropzone() {
 	// A full-screen dropzone would look broken, and there's nothing left to
 	// frame - safe to call even when picture-frame mode is already off.
 	v.slides.Exit()
+	v.resetFade()
 
 	v.gen.Add(1) // invalidate any decode or animation still in flight
 	v.stopAnimation()
@@ -527,8 +543,16 @@ func (v *viewer) Unfocus() {
 
 // Advance displays the next file, wrapping around at the end - attemptLoad
 // folds the index back into range, so there is nothing to clamp here. It's
-// the slideshow's auto-advance step, and deliberately the same navigation
-// the Right key performs rather than a private one.
+// the slideshow's auto-advance step. With shuffle off it's deliberately
+// the same navigation the Right key performs rather than a private one;
+// with shuffle on (Shift+P) it picks a random other file instead - see
+// randomOtherIndex - still through the same ShowImage every navigation
+// goes through, so the crossfade and everything else load.go does on a
+// navigation applies here too.
 func (v *viewer) Advance() {
+	if v.slides.Shuffle() {
+		v.ShowImage(randomOtherIndex(len(v.files), v.index))
+		return
+	}
 	v.ShowImage(v.index + 1)
 }
