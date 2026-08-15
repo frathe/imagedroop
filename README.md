@@ -4,11 +4,15 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-donate-yellow.svg?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/gcobnk0grj)
 
-![Header](assets/imagedrop_functionality.gif)
+![Header](assets/header.png)
 
 A small [Fyne](https://fyne.io/) desktop app for quickly viewing images.
 Drop one or more images onto the window to view them, and step through the
 set with the keyboard.
+
+## usage demo
+
+![Demo](assets/imagedrop_functionality.gif)
 
 ## Features
 
