@@ -2,6 +2,7 @@ package imaging
 
 import (
 	"bytes"
+	"context"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -11,6 +12,7 @@ import (
 	"image/gif"
 	"image/jpeg"
 	"image/png"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -636,13 +638,105 @@ func TestDecodeJPEG_AppliesEXIFOrientation(t *testing.T) {
 func TestReadAndProbe_AccountsForEXIFOrientation(t *testing.T) {
 	path := writeTempFile(t, "rotated.jpg", halfRedHalfBlueJPEG(t, 20, 10, 6))
 
-	_, bounds, err := ReadAndProbe(storage.NewFileURI(path))
+	_, bounds, err := ReadAndProbe(context.Background(), storage.NewFileURI(path))
 	if err != nil {
 		t.Fatalf("ReadAndProbe returned error: %v", err)
 	}
 
 	if bounds.Dx() != 10 || bounds.Dy() != 20 {
 		t.Errorf("bounds = %dx%d, want 10x20 after accounting for the 90-degree orientation swap", bounds.Dx(), bounds.Dy())
+	}
+}
+
+// TestReadAndProbe_StopsEarlyWhenContextIsCancelled mirrors
+// internal/filesort's TestOrder_StopsEarlyWhenContextIsCancelled: an
+// already-cancelled ctx, checked deterministically rather than by racing a
+// real cancellation against a real read. u is a perfectly valid, readable
+// file, so a returned context.Canceled can only mean the ctx check itself
+// stopped the read - any other error would mean it fell through to a real
+// (and here, impossible) read failure instead.
+func TestReadAndProbe_StopsEarlyWhenContextIsCancelled(t *testing.T) {
+	path := writeTempFile(t, "photo.jpg", encodeJPEG(t, 12, 8, color.RGBA{R: 200, G: 20, B: 20, A: 255}))
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, _, err := ReadAndProbe(ctx, storage.NewFileURI(path))
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("ReadAndProbe() with an already-cancelled ctx = %v, want context.Canceled", err)
+	}
+}
+
+// TestDecodeLoaded_StopsEarlyWhenContextIsCancelled is
+// TestReadAndProbe_StopsEarlyWhenContextIsCancelled for DecodeLoaded's own
+// ctx check: data is a perfectly valid, already-read JPEG, so a returned
+// context.Canceled can only mean DecodeLoaded checked ctx before spending
+// any time decoding pixels for a result its caller has already discarded.
+func TestDecodeLoaded_StopsEarlyWhenContextIsCancelled(t *testing.T) {
+	data := encodeJPEG(t, 12, 8, color.RGBA{R: 200, G: 20, B: 20, A: 255})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, err := DecodeLoaded(ctx, data)
+	if !errors.Is(err, context.Canceled) {
+		t.Errorf("DecodeLoaded() with an already-cancelled ctx = %v, want context.Canceled", err)
+	}
+}
+
+// countingReader wraps an io.Reader and counts how many times Read was
+// actually called on it - ctxReader's job is to stop calling into this
+// once its context is cancelled, so a reads count higher than expected
+// would mean the cancellation was checked too late (or not at all).
+// onRead, if set, runs after the underlying Read - here, used to cancel
+// the context as a side effect of the first Read, standing in for a newer
+// generation superseding this one midway through a real, larger file's
+// transfer.
+type countingReader struct {
+	data   []byte
+	pos    int
+	reads  int
+	onRead func()
+}
+
+func (r *countingReader) Read(p []byte) (int, error) {
+	r.reads++
+	n := copy(p, r.data[r.pos:])
+	r.pos += n
+	if r.onRead != nil {
+		r.onRead()
+	}
+	if r.pos >= len(r.data) {
+		return n, io.EOF
+	}
+	return n, nil
+}
+
+// TestCtxReader_StopsMidStreamOnceContextIsCancelled proves ctxReader
+// actually interrupts a read in progress instead of only checking ctx
+// once up front - the difference that lets readRawBytes stop a large or
+// slow (e.g. network-mounted) file's transfer partway through rather than
+// only catching a cancellation before the next file starts.
+func TestCtxReader_StopsMidStreamOnceContextIsCancelled(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+
+	underlying := &countingReader{data: []byte("0123456789"), onRead: cancel}
+	r := ctxReader{ctx: ctx, r: underlying}
+
+	buf := make([]byte, 4)
+	n, err := r.Read(buf)
+	if err != nil {
+		t.Fatalf("first Read returned error: %v", err)
+	}
+	if n != 4 {
+		t.Fatalf("first Read returned n=%d, want 4", n)
+	}
+
+	if _, err := r.Read(buf); !errors.Is(err, context.Canceled) {
+		t.Errorf("second Read after the context was cancelled = %v, want context.Canceled", err)
+	}
+	if underlying.reads != 1 {
+		t.Errorf("underlying reader was Read %d times, want 1 - the second call should have stopped before reaching it", underlying.reads)
 	}
 }
 

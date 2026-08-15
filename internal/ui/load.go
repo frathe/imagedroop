@@ -3,6 +3,7 @@
 package ui
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"image"
@@ -54,31 +55,54 @@ func (v *viewer) ShowImage(i int) {
 	// A new generation invalidates any decode/retry chain still in flight,
 	// so a slow load can never overwrite a newer selection. Every retry in
 	// attemptLoad below - for a file that turns out to be broken - shares
-	// this one generation and this one done channel: they're all part of
-	// the same logical navigation, not independent ones, so a genuinely
-	// newer ShowImage() call (which bumps gen again) correctly invalidates the
-	// whole chain, and a waiter on done sees the chain as finished only
-	// once it truly settles instead of racing whichever retry closes a
-	// channel first.
-	gen := v.gen.Add(1)
+	// this one generation, this one done channel, and this one ctx: they're
+	// all part of the same logical navigation, not independent ones, so a
+	// genuinely newer ShowImage() call (which bumps gen again, via
+	// invalidateLoad below) correctly invalidates the whole chain - and,
+	// via ctx, stops attemptLoad's/preloadOne's I/O instead of just
+	// discarding a result they'd otherwise run to completion for - and a
+	// waiter on done sees the chain as finished only once it truly settles
+	// instead of racing whichever retry closes a channel first.
+	gen := v.invalidateLoad()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	v.loadCancel = cancel
 
 	done := make(chan struct{})
 	v.loadDone = done
 
-	v.attemptLoad(i, gen, done)
+	v.attemptLoad(ctx, i, gen, done)
+}
+
+// invalidateLoad bumps gen and, if a load's decode/preload work is
+// currently in flight, cancels its context - mirroring invalidateSort
+// (sort.go) for the load/preload generation instead of the sort one. This
+// is what makes attemptLoad's and preloadOne's own ReadAndProbe/
+// DecodeLoaded calls notice and stop doing I/O for a superseded generation,
+// instead of running to completion for a result the gen check they already
+// make would only end up discarding anyway. Called by ShowImage (a fresh
+// navigation) and every other site that already bumped gen directly before
+// this existed: cancelScan, handleDrop (drop.go), and clearToDropzone
+// (viewer.go).
+func (v *viewer) invalidateLoad() uint64 {
+	gen := v.gen.Add(1)
+	if v.loadCancel != nil {
+		v.loadCancel()
+	}
+	return gen
 }
 
 // attemptLoad decodes and displays v.files[i] (wrapped into range), sharing
-// gen and done with the rest of its retry chain - see ShowImage's comment. It
-// first reads the file and probes just its header (imaging.ReadAndProbe), which is
-// enough to reject an invalid file instantly, without spending time on a
-// full pixel decode that was only going to be thrown away, and to resize
-// the window to its final size before that full decode even starts. On
-// failure it drops that file via RemoveFile and retries at the same
-// position, which now holds what used to be the next file (or wraps
-// around to the first, if i was the last); once nothing is left it falls
-// back to the empty-state error screen.
-func (v *viewer) attemptLoad(i int, gen uint64, done chan struct{}) {
+// gen, done, and ctx with the rest of its retry chain - see ShowImage's
+// comment. It first reads the file and probes just its header
+// (imaging.ReadAndProbe), which is enough to reject an invalid file
+// instantly, without spending time on a full pixel decode that was only
+// going to be thrown away, and to resize the window to its final size
+// before that full decode even starts. On failure it drops that file via
+// RemoveFile and retries at the same position, which now holds what used
+// to be the next file (or wraps around to the first, if i was the last);
+// once nothing is left it falls back to the empty-state error screen.
+func (v *viewer) attemptLoad(ctx context.Context, i int, gen uint64, done chan struct{}) {
 	n := len(v.files)
 	i = ((i % n) + n) % n
 	v.index = i
@@ -90,12 +114,12 @@ func (v *viewer) attemptLoad(i int, gen uint64, done chan struct{}) {
 	// the UI goroutine that called ShowImage(). No fyne.Do hop is needed since
 	// we're already on it.
 	if loaded, ok := v.imgCache.Get(u.String()); ok {
-		v.finishLoad(i, u, loaded, gen, done)
+		v.finishLoad(ctx, i, u, loaded, gen, done)
 		return
 	}
 
 	go func() {
-		data, bounds, err := imaging.ReadAndProbe(u)
+		data, bounds, err := imaging.ReadAndProbe(ctx, u)
 
 		if err == nil {
 			fyne.Do(func() {
@@ -111,7 +135,7 @@ func (v *viewer) attemptLoad(i int, gen uint64, done chan struct{}) {
 
 		var loaded *imaging.LoadedImage
 		if err == nil {
-			loaded, err = imaging.DecodeLoaded(data)
+			loaded, err = imaging.DecodeLoaded(ctx, data)
 			if err == nil {
 				loaded.FileSize = int64(len(data))
 			}
@@ -129,7 +153,7 @@ func (v *viewer) attemptLoad(i int, gen uint64, done chan struct{}) {
 				if errors.As(err, &dimErr) {
 					msg = fmt.Sprintf(lang.L("invalid image dimensions for %q"), u.Name())
 				}
-				v.retryAfterLoadFailure(msg, i, gen, done)
+				v.retryAfterLoadFailure(ctx, msg, i, gen, done)
 				return
 			}
 
@@ -137,12 +161,12 @@ func (v *viewer) attemptLoad(i int, gen uint64, done chan struct{}) {
 
 			if b.Dx() == 0 || b.Dy() == 0 {
 				msg := fmt.Sprintf(lang.L("invalid image dimensions for %q"), u.Name())
-				v.retryAfterLoadFailure(msg, i, gen, done)
+				v.retryAfterLoadFailure(ctx, msg, i, gen, done)
 				return
 			}
 
 			v.imgCache.Add(u.String(), loaded)
-			v.finishLoad(i, u, loaded, gen, done)
+			v.finishLoad(ctx, i, u, loaded, gen, done)
 		})
 	}()
 }
@@ -156,7 +180,7 @@ func (v *viewer) attemptLoad(i int, gen uint64, done chan struct{}) {
 // test driver runs synchronously on whatever goroutine called it) and its
 // cache-hit path (called directly from attemptLoad, always on whichever
 // goroutine called ShowImage()).
-func (v *viewer) finishLoad(i int, u fyne.URI, loaded *imaging.LoadedImage, gen uint64, done chan struct{}) {
+func (v *viewer) finishLoad(ctx context.Context, i int, u fyne.URI, loaded *imaging.LoadedImage, gen uint64, done chan struct{}) {
 	b := loaded.Frames[0].Bounds()
 
 	v.displayFrames = loaded.Frames
@@ -248,7 +272,7 @@ func (v *viewer) finishLoad(i int, u fyne.URI, loaded *imaging.LoadedImage, gen 
 	// than a dedicated UI goroutine (see attemptLoad's comment on gen), so
 	// closing done first would let a waiter go on to mutate v.files - via
 	// reset() or a fresh drop - concurrently with this read.
-	v.preloadNeighbors(gen)
+	v.preloadNeighbors(ctx, gen)
 
 	close(done)
 }
@@ -258,7 +282,11 @@ func (v *viewer) finishLoad(i int, u fyne.URI, loaded *imaging.LoadedImage, gen 
 // cache hit instead of a fresh disk read + decode. Always called from
 // finishLoad before done closes - see its comment - so reading
 // v.files/v.index here can't race a waiter that's about to mutate them.
-func (v *viewer) preloadNeighbors(gen uint64) {
+// ctx is the same one ShowImage created for this generation - the
+// preloads it starts belong to the generation that's now on screen, so
+// they get cancelled alongside its own decode the moment a newer
+// navigation or drop supersedes it (see invalidateLoad).
+func (v *viewer) preloadNeighbors(ctx context.Context, gen uint64) {
 	n := len(v.files)
 	if n < 2 {
 		return
@@ -267,9 +295,9 @@ func (v *viewer) preloadNeighbors(gen uint64) {
 	next := ((v.index+1)%n + n) % n
 	prev := ((v.index-1)%n + n) % n
 
-	v.preloadOne(v.files[next], gen)
+	v.preloadOne(ctx, v.files[next], gen)
 	if prev != next {
-		v.preloadOne(v.files[prev], gen)
+		v.preloadOne(ctx, v.files[prev], gen)
 	}
 }
 
@@ -281,8 +309,11 @@ const preloadConcurrency = 2
 // it's already cached or another preload of the same URI is already in
 // flight. gen is checked before and after the decode so a preload started
 // for a set of files that's since been replaced by a fresh drop doesn't
-// keep working, or land a stale result, after the fact.
-func (v *viewer) preloadOne(u fyne.URI, gen uint64) {
+// keep working, or land a stale result, after the fact; ctx backs that up
+// by making ReadAndProbe/DecodeLoaded themselves stop doing I/O partway
+// through, for a preload that goes stale while it's actually running
+// rather than while still queued behind preloadSem.
+func (v *viewer) preloadOne(ctx context.Context, u fyne.URI, gen uint64) {
 	key := u.String()
 
 	if _, cached := v.imgCache.Get(key); cached {
@@ -308,12 +339,12 @@ func (v *viewer) preloadOne(u fyne.URI, gen uint64) {
 			return
 		}
 
-		data, _, err := imaging.ReadAndProbe(u)
+		data, _, err := imaging.ReadAndProbe(ctx, u)
 		if err != nil {
 			return
 		}
 
-		loaded, err := imaging.DecodeLoaded(data)
+		loaded, err := imaging.DecodeLoaded(ctx, data)
 		if err != nil {
 			return
 		}
@@ -348,9 +379,9 @@ func (v *viewer) stopAnimation() {
 // retryAfterLoadFailure reports msg, drops v.files[i], and either continues
 // the retry chain via attemptLoad or, if that emptied the set, falls back
 // to the empty-state error screen and finalizes done. See show/attemptLoad
-// for why gen and done are threaded through unchanged rather than starting
-// a fresh chain.
-func (v *viewer) retryAfterLoadFailure(msg string, i int, gen uint64, done chan struct{}) {
+// for why gen, done, and ctx are threaded through unchanged rather than
+// starting a fresh chain.
+func (v *viewer) retryAfterLoadFailure(ctx context.Context, msg string, i int, gen uint64, done chan struct{}) {
 	v.RemoveFile(i)
 
 	if len(v.files) == 0 {
@@ -360,7 +391,7 @@ func (v *viewer) retryAfterLoadFailure(msg string, i int, gen uint64, done chan 
 	}
 
 	v.ShowToast(msg)
-	v.attemptLoad(i, gen, done)
+	v.attemptLoad(ctx, i, gen, done)
 }
 
 // animate cycles an animated GIF's frames on their own goroutine, sleeping

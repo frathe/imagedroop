@@ -187,10 +187,12 @@ func drain(t *testing.T, v *viewer) {
 
 	// Supersede any in-flight decode/retry chain first, so a load that was
 	// deliberately abandoned mid-test (a broken-file retry loop, say) stops
-	// re-entering rather than being waited out step by step. The slideshow
-	// is asked to stop for the same reason, on this goroutine, since
-	// leaving picture-frame mode touches the window.
-	v.gen.Add(1)
+	// re-entering rather than being waited out step by step - invalidateLoad
+	// also cancels its context, so an abandoned decode/preload actually
+	// stops doing I/O instead of just being ignored once it finishes. The
+	// slideshow is asked to stop for the same reason, on this goroutine,
+	// since leaving picture-frame mode touches the window.
+	v.invalidateLoad()
 	v.stopAnimation()
 	v.slides.Exit()
 
@@ -746,6 +748,61 @@ func TestSetMaxScan_FloorsAtOne(t *testing.T) {
 	v.SetMaxScan(-5)
 	if got := v.MaxScan(); got != 1 {
 		t.Errorf("MaxScan() = %d, want it floored to 1 for a negative input", got)
+	}
+}
+
+// --- invalidateLoad (load-generation cancellation) -------------------------
+
+// TestInvalidateLoad_CancelsPriorLoadContext checks invalidateLoad's own
+// contract - bump gen, and cancel whatever context the previous generation's
+// decode/preload work was still running under - the same way
+// TestHandleKeyEvent_EscapeDuringFirstDropReorderDoesNotCloseWindow stubs
+// v.sortCancel rather than racing a real background decode to catch it
+// mid-flight.
+func TestInvalidateLoad_CancelsPriorLoadContext(t *testing.T) {
+	v := newTestViewer(t)
+
+	var cancelled bool
+	v.loadCancel = func() { cancelled = true }
+	genBefore := v.gen.Load()
+
+	got := v.invalidateLoad()
+
+	if !cancelled {
+		t.Error("invalidateLoad should cancel the previous generation's load context")
+	}
+	if got != genBefore+1 {
+		t.Errorf("invalidateLoad() = %d, want %d (genBefore+1)", got, genBefore+1)
+	}
+	if v.gen.Load() != got {
+		t.Errorf("v.gen = %d, want %d", v.gen.Load(), got)
+	}
+}
+
+// TestInvalidateLoad_NilCancelIsSafe checks the guard for the state before
+// any image has ever been shown: v.loadCancel is nil until ShowImage's
+// first call sets it, and every gen-bumping call site (cancelScan,
+// handleDrop, clearToDropzone) can run before that - a first drop's own
+// handleDrop, for one.
+func TestInvalidateLoad_NilCancelIsSafe(t *testing.T) {
+	v := newTestViewer(t)
+	v.loadCancel = nil
+
+	v.invalidateLoad() // must not panic
+}
+
+// TestShowImage_SetsLoadCancel checks that ShowImage actually wires a real
+// (non-nil) cancel func for its generation, rather than only relying on
+// gen's own staleness check - see loadCancel's field comment for why both
+// exist.
+func TestShowImage_SetsLoadCancel(t *testing.T) {
+	v := newTestViewer(t)
+
+	a := uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White)
+	dropAndWait(t, v, a)
+
+	if v.loadCancel == nil {
+		t.Error("ShowImage should set v.loadCancel so a later navigation can cancel this generation's decode/preload work")
 	}
 }
 

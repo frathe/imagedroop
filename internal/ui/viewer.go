@@ -105,6 +105,19 @@ type viewer struct {
 	// goroutine.
 	gen atomic.Uint64
 
+	// loadCancel cancels the context.Context behind whichever decode/preload
+	// work v.gen's current generation owns - attemptLoad's own
+	// ReadAndProbe/DecodeLoaded calls and preloadOne's copies of the same,
+	// for both of ShowImage's neighbors. Set by ShowImage alongside gen's
+	// bump, mirroring sortCancel/sortGen (sort.go) for the load generation
+	// instead of the sort one; nil until the first ShowImage call.
+	// Cancelling it is what makes ReadAndProbe's read and DecodeLoaded's
+	// entry check notice and stop promptly instead of running to completion
+	// for a result invalidateLoad's gen bump has already guaranteed will be
+	// discarded - see invalidateLoad (load.go), the one place this is
+	// called.
+	loadCancel context.CancelFunc
+
 	// unsortedFiles is the raw scan/drop order, kept alongside files so the
 	// S key can cycle back to it without rescanning. sortMode picks which
 	// ordering files currently holds (see sort.go); it persists across
@@ -416,7 +429,7 @@ func (v *viewer) clearToDropzone() {
 	v.slides.Exit()
 	v.resetFade()
 
-	v.gen.Add(1) // invalidate any decode or animation still in flight
+	v.invalidateLoad() // invalidate any decode/preload or animation still in flight
 	v.stopAnimation()
 	v.invalidateSort() // cancel a sort still in flight - see sortGen's field comment
 

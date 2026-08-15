@@ -14,10 +14,12 @@ import (
 )
 
 // cancelScan aborts a scan in progress (Escape while v.scanning is true).
-// It bumps gen the same way clearToDropzone/ShowImage already do for loads, so
-// the background goroutine in handleDrop notices via the gen check in its
-// directory-walk loop and stops touching the filesystem instead of racing a
-// large tree to completion for a result nobody will see.
+// It bumps gen the same way clearToDropzone/ShowImage already do for loads
+// (via invalidateLoad, which also cancels any load/preload context still
+// running), so the background goroutine in handleDrop notices via the gen
+// check in its directory-walk loop and stops touching the filesystem
+// instead of racing a large tree to completion for a result nobody will
+// see.
 //
 // Unlike reset, it never touches v.files or v.unsortedFiles: a merge-mode
 // scan can be cancelled mid-way through without losing images that were
@@ -29,7 +31,7 @@ func (v *viewer) cancelScan() {
 		return
 	}
 
-	v.gen.Add(1)
+	v.invalidateLoad()
 	v.stopAnimation()
 	v.scanning = false
 
@@ -116,7 +118,7 @@ func (v *viewer) handleDrop(uris []fyne.URI) {
 	// drop gets applied.
 	merging := v.mergeMode && len(v.files) > 0
 
-	gen := v.gen.Add(1)
+	gen := v.invalidateLoad()
 	v.stopAnimation()
 	v.scanning = true
 

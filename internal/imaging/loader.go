@@ -5,6 +5,7 @@ package imaging
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"image"
 	_ "image/jpeg" // registers JPEG with image.Decode
@@ -95,17 +96,44 @@ func (e *InvalidDimensionsError) Error() string {
 	return fmt.Sprintf("invalid image dimensions %dx%d", e.w, e.h)
 }
 
+// ctxReader wraps r so a Read call fails with ctx's error once ctx is
+// done, instead of running r's Read to completion for a result a
+// cancelled load has already discarded. readRawBytes's io.ReadAll loop
+// calls Read repeatedly for anything bigger than one chunk, so this stops
+// a large or slow (e.g. network-mounted) file's read partway through
+// rather than only catching the cancellation before the next file starts.
+type ctxReader struct {
+	ctx context.Context
+	r   io.Reader
+}
+
+func (cr ctxReader) Read(p []byte) (int, error) {
+	if err := cr.ctx.Err(); err != nil {
+		return 0, err
+	}
+	return cr.r.Read(p)
+}
+
 // readRawBytes reads u's entire contents into memory - the first step
 // shared by ReadAndProbe (which goes on to decode the header) and
-// CaptureDate (which only needs the bytes to walk for Exif).
-func readRawBytes(u fyne.URI) ([]byte, error) {
+// CaptureDate (which only needs the bytes to walk for Exif). ctx is
+// checked once up front, before even opening u - cheap enough there's no
+// reason not to, mirroring internal/filesort's Order - and then on every
+// Read the io.ReadAll loop makes, via ctxReader, so a load abandoned
+// partway through a large read stops doing I/O for it instead of finishing
+// unseen.
+func readRawBytes(ctx context.Context, u fyne.URI) ([]byte, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	rc, err := storage.Reader(u)
 	if err != nil {
 		return nil, err
 	}
 	defer rc.Close()
 
-	return io.ReadAll(rc)
+	return io.ReadAll(ctxReader{ctx: ctx, r: rc})
 }
 
 // CaptureDate reads u's raw bytes and returns its Exif capture date (see
@@ -113,9 +141,14 @@ func readRawBytes(u fyne.URI) ([]byte, error) {
 // Metadata - the one field internal/filesort's capture-date sort mode
 // actually needs. ok is false if u can't be read or carries no recognizable
 // capture date, mirroring ReadMetadata's tolerant-failure style; callers
-// are expected to fall back to the file's mtime in that case.
+// are expected to fall back to the file's mtime in that case. Uses
+// context.Background() rather than taking a ctx of its own: filesort.Order
+// already checks its own ctx once per file before calling this (see its
+// own doc comment), which is the granularity that sort needs; the read
+// itself is small enough not to need a second, finer-grained cancellation
+// point on top of that.
 func CaptureDate(u fyne.URI) (time.Time, bool) {
-	data, err := readRawBytes(u)
+	data, err := readRawBytes(context.Background(), u)
 	if err != nil {
 		return time.Time{}, false
 	}
@@ -132,8 +165,14 @@ func CaptureDate(u fyne.URI) (time.Time, bool) {
 // exchanges width and height), so a caller can resize the window to it
 // ahead of the full pixel decode in DecodeLoaded. This is also the natural
 // hook for a future downsampling pass on huge-but-valid images.
-func ReadAndProbe(u fyne.URI) (data []byte, bounds image.Rectangle, err error) {
-	data, err = readRawBytes(u)
+//
+// ctx is threaded through to readRawBytes, which is where the actual I/O
+// happens - see its own comment. A caller (internal/ui's attemptLoad/
+// preloadOne) whose generation has been superseded by a newer navigation
+// or drop cancels ctx instead of just discarding the result once it comes
+// back, so an abandoned load stops doing I/O instead of finishing unseen.
+func ReadAndProbe(ctx context.Context, u fyne.URI) (data []byte, bounds image.Rectangle, err error) {
+	data, err = readRawBytes(ctx, u)
 
 	if err != nil {
 		return nil, image.Rectangle{}, err
@@ -163,7 +202,18 @@ func ReadAndProbe(u fyne.URI) (data []byte, bounds image.Rectangle, err error) {
 // JPEG files carry an Exif orientation tag in practice; readEXIFOrientation
 // returns 1 (no correction) for anything else. Animated GIFs are decoded to
 // every frame instead of just the first.
-func DecodeLoaded(data []byte) (*LoadedImage, error) {
+//
+// ctx is checked once, up front, rather than threaded into the decode
+// itself: unlike ReadAndProbe's file read, decoding already-in-memory
+// bytes doesn't block on external I/O, so there's no slow operation to
+// interrupt mid-flight - only a possibly-wasted one to skip entirely if
+// ctx is already done by the time this runs (e.g. a generation that went
+// stale while queued behind preloadOne's semaphore).
+func DecodeLoaded(ctx context.Context, data []byte) (*LoadedImage, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+
 	if frames, delays := decodeAnimatedGIF(data); len(frames) > 1 {
 		return &LoadedImage{Frames: frames, Delays: delays}, nil
 	}
@@ -181,13 +231,18 @@ func DecodeLoaded(data []byte) (*LoadedImage, error) {
 // the image package (JPEG, PNG, GIF, WebP, BMP, TIFF, ICO, XPM, HEIC, AVIF)
 // - see ReadAndProbe and
 // DecodeLoaded, which callers wanting to resize a window ahead of the full
-// pixel decode call separately instead.
+// pixel decode call separately instead. Uses context.Background() rather
+// than taking a ctx of its own: its only caller, LoadThumbnail, is read by
+// internal/ui/grid's own bounded worker pool, which has its own staleness
+// guard (a generation the caller checks against once a thumbnail comes
+// back) rather than the cancellable-context one internal/ui's main decode
+// path (ShowImage/attemptLoad/preloadOne) uses.
 func LoadImage(u fyne.URI) (*LoadedImage, error) {
-	data, _, err := ReadAndProbe(u)
+	data, _, err := ReadAndProbe(context.Background(), u)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return DecodeLoaded(data)
+	return DecodeLoaded(context.Background(), data)
 }

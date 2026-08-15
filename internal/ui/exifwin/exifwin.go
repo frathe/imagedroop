@@ -8,6 +8,7 @@
 package exifwin
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -90,7 +91,11 @@ func (w *Window) Refresh() {
 		return
 	}
 
-	data, _, err := imaging.ReadAndProbe(u)
+	// context.Background(): this is a quick, on-demand, synchronous re-read
+	// for the EXIF panel, not part of the cancellable load/preload chain
+	// internal/ui's ShowImage/attemptLoad/preloadOne share a generation's
+	// context for.
+	data, _, err := imaging.ReadAndProbe(context.Background(), u)
 	if err != nil {
 		w.text.SetText(lang.L("Could not read this file's metadata."))
 		return

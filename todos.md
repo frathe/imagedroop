@@ -10,12 +10,19 @@
    (`←`/`→`/`Home`/`End`) still steps in order even with shuffle on; only
    the timer-driven auto-advance picks randomly.
 
-## TODO
+- **Cancel pending decodes when new files are dropped** —
+   `internal/imaging`'s `ReadAndProbe`/`DecodeLoaded` now take a
+   `context.Context`; a cancelled one stops `ReadAndProbe`'s file read
+   mid-transfer (`ctxReader`, checked on every `Read`) and makes
+   `DecodeLoaded` skip a pixel decode it would only have thrown away.
+   `internal/ui`'s new `invalidateLoad` (`load.go`) bumps `gen` and cancels
+   the previous generation's context together - mirroring
+   `invalidateSort`/`sortCancel` (`sort.go`) - and is what `ShowImage`,
+   `cancelScan`, `handleDrop`, and `clearToDropzone` now call instead of
+   bumping `gen` directly, so an abandoned `attemptLoad`/`preloadOne` stops
+   doing I/O instead of finishing unseen.
 
-- **Cancel pending decodes when new files are dropped** — attach a
-   `context.Context`/`cancel` to each decode so an abandoned load stops
-   doing I/O instead of finishing unseen; the `gen` guard only hides the
-   result, it doesn't stop the work.
+## TODO
 
 - **Move to Trash instead of permanent delete** — `internal/ui/deletion`
    calls `os.Remove` directly; route it through the OS trash/recycle bin
