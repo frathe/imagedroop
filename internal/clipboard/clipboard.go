@@ -69,7 +69,7 @@ func copyImageDarwin(data []byte) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(path)
+	defer func() { _ = os.Remove(path) }()
 
 	script := fmt.Sprintf(`set the clipboard to (read (POSIX file %q) as «class PNGf»)`, path)
 	_, err = runClipboardCommand(exec.Command("osascript", "-e", script))
@@ -130,7 +130,7 @@ func copyImageWindows(data []byte) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(path)
+	defer func() { _ = os.Remove(path) }()
 
 	// Pass the path through the environment instead of interpolating it into
 	// PowerShell source. A Windows temp directory may legally contain `$` or

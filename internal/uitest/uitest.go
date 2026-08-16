@@ -190,8 +190,10 @@ func CaptureDateJPEG(t *testing.T, w, h int, raw string) []byte {
 func TruncatedPNGHeader(t *testing.T, width, height uint32) []byte {
 	t.Helper()
 
+	// bytes.Buffer.Write/WriteString and hash.Hash.Write never return a
+	// non-nil error, so every result below is ignored deliberately.
 	var buf bytes.Buffer
-	buf.Write([]byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'})
+	_, _ = buf.Write([]byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'})
 
 	data := make([]byte, 13)
 	binary.BigEndian.PutUint32(data[0:4], width)
@@ -202,18 +204,18 @@ func TruncatedPNGHeader(t *testing.T, width, height uint32) []byte {
 
 	var length [4]byte
 	binary.BigEndian.PutUint32(length[:], uint32(len(data)))
-	buf.Write(length[:])
+	_, _ = buf.Write(length[:])
 
 	crc := crc32.NewIEEE()
-	crc.Write([]byte("IHDR"))
-	crc.Write(data)
+	_, _ = crc.Write([]byte("IHDR"))
+	_, _ = crc.Write(data)
 
-	buf.WriteString("IHDR")
-	buf.Write(data)
+	_, _ = buf.WriteString("IHDR")
+	_, _ = buf.Write(data)
 
 	var crcBytes [4]byte
 	binary.BigEndian.PutUint32(crcBytes[:], crc.Sum32())
-	buf.Write(crcBytes[:])
+	_, _ = buf.Write(crcBytes[:])
 
 	return buf.Bytes()
 }

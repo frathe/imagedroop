@@ -231,21 +231,23 @@ func encodeXPM(t *testing.T, w, h int, c color.Color) []byte {
 	t.Helper()
 
 	r, g, b, _ := c.RGBA()
+	// bytes.Buffer.Write/WriteString and fmt.Fprintf into it never return a
+	// non-nil error, so every result below is ignored deliberately.
 	var buf bytes.Buffer
-	buf.WriteString("/* XPM */\n")
-	buf.WriteString("static char * img_xpm[] = {\n")
-	fmt.Fprintf(&buf, "\"%d %d 1 1\",\n", w, h)
-	fmt.Fprintf(&buf, "\"X c #%02x%02x%02x\",\n", r>>8, g>>8, b>>8)
+	_, _ = buf.WriteString("/* XPM */\n")
+	_, _ = buf.WriteString("static char * img_xpm[] = {\n")
+	_, _ = fmt.Fprintf(&buf, "\"%d %d 1 1\",\n", w, h)
+	_, _ = fmt.Fprintf(&buf, "\"X c #%02x%02x%02x\",\n", r>>8, g>>8, b>>8)
 	for y := range h {
-		buf.WriteString("\"")
-		buf.WriteString(strings.Repeat("X", w))
-		buf.WriteString("\"")
+		_, _ = buf.WriteString("\"")
+		_, _ = buf.WriteString(strings.Repeat("X", w))
+		_, _ = buf.WriteString("\"")
 		if y < h-1 {
-			buf.WriteString(",")
+			_, _ = buf.WriteString(",")
 		}
-		buf.WriteString("\n")
+		_, _ = buf.WriteString("\n")
 	}
-	buf.WriteString("};\n")
+	_, _ = buf.WriteString("};\n")
 
 	return buf.Bytes()
 }
@@ -538,8 +540,10 @@ func TestLoadImage(t *testing.T) {
 func truncatedPNGHeader(t *testing.T, width, height uint32) []byte {
 	t.Helper()
 
+	// bytes.Buffer.Write/WriteString and hash.Hash.Write never return a
+	// non-nil error, so every result below is ignored deliberately.
 	var buf bytes.Buffer
-	buf.Write([]byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'})
+	_, _ = buf.Write([]byte{0x89, 'P', 'N', 'G', '\r', '\n', 0x1A, '\n'})
 
 	data := make([]byte, 13)
 	binary.BigEndian.PutUint32(data[0:4], width)
@@ -550,18 +554,18 @@ func truncatedPNGHeader(t *testing.T, width, height uint32) []byte {
 
 	var length [4]byte
 	binary.BigEndian.PutUint32(length[:], uint32(len(data)))
-	buf.Write(length[:])
+	_, _ = buf.Write(length[:])
 
 	crc := crc32.NewIEEE()
-	crc.Write([]byte("IHDR"))
-	crc.Write(data)
+	_, _ = crc.Write([]byte("IHDR"))
+	_, _ = crc.Write(data)
 
-	buf.WriteString("IHDR")
-	buf.Write(data)
+	_, _ = buf.WriteString("IHDR")
+	_, _ = buf.Write(data)
 
 	var crcBytes [4]byte
 	binary.BigEndian.PutUint32(crcBytes[:], crc.Sum32())
-	buf.Write(crcBytes[:])
+	_, _ = buf.Write(crcBytes[:])
 
 	return buf.Bytes()
 }

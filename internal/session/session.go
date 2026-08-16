@@ -73,7 +73,11 @@ func Load(app fyne.App) []fyne.URI {
 	if err != nil {
 		return nil
 	}
-	defer r.Close()
+	defer func() {
+		if err := r.Close(); err != nil {
+			fyne.LogError("failed to close session cache reader", err)
+		}
+	}()
 
 	var s state
 	if err := json.NewDecoder(r).Decode(&s); err != nil {

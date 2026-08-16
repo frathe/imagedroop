@@ -1164,27 +1164,6 @@ func warmThumbs(t *testing.T, v *viewer) {
 	}
 }
 
-// settleThumbs waits until every thumbnail decode spawned so far has fully
-// finished - painted its cell or discarded a stale result - so the test
-// goroutine can touch widgets again without racing their inline fyne.Do
-// completions. Call after any action that refreshes the grid while it's
-// open (drain does it at the end of every test regardless).
-func settleThumbs(t *testing.T, v *viewer) {
-	t.Helper()
-
-	settled := make(chan struct{})
-	go func() {
-		v.grid.Settle()
-		close(settled)
-	}()
-
-	select {
-	case <-settled:
-	case <-time.After(testTimeout):
-		t.Fatal("timed out waiting for thumbnail decodes to settle")
-	}
-}
-
 // waitForAnimFrame polls v.animFrame - an atomic counter animate bumps after
 // every frame write - until it reaches at least n. Polling the atomic is
 // race-free, unlike reading v.img.Image directly from the test goroutine

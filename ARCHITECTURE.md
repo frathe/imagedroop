@@ -276,9 +276,11 @@ files, so it never reaches a production binary. Zero dependency on
 Added 2026-08-14, replacing per-package copies of the same helpers — Go can't share unexported test helpers across
 packages, and the per-feature package split needs one shared source. What deliberately did **not** move:
 the wait helpers (`waitUntilLoaded`/`waitForScan`/`settleToast`/
-`settleThumbs`/`settleSlideshow`/`dropAndWait`) live in `internal/ui`'s own test files, because they synchronize on
+`settleSlideshow`/`dropAndWait`) live in `internal/ui`'s own test files, because they synchronize on
 unexported `viewer` channels and WaitGroups — keeping them there is what stops those sync primitives from becoming
-exported API.
+exported API. (A `settleThumbs` used to be listed here too; it was removed 2026-08-16 as dead code — `drain`, run via
+`t.Cleanup` in every test, already calls `v.grid.Settle()` at teardown, so nothing was left calling `settleThumbs`
+directly.)
 
 ## Translations
 
@@ -295,6 +297,29 @@ Two tests in `main_test.go` guard the part that rots silently: that every locale
 new string added to `en.json`
 and nowhere else is otherwise invisible until a German user meets an English word), and that `en.json` really is an
 identity mapping. Both read the embedded FS, so they check what actually ships.
+
+## Error handling
+
+There is no logging package anywhere in this module (`grep -rl '"log"\|log/slog'` turns up nothing) — the only
+error-reporting mechanism is Fyne's own `fyne.LogError`, and it is used exclusively at the app/UI-facing layer:
+`main.go`, `internal/ui`'s own files (`clipboard.go`, `openfiles.go`, `save.go`), and `internal/session/session.go`
+(the one lower-level package that already imports `fyne` for `fyne.App`/`storage`). Lower-level, `viewer`-independent
+packages (`internal/clipboard`, `internal/imaging`, `internal/uitest`) do not import `fyne` for this and never will
+just to report an error — an error a caller genuinely cannot or need not act on (a best-effort temp-file cleanup, a
+read handle's `Close` after the read already succeeded) is ignored explicitly instead: `defer func() { _ =
+os.Remove(path) }()`, matching the pattern already used for `_ = tmp.Close()` in `internal/imaging/save.go`. Never
+leave the call bare (`defer os.Remove(path)`) — an explicit `_ =`/`_, _ =` is what tells a reader (and the IDE's
+unhandled-error inspection) that the omission is deliberate, not an oversight.
+
+This applies even to calls that are provably infallible: `bytes.Buffer`/`strings.Builder`'s `Write`/`WriteString`,
+`hash.Hash.Write`, and `fmt.Fprintf`/`Fprint`/`Fprintln` into either never return a non-nil error (this is also why
+`errcheck`'s own default exclude list — `github.com/kisielk/errcheck/errcheck/excludes.go` — omits them). Several test
+helpers that build synthetic file headers by hand (`internal/imaging/loader_test.go`'s `encodeXPM`/
+`truncatedPNGHeader`, `internal/uitest/uitest.go`'s `TruncatedPNGHeader`) still mark every such call `_, _ = ...`, with
+a one-line comment stating why, purely so the code reads as an intentional choice rather than an unhandled error an
+IDE inspection flags.
+
+Use `errcheck` command to check for unhadled errors.
 
 ## Where to look for X
 
@@ -336,6 +361,7 @@ identity mapping. Both read the embedded FS, so they check what actually ships.
   every bundle in `translations/` — see Translations above
 - "Why isn't feature X its own package?" → the ownership and cross-feature-composition rules in the `internal/ui`
   section above
+- "How/where are errors reported, and when is it OK to ignore one?" → Error handling above
 
 ## Keeping this doc current
 

@@ -181,7 +181,7 @@ func (v *viewer) attemptLoad(ctx context.Context, i int, gen uint64, done chan s
 // test driver runs synchronously on whatever goroutine called it) and its
 // cache-hit path (called directly from attemptLoad, always on whichever
 // goroutine called ShowImage()).
-func (v *viewer) finishLoad(ctx context.Context, i int, u fyne.URI, loaded *imaging.LoadedImage, gen uint64, done chan struct{}) {
+func (v *viewer) finishLoad(ctx context.Context, _ int, u fyne.URI, loaded *imaging.LoadedImage, gen uint64, done chan struct{}) {
 	b := loaded.Frames[0].Bounds()
 
 	v.displayFrames = loaded.Frames

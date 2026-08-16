@@ -99,7 +99,7 @@ func SaveRotated(u fyne.URI, img image.Image) error {
 	// A no-op once the rename below has already moved tmpPath to path; left
 	// unchecked deliberately, since its only job left by then is to clean up
 	// on an error return above.
-	defer os.Remove(tmpPath)
+	defer func() { _ = os.Remove(tmpPath) }()
 
 	if err := tmp.Chmod(info.Mode().Perm()); err != nil {
 		_ = tmp.Close()
