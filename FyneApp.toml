@@ -1,8 +1,8 @@
 [Details]
 Name = "Image Drop"
 ID = "image_drop"
-Version = "0.1.4"
-Build = 273
+Version = "0.1.5"
+Build = 278
 
 [Migrations]
 fyneDo = true
