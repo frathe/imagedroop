@@ -96,6 +96,36 @@ func TestPerformDelete_RemovesCurrentFileAndAdvancesToTheNextOne(t *testing.T) {
 	settleToast(t, v)
 }
 
+// TestPerformDelete_OnLastImageOfMultipleAdvancesWithoutPanicking is a
+// regression test: deleting while positioned on the last image of a
+// multi-file set left v.index equal to the new (shrunk) length, so the very
+// next CurrentFile() call - performDelete's own "did that empty the set?"
+// check - indexed v.files out of range and crashed the whole app.
+func TestPerformDelete_OnLastImageOfMultipleAdvancesWithoutPanicking(t *testing.T) {
+	uitest.StubTrashMove(t, func(path string) error { return os.Remove(path) })
+	v := newTestViewer(t)
+	a := uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White)
+	b := uitest.TempJPEGURI(t, "b.jpg", 4, 4, color.White)
+	dropAndWait(t, v, a, b)
+
+	v.handleKeyEvent(&fyne.KeyEvent{Name: fyne.KeyRight})
+	waitUntilLoaded(t, v)
+	if v.index != 1 {
+		t.Fatalf("setup: index = %d, want 1 (on b.jpg, the last image)", v.index)
+	}
+
+	confirmDelete(t, v)
+	waitUntilLoaded(t, v)
+
+	if len(v.files) != 1 || v.files[0].String() != a.String() {
+		t.Fatalf("files = %v, want just a.jpg left", v.files)
+	}
+	if v.index != 0 {
+		t.Errorf("index = %d, want 0 (a.jpg took b.jpg's slot)", v.index)
+	}
+	settleToast(t, v)
+}
+
 // TestPerformDelete_LastFileReturnsToEmptyDropzone covers deleting the only
 // remaining file: the app should fall back to the empty-state screen, the
 // same place a last decode failure already lands it.

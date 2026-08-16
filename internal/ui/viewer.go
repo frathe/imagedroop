@@ -625,6 +625,14 @@ func (v *viewer) RemoveFile(i int) {
 	v.files = append(v.files[:i], v.files[i+1:]...)
 	v.imgCache.Remove(target.String())
 
+	// Callers always remove the file currently at v.index, so once it's
+	// gone v.index may point past the new end (e.g. deleting the last
+	// image) - clamp it back onto the shrunk slice, same as attemptLoad's
+	// wraparound does for the retry path.
+	if v.index >= len(v.files) {
+		v.index = len(v.files) - 1
+	}
+
 	for j, u := range v.unsortedFiles {
 		if u.String() == target.String() {
 			v.unsortedFiles = append(v.unsortedFiles[:j], v.unsortedFiles[j+1:]...)
