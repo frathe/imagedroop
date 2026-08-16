@@ -13,6 +13,14 @@
    BMP/TIFF/AVIF, atomic temp-file-then-rename write). Animated images and
    formats with no encoder (WebP/HEIC/ICO/XPM) are excluded, not converted.
 
+- **Fix golden masters for linux/amd64 CI**, add make golden
+   delete_confirm_{cancel,danger}.png were regenerated on darwin/arm64,
+   which Fyne's test harness compares leniently but CI (linux/amd64)
+   does not - CI failed with a byte-exact mismatch. Re-rendered both
+   under linux/amd64 to match CI, and added a `make golden` Docker
+   target (+ CONTRIBUTING/README updates) so future regenerations are
+   never machine-dependent.
+
 ## TODO
 
 - **Save As / convert image format** — `internal/imaging/save.go` can only
