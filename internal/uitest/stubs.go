@@ -6,11 +6,12 @@ import (
 	"github.com/frathe/imagedrop/internal/clipboard"
 	"github.com/frathe/imagedrop/internal/filepicker"
 	"github.com/frathe/imagedrop/internal/trash"
+	"github.com/frathe/imagedrop/internal/wallpaper"
 )
 
 // The stubs below swap the exported dispatcher vars that stand in front of
 // this app's OS-level shell-outs (a native file dialog, a clipboard copy, a
-// trash move). Those vars exist precisely so tests never actually open a
+// trash move, a wallpaper change). Those vars exist precisely so tests never actually open a
 // dialog, touch the system clipboard, or move a file to the real Trash;
 // each restores the real implementation on cleanup, so a test that stubs
 // one can't affect the ones that follow.
@@ -66,4 +67,15 @@ func StubTrashMove(t *testing.T, fn func(path string) error) {
 	orig := trash.Move
 	t.Cleanup(func() { trash.Move = orig })
 	trash.Move = fn
+}
+
+// StubWallpaperSet makes wallpaper.Set call fn instead of changing the
+// machine's real desktop wallpaper - the one stub here whose absence a test
+// run would leave visibly behind on the developer's own screen.
+func StubWallpaperSet(t *testing.T, fn func(path string) error) {
+	t.Helper()
+
+	orig := wallpaper.Set
+	t.Cleanup(func() { wallpaper.Set = orig })
+	wallpaper.Set = fn
 }

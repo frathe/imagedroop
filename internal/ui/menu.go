@@ -42,11 +42,18 @@ func buildMainMenu(view *viewer) *fyne.MainMenu {
 	exportJPEG.Disabled = true
 	view.exportJPEGItem = exportJPEG
 
+	// Carries no accelerator either, for the same reason the export items
+	// don't: it sits among them, and nothing about the action suggests one
+	// key over another.
+	setWallpaper := fyne.NewMenuItem(lang.L("Set as Wallpaper"), func() { view.setAsWallpaper() })
+	setWallpaper.Disabled = true // updateFileMenuState (save.go) enables it once an image is loaded
+	view.wallpaperItem = setWallpaper
+
 	closeFiles := fyne.NewMenuItem(lang.L("Close Files"), func() { view.closeFiles() })
 	settings := fyne.NewMenuItem(lang.L("Settings…"), func() { view.settings.Show() })
 
 	fileMenu := fyne.NewMenu(lang.L("File"),
-		open, save, exportPNG, exportJPEG, closeFiles, fyne.NewMenuItemSeparator(), settings)
+		open, save, exportPNG, exportJPEG, setWallpaper, closeFiles, fyne.NewMenuItemSeparator(), settings)
 
 	return fyne.NewMainMenu(fileMenu, view.help.Menu())
 }

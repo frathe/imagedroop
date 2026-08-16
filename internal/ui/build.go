@@ -314,6 +314,7 @@ func buildViewer(application fyne.App) (*viewer, fyne.Window) {
 		maxWinW:       maxWinW,
 		maxWinH:       maxWinH,
 		imgCacheMB:    imgCacheMB,
+		wallpaperDir:  defaultWallpaperDir(),
 		keyModifiers:  defaultKeyModifiers,
 	}
 

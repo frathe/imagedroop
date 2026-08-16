@@ -482,6 +482,13 @@ needed. macOS and Windows need nothing extra either way.
   HEIC files and a single frame of an animated GIF, and it never touches the
   original. If the name you type already ends in a format Image Drop can
   write, that format wins over the menu item you picked
+- **File -> Set as Wallpaper** — makes the image on screen your desktop
+  wallpaper, exactly as it currently appears. Image Drop writes its own copy
+  into its cache folder and points the desktop at that, so the wallpaper
+  keeps working after you move, rename or trash the original. On Linux this
+  needs `gsettings` (GNOME, Cinnamon, Budgie, Unity) or
+  `plasma-apply-wallpaperimage` (KDE Plasma 5.24+); a message says so if
+  neither is installed
 - **File -> Close Files** — returns to the drop zone without quitting
 - **File -> Settings…** — opens the settings window
 - **Help -> Manual** — opens this manual, same as `F1`
@@ -588,8 +595,9 @@ Things Image Drop deliberately does not do (yet):
   override — every image gets the same interval (animated GIFs aside)
 - No image editing beyond rotation: no cropping, no colour or exposure
   adjustment, no resizing. What you can write to disk is a rotation
-  (**File -> Save Changes**) and a copy in another format
-  (**File -> Export as PNG…/JPEG…**), both described in "Menu" below
+  (**File -> Save Changes**), a copy in another format
+  (**File -> Export as PNG…/JPEG…**) and a wallpaper copy
+  (**File -> Set as Wallpaper**), all described in "Menu" below
 - No support for RAW, SVG, or PDF
 - No playback controls (pause, step, restart) for animated GIFs
 - No EXIF GPS/location display — deliberately left out of the EXIF data

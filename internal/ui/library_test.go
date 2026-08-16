@@ -155,6 +155,14 @@ func newTestUI(t *testing.T) (v *viewer, win fyne.Window, closed func() bool) {
 	// harmlessly until the process exits.
 	v.toast.duration = time.Hour
 
+	// setAsWallpaper writes a PNG it then hands to the OS, and unlike every
+	// other file this suite produces that one is meant to outlive the
+	// process - so it is redirected out of the user's real cache directory
+	// here, the same way the toast's duration is neutralized above.
+	// wallpaper.Set itself is stubbed per-test (uitest.StubWallpaperSet), so
+	// nothing here ever reaches the desktop.
+	v.wallpaperDir = t.TempDir()
+
 	var isClosed bool
 	win.SetOnClosed(func() { isClosed = true })
 
@@ -205,6 +213,7 @@ func drain(t *testing.T, v *viewer) {
 		{"load", v.loadDone},
 		{"clipboard copy", v.clipboardDone},
 		{"file chooser", v.chooserDone},
+		{"wallpaper", v.wallpaperDone},
 	} {
 		if c.ch == nil {
 			continue

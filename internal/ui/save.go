@@ -76,9 +76,11 @@ func (v *viewer) saveRotation() {
 	v.ShowToast(lang.L("Saved"))
 }
 
-// updateFileMenuState keeps the File menu's three image-dependent items in
+// updateFileMenuState keeps the File menu's four image-dependent items in
 // sync with what's currently loaded: "Save Changes" with canSaveRotation
-// above, and both "Export as…" items with canExport (export.go). Called
+// above, and both "Export as…" items plus "Set as Wallpaper" with canExport
+// (export.go, and canSetWallpaper in wallpaper.go, which is the same
+// condition for the same reasons). Called
 // wherever v.rotation, v.displayFrames, v.loading, or the current file can
 // change: rotateBy/resetRotation (rotate.go), ShowImage/finishLoad
 // (load.go), clearToDropzone (viewer.go), and after a successful
@@ -90,6 +92,7 @@ func (v *viewer) updateFileMenuState() {
 	noExport := !v.canExport()
 	v.exportPNGItem.Disabled = noExport
 	v.exportJPEGItem.Disabled = noExport
+	v.wallpaperItem.Disabled = !v.canSetWallpaper()
 
 	v.win.MainMenu().Refresh()
 }

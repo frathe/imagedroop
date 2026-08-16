@@ -14,8 +14,9 @@ import (
 )
 
 // TestBuildMainMenu_Structure checks the bar's shape: File (Open Files…,
-// Save Changes, Export as PNG…, Export as JPEG…, Close Files, a separator,
-// Settings…) followed by view.help's own Help menu - mirroring help's own
+// Save Changes, Export as PNG…, Export as JPEG…, Set as Wallpaper, Close
+// Files, a separator, Settings…) followed by view.help's own Help menu -
+// mirroring help's own
 // TestHelpMenu (manual_test.go), which covers the Help submenu's own
 // contents.
 func TestBuildMainMenu_Structure(t *testing.T) {
@@ -31,8 +32,8 @@ func TestBuildMainMenu_Structure(t *testing.T) {
 	if file.Label != "File" {
 		t.Errorf("first menu label = %q, want %q", file.Label, "File")
 	}
-	if len(file.Items) != 7 {
-		t.Fatalf("File menu items = %d, want 7 (Open Files…, Save Changes, Export as PNG…, Export as JPEG…, Close Files, separator, Settings…)", len(file.Items))
+	if len(file.Items) != 8 {
+		t.Fatalf("File menu items = %d, want 8 (Open Files…, Save Changes, Export as PNG…, Export as JPEG…, Set as Wallpaper, Close Files, separator, Settings…)", len(file.Items))
 	}
 
 	if got := file.Items[0]; got.Label != "Open Files…" || got.Action == nil {
@@ -47,14 +48,17 @@ func TestBuildMainMenu_Structure(t *testing.T) {
 	if got := file.Items[3]; got.Label != "Export as JPEG…" || got.Action == nil || !got.Disabled {
 		t.Errorf("File menu item 3 = %+v, want %q with an action, starting disabled", got, "Export as JPEG…")
 	}
-	if got := file.Items[4]; got.Label != "Close Files" || got.Action == nil {
-		t.Errorf("File menu item 4 = %+v, want %q with an action", got, "Close Files")
+	if got := file.Items[4]; got.Label != "Set as Wallpaper" || got.Action == nil || !got.Disabled {
+		t.Errorf("File menu item 4 = %+v, want %q with an action, starting disabled", got, "Set as Wallpaper")
 	}
-	if !file.Items[5].IsSeparator {
+	if got := file.Items[5]; got.Label != "Close Files" || got.Action == nil {
+		t.Errorf("File menu item 5 = %+v, want %q with an action", got, "Close Files")
+	}
+	if !file.Items[6].IsSeparator {
 		t.Error("expected a separator between Close Files and Settings…")
 	}
-	if got := file.Items[6]; got.Label != "Settings…" || got.Action == nil {
-		t.Errorf("File menu item 6 = %+v, want %q with an action", got, "Settings…")
+	if got := file.Items[7]; got.Label != "Settings…" || got.Action == nil {
+		t.Errorf("File menu item 7 = %+v, want %q with an action", got, "Settings…")
 	}
 
 	if got := menu.Items[1]; got.Label != "Help" {
@@ -96,7 +100,7 @@ func TestBuildMainMenu_CloseFilesItemResetsToWelcomeState(t *testing.T) {
 	dropAndWait(t, v, a)
 
 	menu := buildMainMenu(v)
-	menu.Items[0].Items[4].Action()
+	menu.Items[0].Items[5].Action()
 
 	if v.files != nil {
 		t.Errorf("files = %v, want nil after the Close Files action", v.files)
@@ -114,7 +118,7 @@ func TestBuildMainMenu_SettingsItemOpensTheSettingsWindow(t *testing.T) {
 		t.Fatal("settings window should not be open yet")
 	}
 
-	menu.Items[0].Items[6].Action()
+	menu.Items[0].Items[7].Action()
 
 	if !v.settings.Open() {
 		t.Error("the Settings… action should open the settings window")

@@ -81,16 +81,18 @@ type viewer struct {
 	// setters).
 	settings *settingswin.Window
 
-	// saveItem is the File menu's "Save Changes" item (save.go), and
-	// exportPNGItem/exportJPEGItem its two "Export as…" items (export.go) -
-	// kept as their own fields, unlike the other menu items built in
-	// menu.go, because their Disabled fields need updating from outside
+	// saveItem is the File menu's "Save Changes" item (save.go),
+	// exportPNGItem/exportJPEGItem its two "Export as…" items (export.go),
+	// and wallpaperItem its "Set as Wallpaper" one (wallpaper.go) - kept as
+	// their own fields, unlike the other menu items built in menu.go,
+	// because their Disabled fields need updating from outside
 	// buildMainMenu itself, at every site that can change whether there's
-	// anything to save or export: rotate.go, load.go, clearToDropzone, and
-	// save.go itself - see updateFileMenuState.
+	// anything to save, export or set: rotate.go, load.go, clearToDropzone,
+	// and save.go itself - see updateFileMenuState.
 	saveItem       *fyne.MenuItem
 	exportPNGItem  *fyne.MenuItem
 	exportJPEGItem *fyne.MenuItem
+	wallpaperItem  *fyne.MenuItem
 
 	// restoreLink offers to reload the file set saved when the window last
 	// closed (see session.go). Shown only while welcomeArt is - and only
@@ -362,9 +364,17 @@ type viewer struct {
 	// shell-out goroutine has fully finished, error reporting included -
 	// the same wait-channel discipline scanDone/loadDone give tests for
 	// drops and loads. chooserDone is the same for openFileDialog's
-	// native-dialog goroutine.
+	// native-dialog goroutine, and wallpaperDone for setAsWallpaper's.
 	clipboardDone chan struct{}
 	chooserDone   chan struct{}
+	wallpaperDone chan struct{}
+
+	// wallpaperDir is where setAsWallpaper (wallpaper.go) writes the PNG it
+	// hands to the OS - defaultWallpaperDir in production, a t.TempDir() in
+	// tests, which is why it is a field rather than a package-level
+	// constant: this is the one action whose side effect outlives the
+	// process, on the developer's own desktop.
+	wallpaperDir string
 
 	// maxScan caps how many images a single recursive folder scan will
 	// gather - see handleDrop (drop.go). A field rather than the package

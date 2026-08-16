@@ -2,6 +2,32 @@
 
 ## Done
 
+- **Set current image as desktop wallpaper** — File > "Set as Wallpaper"
+   (`internal/ui/wallpaper.go`) makes the frame on screen the desktop
+   picture, through a new per-OS `internal/wallpaper` shaped like
+   `internal/trash`. What the OS is handed is *not* the user's file but a PNG
+   copy the app writes into `os.UserCacheDir()/image_drop/wallpapers`: every
+   platform here stores a reference to the path rather than the pixels, so
+   pointing the desktop at the original would break the wallpaper the moment
+   it was moved — or trashed with the Shift+Delete one keystroke away. The
+   copy also gets rotation, one frame of an animation, and WebP/HEIC for
+   free, which is why the enable rule is `canExport` verbatim rather than
+   `canSaveRotation`'s. Its name carries a timestamp because macOS caches the
+   desktop picture by path and can ignore a same-path content change;
+   `sweepWallpapers` then clears the file it replaced, but only after
+   `wallpaper.Set` succeeds — a failed set removes just what it wrote, since
+   the previous copy may still be the live wallpaper. macOS goes through
+   AppKit's `NSWorkspace` rather than the AppleScript the todo sketched, for
+   the same reason `internal/trash` avoids scripting Finder (the Automation
+   permission prompt), and reads each screen's existing options back so the
+   user's Fill/Fit choice survives. Two Linux details carry the rest: the KDE
+   check runs *before* the binary lookup, because gsettings is usually
+   installed there too and would otherwise report success while the desktop
+   never changed; and `picture-uri-dark` is written alongside `picture-uri`,
+   since GNOME 42 split the pair and a dark-mode user sees nothing change
+   otherwise — its failure ignored, because what makes it fail is an older
+   GNOME where the light key was already the whole job.
+
 - **Multi-select + batch ops in grid view** — Cmd/Ctrl-click toggles a
    thumbnail, Shift-click extends a range, `Space` picks the highlighted one
    and Cmd/Ctrl+A takes the lot; `Shift+Delete` then trashes all of them
@@ -99,10 +125,7 @@
 
 ## TODO
 
-- **Set current image as desktop wallpaper** — a per-OS action
-   (AppleScript on macOS, PowerShell on Windows, gsettings on Linux)
-   mirroring the per-OS dispatch pattern already used by
-   `internal/clipboard`/`internal/filepicker`/`internal/winpos`.
+- (nothing open)
 
 ## not deemed worth implementing (edgecases)
 

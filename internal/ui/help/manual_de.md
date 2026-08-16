@@ -547,6 +547,14 @@ benötigen in beiden Fällen nichts Zusätzliches.
   unangetastet. Endet der von Ihnen eingegebene Name bereits auf ein Format,
   das Image Drop schreiben kann, hat dieses Vorrang vor dem gewählten
   Menüeintrag
+- **Datei -> Als Hintergrundbild festlegen** — macht das angezeigte Bild zum
+  Hintergrundbild des Schreibtischs, genau so, wie es gerade aussieht. Image
+  Drop legt dafür eine eigene Kopie im Zwischenspeicher an und verweist den
+  Schreibtisch darauf, das Hintergrundbild bleibt also erhalten, wenn Sie
+  das Original verschieben, umbenennen oder in den Papierkorb legen. Unter
+  Linux wird dafür `gsettings` (GNOME, Cinnamon, Budgie, Unity) oder
+  `plasma-apply-wallpaperimage` (KDE Plasma ab 5.24) benötigt; ist keines
+  von beiden installiert, erscheint ein entsprechender Hinweis
 - **Datei -> Dateien schließen** — zurück zum Ablagebereich, ohne das
   Programm zu beenden
 - **Datei -> Einstellungen…** — öffnet das Einstellungsfenster
@@ -672,9 +680,10 @@ Dinge, die Image Drop absichtlich (noch) nicht tut:
   (animierte GIFs ausgenommen)
 - Keine Bildbearbeitung über das Drehen hinaus: kein Zuschneiden, keine
   Farb- oder Belichtungskorrektur, keine Größenänderung. Auf die Festplatte
-  schreiben lassen sich eine Drehung (**Datei -> Änderungen speichern**) und
+  schreiben lassen sich eine Drehung (**Datei -> Änderungen speichern**),
   eine Kopie in einem anderen Format (**Datei -> Als PNG/JPEG
-  exportieren…**), beide unter „Menü“ oben beschrieben
+  exportieren…**) und eine Hintergrundbild-Kopie (**Datei -> Als
+  Hintergrundbild festlegen**), alle unter „Menü“ oben beschrieben
 - Keine Unterstützung für RAW, SVG oder PDF
 - Keine Wiedergabesteuerung (Pause, Einzelschritt, Neustart) für animierte
   GIFs
