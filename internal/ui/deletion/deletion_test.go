@@ -9,6 +9,8 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/test"
+
+	"github.com/frathe/imagedrop/internal/trash"
 )
 
 func TestMain(m *testing.M) {
@@ -26,6 +28,7 @@ func TestMain(m *testing.M) {
 type fakeHost struct {
 	files []fyne.URI
 	index int
+	gen   uint64
 
 	removed  []int
 	shown    []int
@@ -54,8 +57,21 @@ func (f *fakeHost) ShowImage(i int)              { f.shown = append(f.shown, i) 
 func (f *fakeHost) ShowToast(msg string)         { f.toasts = append(f.toasts, msg) }
 func (f *fakeHost) ShowEmptyStateError(m string) { f.emptied = append(f.emptied, m) }
 func (f *fakeHost) ForceRepaint()                { f.repaints++ }
+func (f *fakeHost) Generation() uint64           { return f.gen }
 
-// tempFiles writes n real files (the delete path calls os.Remove, so they
+// stubTrashMove makes trash.Move behave like a plain remove, so these tests
+// exercise the confirmation flow's own logic without ever invoking the real
+// per-OS trash mover - which, run for real in `go test`, would move the
+// temp file into the machine's actual Trash.
+func stubTrashMove(t *testing.T) {
+	t.Helper()
+
+	orig := trash.Move
+	t.Cleanup(func() { trash.Move = orig })
+	trash.Move = func(path string) error { return os.Remove(path) }
+}
+
+// tempFiles writes n real files (the delete path calls trash.Move, so they
 // have to exist) and returns their URIs.
 func tempFiles(t *testing.T, names ...string) []fyne.URI {
 	t.Helper()
@@ -170,6 +186,7 @@ func TestHandleKey_ReturnWithCancelSelectedJustHidesTheCard(t *testing.T) {
 }
 
 func TestPerformDelete_RemovesFileAndAdvances(t *testing.T) {
+	stubTrashMove(t)
 	files := tempFiles(t, "a.jpg", "b.jpg")
 	host := &fakeHost{files: files}
 	c := New(host)
@@ -183,6 +200,7 @@ func TestPerformDelete_RemovesFileAndAdvances(t *testing.T) {
 
 	c.HandleKey(&fyne.KeyEvent{Name: fyne.KeyRight}) // select danger
 	c.HandleKey(&fyne.KeyEvent{Name: fyne.KeyReturn})
+	c.Settle()
 
 	if c.Visible() {
 		t.Error("confirming should dismiss the card")
@@ -202,6 +220,7 @@ func TestPerformDelete_RemovesFileAndAdvances(t *testing.T) {
 }
 
 func TestPerformDelete_LastFileFallsBackToEmptyState(t *testing.T) {
+	stubTrashMove(t)
 	files := tempFiles(t, "only.jpg")
 	host := &fakeHost{files: files}
 	c := New(host)
@@ -209,6 +228,7 @@ func TestPerformDelete_LastFileFallsBackToEmptyState(t *testing.T) {
 
 	c.setSelection(true)
 	c.confirmSelection()
+	c.Settle()
 
 	if _, err := os.Stat(files[0].Path()); !os.IsNotExist(err) {
 		t.Error("the confirmed file should be gone from disk")
@@ -222,9 +242,11 @@ func TestPerformDelete_LastFileFallsBackToEmptyState(t *testing.T) {
 }
 
 func TestPerformDelete_OSFailureKeepsTheFileAndToastsAnError(t *testing.T) {
+	stubTrashMove(t)
+
 	// A directory that isn't empty can't be removed, which is the simplest
-	// portable way to make os.Remove fail against a path that still exists
-	// afterwards.
+	// portable way to make the stubbed trash.Move fail against a path that
+	// still exists afterwards.
 	dir := t.TempDir()
 	stubborn := filepath.Join(dir, "notafile")
 	if err := os.MkdirAll(filepath.Join(stubborn, "child"), 0o755); err != nil {
@@ -237,6 +259,7 @@ func TestPerformDelete_OSFailureKeepsTheFileAndToastsAnError(t *testing.T) {
 
 	c.setSelection(true)
 	c.confirmSelection()
+	c.Settle()
 
 	if _, err := os.Stat(stubborn); err != nil {
 		t.Errorf("the file should survive a failed delete: %v", err)
@@ -244,8 +267,46 @@ func TestPerformDelete_OSFailureKeepsTheFileAndToastsAnError(t *testing.T) {
 	if len(host.removed) != 0 {
 		t.Error("a failed os.Remove must not drop the file from the app's set")
 	}
-	if len(host.toasts) != 1 || !strings.Contains(host.toasts[0], "could not delete") {
+	if len(host.toasts) != 1 || !strings.Contains(host.toasts[0], "could not move") {
 		t.Errorf("toasts = %v, want one reporting the failure", host.toasts)
+	}
+}
+
+// TestPerformDelete_SkipsFileSetMutationIfGenerationChangesDuringTheMove
+// guards against a race the async redesign introduces: trash.Move runs on
+// its own goroutine (see performDelete's doc comment for why it must), so
+// something else - a fresh drop, a reset, another delete - can change the
+// app's file set while it's still in flight, which would make the
+// captured index stale by the time the move finishes. The move to Trash
+// itself must still go through (the file shouldn't leak just because the
+// bookkeeping got skipped), but RemoveFile/ShowImage/ShowEmptyStateError
+// must not run against an index that may no longer mean what it did.
+func TestPerformDelete_SkipsFileSetMutationIfGenerationChangesDuringTheMove(t *testing.T) {
+	host := &fakeHost{files: tempFiles(t, "a.jpg")}
+	c := New(host)
+
+	orig := trash.Move
+	t.Cleanup(func() { trash.Move = orig })
+	trash.Move = func(path string) error {
+		// Stands in for a fresh drop (or any other event) landing while
+		// the move to Trash is still in flight.
+		host.gen++
+		return os.Remove(path)
+	}
+
+	c.Request()
+	c.setSelection(true)
+	c.confirmSelection()
+	c.Settle()
+
+	if _, err := os.Stat(host.files[0].Path()); !os.IsNotExist(err) {
+		t.Error("the file should still be moved to Trash even though the generation changed mid-flight")
+	}
+	if len(host.removed) != 0 {
+		t.Error("RemoveFile must not run against a file set that moved on during the async move")
+	}
+	if len(host.shown) != 0 || len(host.emptied) != 0 {
+		t.Error("neither ShowImage nor ShowEmptyStateError should run once the generation is stale")
 	}
 }
 

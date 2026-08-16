@@ -250,12 +250,37 @@ notwindows}.go` (all four deleted from root) on 2026-08-13 — see
 widget and the `*viewer` glue (`openFileDialog`, `runFileChooser`,
 `reportChooserError`) that calls `filepicker.Choose`/`filepicker.ParseFileList`.
 
-Note: `hideConsoleWindow` now exists as three separate build-tag-pair
-copies — here, in `internal/clipboard`, and nowhere else (the root
-`openfiles_windows.go`/`openfiles_notwindows.go` that used to hold a third
-copy were deleted, since `main` no longer calls it directly). Each copy is
-~10 lines and unexported, so duplicating it per package beat introducing a
-shared package for one tiny OS-quirk helper.
+Note: `hideConsoleWindow` now exists as four separate build-tag-pair
+copies — here, in `internal/clipboard`, in `internal/trash`, and nowhere
+else (the root `openfiles_windows.go`/`openfiles_notwindows.go` that used to
+hold another copy were deleted, since `main` no longer calls it directly).
+Each copy is ~10 lines and unexported, so duplicating it per package beat
+introducing a shared package for one tiny OS-quirk helper.
+
+### `internal/trash`
+
+Moves a file to the current OS's trash/recycle bin rather than deleting it
+outright, for `internal/ui/deletion`'s Shift+Delete flow. Each platform
+needs its own approach: `gio trash` (falling back to `trash-cli`'s
+`trash-put`) on Linux, both of which already implement the
+freedesktop.org trash spec correctly; `Microsoft.VisualBasic.FileIO`'s
+recycle-bin delete via PowerShell on Windows; in-process cgo/AppKit
+`NSWorkspace.recycleURLs:completionHandler:` on macOS — deliberately not an
+AppleScript `tell application "Finder" to delete` shell-out, since
+scripting another app that way triggers a one-time Automation permission
+prompt that a direct framework call avoids. Zero dependency on `viewer`.
+
+| File | Responsibility |
+|---|---|
+| `trash.go` | `Move` (exported dispatcher var), unexported per-platform impls (`moveLinux`, `moveWindows`, `escapePowerShellPath`) |
+| `darwin.go` / `other.go` | `moveDarwin` (build-tag pair, real cgo/AppKit impl / non-darwin stub) |
+| `windows.go` / `notwindows.go` | `hideConsoleWindow` (build-tag pair, real impl / no-op twin) |
+
+Added 2026-08-16. `internal/ui/deletion`'s `performDelete` calls
+`trash.Move` in place of the `os.Remove` it used before, and
+`internal/uitest`'s `StubTrashMove` swaps it out the same way
+`StubClipboardCopy` does for `clipboard.CopyImage`, so tests never invoke
+the real per-OS mover.
 
 ### `internal/filesort`
 
@@ -290,7 +315,7 @@ files, so it never reaches a production binary. Zero dependency on
 | File | Responsibility |
 |---|---|
 | `uitest.go` | `TempJPEGURI`, `WriteTempFile`, `EncodeJPEG`/`EncodePNG`/`EncodeGIF`/`EncodeAnimatedGIF`, `CaptureDateJPEG`, `TruncatedPNGHeader`, `FakeURI`, `ApproxEqual` |
-| `stubs.go` | `StubChooser`, `StubClipboardCopy` — swap `filepicker.Choose`/`clipboard.CopyImage` for the duration of a test |
+| `stubs.go` | `StubChooser`, `StubClipboardCopy`, `StubTrashMove` — swap `filepicker.Choose`/`clipboard.CopyImage`/`trash.Move` for the duration of a test |
 
 Added 2026-08-14, replacing per-package copies of the same helpers — Go
 can't share unexported test helpers across packages, and the per-feature
@@ -331,7 +356,7 @@ the embedded FS, so they check what actually ships.
 - "Which keys do what?" → `keys.go`'s `handleKeyEvent`
 - "How does zoom/pan work?" → `internal/ui/zoom` (the state, the geometry, and the widget); the keys that drive it are in `keys.go`
 - "How does the slideshow / picture-frame mode work?" → `internal/ui/slideshow` (the mode itself) + `slideshow.go` (the grid guard around it)
-- "How does delete work?" → `internal/ui/deletion` (the flow) + `build.go`'s wireDeleteShortcut (how Shift+Delete reaches it)
+- "How does delete work?" → `internal/ui/deletion` (the flow) + `internal/trash` (per-OS move-to-Trash) + `build.go`'s wireDeleteShortcut (how Shift+Delete reaches it)
 - "How are native file-open dialogs implemented?" → `internal/filepicker/` (per-OS chooser) + `openfiles.go` (`*viewer` glue)
 - "How is the last session saved/restored?" → `internal/session/session.go` (persistence) + `session.go` (`restoreSession` glue)
 - "Where is the File menu / Settings window?" → `internal/ui/menu.go`'s `buildMainMenu` (Open Files…/Close Files/Settings…, composed with `help.Menu()`) + `internal/ui/settingswin` (the Settings window itself) + `viewer.go`'s `closeFiles` (what "Close Files" runs)

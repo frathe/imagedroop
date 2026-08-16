@@ -2,32 +2,11 @@
 
 ## Done
 
-- **Slideshow crossfade + shuffle** — picture-frame mode now crossfades
-   between images (`internal/ui/load.go`'s `startFade`/`resetFade`) instead
-   of cutting instantly, and `Shift+P` toggles a shuffle order for
-   auto-advance (`internal/ui/slideshow`'s `Shuffle`/`SetShuffle`/
-   `ToggleShuffle`), persisted like the interval. Manual navigation
-   (`←`/`→`/`Home`/`End`) still steps in order even with shuffle on; only
-   the timer-driven auto-advance picks randomly.
-
-- **Cancel pending decodes when new files are dropped** —
-   `internal/imaging`'s `ReadAndProbe`/`DecodeLoaded` now take a
-   `context.Context`; a cancelled one stops `ReadAndProbe`'s file read
-   mid-transfer (`ctxReader`, checked on every `Read`) and makes
-   `DecodeLoaded` skip a pixel decode it would only have thrown away.
-   `internal/ui`'s new `invalidateLoad` (`load.go`) bumps `gen` and cancels
-   the previous generation's context together - mirroring
-   `invalidateSort`/`sortCancel` (`sort.go`) - and is what `ShowImage`,
-   `cancelScan`, `handleDrop`, and `clearToDropzone` now call instead of
-   bumping `gen` directly, so an abandoned `attemptLoad`/`preloadOne` stops
-   doing I/O instead of finishing unseen.
+- **Move to Trash instead of permanent delete** — `internal/ui/deletion`'s
+   Shift+Delete flow now routes through the new per-OS `internal/trash`
+   package instead of calling `os.Remove` directly.
 
 ## TODO
-
-- **Move to Trash instead of permanent delete** — `internal/ui/deletion`
-   calls `os.Remove` directly; route it through the OS trash/recycle bin
-   instead (new `internal/trash` package, per-OS like `internal/clipboard`/
-   `internal/filepicker`) so Shift+Delete becomes recoverable.
 
 - **Save rotation to disk** — `rotate.go`'s 90°-step rotation
    (`rotateBy`/`resetRotation`) is view-only; add an explicit save action

@@ -23,7 +23,9 @@ import (
 
 // confirmDelete opens the confirmation and confirms it: Right moves the
 // selection onto the danger button, Return commits - exactly the key
-// sequence a user performs.
+// sequence a user performs - then settles the background trash-move
+// goroutine performDelete starts (see its doc comment in deletion.go),
+// so every caller lands after the whole thing has actually finished.
 func confirmDelete(t *testing.T, v *viewer) {
 	t.Helper()
 
@@ -34,6 +36,7 @@ func confirmDelete(t *testing.T, v *viewer) {
 
 	v.deletion.HandleKey(&fyne.KeyEvent{Name: fyne.KeyRight})
 	v.deletion.HandleKey(&fyne.KeyEvent{Name: fyne.KeyReturn})
+	v.deletion.Settle()
 }
 
 // TestHandleKeyEvent_DeleteConfirmSwallowsNavigationButRespondsToItsOwnKeys
@@ -69,6 +72,7 @@ func TestHandleKeyEvent_DeleteConfirmSwallowsNavigationButRespondsToItsOwnKeys(t
 // the first, and the second one - which has shifted down to index 0 -
 // should end up on screen.
 func TestPerformDelete_RemovesCurrentFileAndAdvancesToTheNextOne(t *testing.T) {
+	uitest.StubTrashMove(t, func(path string) error { return os.Remove(path) })
 	v := newTestViewer(t)
 	a := uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White)
 	b := uitest.TempJPEGURI(t, "b.jpg", 4, 4, color.White)
@@ -96,6 +100,7 @@ func TestPerformDelete_RemovesCurrentFileAndAdvancesToTheNextOne(t *testing.T) {
 // remaining file: the app should fall back to the empty-state screen, the
 // same place a last decode failure already lands it.
 func TestPerformDelete_LastFileReturnsToEmptyDropzone(t *testing.T) {
+	uitest.StubTrashMove(t, func(path string) error { return os.Remove(path) })
 	v := newTestViewer(t)
 	a := uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White)
 	dropAndWait(t, v, a)
@@ -115,16 +120,17 @@ func TestPerformDelete_LastFileReturnsToEmptyDropzone(t *testing.T) {
 }
 
 // TestPerformDelete_OSFailureKeepsTheFileAndToastsAnError guards the
-// os.Remove error path through the real viewer: if deletion fails, the file
-// must stay in v.files (nothing silently dropped from the set for a file
-// that's actually still there) and the user must be told.
+// trash.Move error path through the real viewer: if the move fails, the
+// file must stay in v.files (nothing silently dropped from the set for a
+// file that's actually still there) and the user must be told.
 func TestPerformDelete_OSFailureKeepsTheFileAndToastsAnError(t *testing.T) {
+	uitest.StubTrashMove(t, func(path string) error { return os.Remove(path) })
 	v := newTestViewer(t)
 	a := uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White)
 	dropAndWait(t, v, a)
 
-	// Remove the file out from under the app first, so the delete's own
-	// os.Remove deterministically fails with "no such file", regardless of
+	// Remove the file out from under the app first, so the stubbed
+	// trash.Move deterministically fails with "no such file", regardless of
 	// what permissions the test process happens to run with.
 	if err := os.Remove(a.Path()); err != nil {
 		t.Fatalf("pre-removing the file: %v", err)

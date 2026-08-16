@@ -324,12 +324,11 @@ photos like a digital picture frame.
 
 ## 10. Deleting a file
 
-Press **`Shift+Delete`** to permanently delete the file currently on screen
-from disk — not the OS trash, so there is no undo. A confirmation card
-appears with two buttons:
+Press **`Shift+Delete`** to move the file currently on screen to the OS
+trash/recycle bin. A confirmation card appears with two buttons:
 
 - **Cancel** — selected by default
-- **Permanently delete** (in red)
+- **Move to Trash** (in red)
 
 Whichever button is currently selected is outlined, so what `Return` will
 press is always visible before you press it.
@@ -338,7 +337,7 @@ You can respond either way:
 
 - **With the mouse**: click either button directly.
 - **With the keyboard**: press **`→`** to move the selection onto
-  "Permanently delete" (**`←`** moves it back to Cancel) — the outline moves
+  "Move to Trash" (**`←`** moves it back to Cancel) — the outline moves
   with it — then **`Return`** to go with whichever one is currently
   selected. **`Esc`** cancels immediately from either selection.
 
@@ -388,8 +387,8 @@ stays in the set.
   image data you can paste into another app (not a file)
 - **`Cmd`/`Ctrl+Shift+C`** — copy the current image's file path to the
   clipboard
-- **`Shift+Delete`** — permanently delete the current file from disk, after
-  confirming (see "Deleting a file" above)
+- **`Shift+Delete`** — move the current file to the Trash, after confirming
+  (see "Deleting a file" above)
 - **`P`** — toggle picture-frame mode (full-screen slideshow with a
   crossfade between images, see above)
 - **`Shift+P`** — toggle shuffle order for picture-frame mode's
@@ -559,7 +558,7 @@ Things Image Drop deliberately does not do (yet):
 - **Copy** — `Cmd`/`Ctrl+C` copies the current image, `Cmd`/`Ctrl+Shift+C`
   copies its file path
 - **Delete** — `Shift+Delete` opens a confirmation card (`←`/`→` to choose,
-  `Return` to go, `Esc` to cancel); permanent, no undo
+  `Return` to go, `Esc` to cancel); moves the file to the Trash
 - **Manual** — `F1`, or Help -> Manual
 - **Clear / Quit** — `Esc` (clears the loaded images first, then quits;
   cancels a folder scan still in progress instead, if one is running)

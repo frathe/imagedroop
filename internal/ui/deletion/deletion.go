@@ -1,6 +1,6 @@
 // Package deletion is the Shift+Delete confirmation flow: a dimmed scrim
-// behind a centered card asking whether to permanently delete the file on
-// screen, and the os.Remove that follows if the user says yes.
+// behind a centered card asking whether to move the file on screen to the
+// Trash, and the trash.Move that follows if the user says yes.
 //
 // It owns its own widgets and its own selection state, and reaches back
 // into the app only through Host - the first of the per-feature interfaces
@@ -12,7 +12,7 @@ package deletion
 
 import (
 	"fmt"
-	"os"
+	"sync"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -21,6 +21,7 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/frathe/imagedrop/internal/trash"
 	"github.com/frathe/imagedrop/internal/ui/widgets"
 )
 
@@ -46,6 +47,12 @@ type Host interface {
 
 	// ForceRepaint redraws the window after a visibility change.
 	ForceRepaint()
+
+	// Generation is the app's current load generation - see performDelete:
+	// it's how a trash.Move that finishes after the file set has moved on
+	// (a fresh drop, a reset, another navigation) notices and skips acting
+	// on a now-stale index.
+	Generation() uint64
 }
 
 // Confirmer is the confirmation card and the state behind it.
@@ -54,8 +61,8 @@ type Confirmer struct {
 
 	// visible is true while the card is up. The app's key dispatcher
 	// checks it before its own handling, so every other key is swallowed
-	// rather than acted on while a decision about permanently deleting a
-	// file is pending.
+	// rather than acted on while a decision about moving a file to the
+	// Trash is pending.
 	visible bool
 
 	// dangerSelected tracks which button Left/Right has selected: false
@@ -63,6 +70,13 @@ type Confirmer struct {
 	// button) - reset to false every time Request opens the card, never
 	// carried over from a previous prompt.
 	dangerSelected bool
+
+	// pending tracks the background goroutine performDelete starts for its
+	// trash.Move call - see performDelete's doc comment for why that call
+	// can't run on the UI goroutine. Settle waits on it, the same way
+	// slideshow.Controller's own pending WaitGroup lets tests wait out its
+	// background goroutine before asserting on state it's still touching.
+	pending sync.WaitGroup
 
 	overlay    *fyne.Container
 	message    *widget.Label
@@ -91,7 +105,7 @@ func New(host Host) *Confirmer {
 	c.message.Wrapping = fyne.TextWrapWord
 
 	cancelBtn := widget.NewButton(lang.L("Cancel"), c.Cancel)
-	dangerBtn := widget.NewButton(lang.L("Permanently delete"), c.performDelete)
+	dangerBtn := widget.NewButton(lang.L("Move to Trash"), c.performDelete)
 	dangerBtn.Importance = widget.DangerImportance
 
 	c.cancelRing = widgets.NewFocusRing(widgets.ButtonRingWidth, widgets.RingRadius)
@@ -148,7 +162,7 @@ func (c *Confirmer) Request() {
 		return
 	}
 
-	c.message.SetText(fmt.Sprintf(lang.L("Permanently delete %q? This cannot be undone."), u.Name()))
+	c.message.SetText(fmt.Sprintf(lang.L("Move %q to the Trash?"), u.Name()))
 
 	c.dangerSelected = false
 	c.updateSelectionVisual()
@@ -221,16 +235,32 @@ func (c *Confirmer) confirmSelection() {
 }
 
 // performDelete is the danger button's action (or Return with it
-// selected): it permanently removes the current file from disk via
-// os.Remove - not the OS trash, per the explicit "permanently delete"
-// wording this feature was specified with - then drops it from the app's
-// file set the same way a decode failure already does (Host.RemoveFile),
-// and advances to whatever now sits at that index, wrapping around, or
-// falls back to the empty-state screen if it was the last file. If the
-// same path is loaded twice (merge mode allows that), only this one entry
-// is removed; the other one pointing at the now-missing file fails to
-// decode the ordinary way the next time it's navigated to, which the
-// existing retry chain already handles without any special-casing here.
+// selected): it moves the current file to the OS trash/recycle bin via
+// trash.Move rather than removing it outright, so Shift+Delete is
+// recoverable the same way a delete from Finder/Explorer/a Linux file
+// manager already is.
+//
+// It runs on its own goroutine, mirroring openFileDialog/copyImageToClipboard
+// - and here that's not just consistency with them, it's load-bearing:
+// trash.Move's darwin implementation waits on NSWorkspace's completion
+// handler via a semaphore, and that handler is delivered back through
+// Cocoa's own machinery, which needs this app's UI goroutine free to keep
+// running for the delivery to ever happen. Call trash.Move synchronously
+// from the UI goroutine - as os.Remove safely was - and that wait
+// deadlocks the whole app on every confirmed delete on macOS; a background
+// goroutine (confirmed against a real NSWorkspace call, not just reasoned
+// about) keeps the UI goroutine free the whole time.
+//
+// The index and generation are captured up front, before the goroutine
+// starts: something else (a fresh drop, a reset, another navigation) can
+// change the app's file set while trash.Move is in flight, which would
+// make the captured index stale by the time it returns. The generation
+// check below catches that - if it no longer matches, the move to Trash
+// still happened (nothing is lost), but Host.RemoveFile/ShowImage aren't
+// called against an index that may no longer mean what it did; the
+// now-missing entry, if it's even still in the set, fails to decode the
+// ordinary way the next time it's navigated to, the same fallback a
+// duplicate merge-mode path already relies on.
 func (c *Confirmer) performDelete() {
 	c.visible = false
 	c.overlay.Hide()
@@ -240,21 +270,44 @@ func (c *Confirmer) performDelete() {
 		return
 	}
 	name := target.Name()
+	path := target.Path()
+	gen := c.host.Generation()
 
-	if err := os.Remove(target.Path()); err != nil {
-		c.host.ShowToast(fmt.Sprintf(lang.L("could not delete %q: %v"), name, err))
-		return
-	}
+	c.pending.Add(1)
+	go func() {
+		defer c.pending.Done()
 
-	c.host.RemoveFile(i)
+		err := trash.Move(path)
 
-	if _, _, stillLoaded := c.host.CurrentFile(); !stillLoaded {
-		c.host.ShowEmptyStateError(fmt.Sprintf(lang.L("deleted %q"), name))
-		return
-	}
+		fyne.Do(func() {
+			if err != nil {
+				c.host.ShowToast(fmt.Sprintf(lang.L("could not move %q to the Trash: %v"), name, err))
+				return
+			}
 
-	c.host.ShowToast(fmt.Sprintf(lang.L("deleted %q"), name))
-	c.host.ShowImage(i)
+			if c.host.Generation() != gen {
+				return
+			}
+
+			c.host.RemoveFile(i)
+
+			if _, _, stillLoaded := c.host.CurrentFile(); !stillLoaded {
+				c.host.ShowEmptyStateError(fmt.Sprintf(lang.L("moved %q to the Trash"), name))
+				return
+			}
+
+			c.host.ShowToast(fmt.Sprintf(lang.L("moved %q to the Trash"), name))
+			c.host.ShowImage(i)
+		})
+	}()
+}
+
+// Settle waits for any in-flight trash-move goroutine performDelete started
+// to finish. Mirrors slideshow.Controller's Settle: the app's test suite
+// uses this so a test doesn't end - or assert on Host state - while that
+// goroutine's fyne.Do callback is still about to run.
+func (c *Confirmer) Settle() {
+	c.pending.Wait()
 }
 
 // ShortcutHandler is registered against &fyne.ShortcutCut{} rather than a

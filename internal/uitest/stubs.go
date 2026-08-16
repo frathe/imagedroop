@@ -5,13 +5,15 @@ import (
 
 	"github.com/frathe/imagedrop/internal/clipboard"
 	"github.com/frathe/imagedrop/internal/filepicker"
+	"github.com/frathe/imagedrop/internal/trash"
 )
 
-// The two stubs below swap the exported dispatcher vars that stand in front
-// of this app's OS-level shell-outs (a native file dialog, a clipboard
-// copy). Those vars exist precisely so tests never actually open a dialog
-// or touch the system clipboard; both restore the real implementation on
-// cleanup, so a test that stubs them can't affect the ones that follow.
+// The stubs below swap the exported dispatcher vars that stand in front of
+// this app's OS-level shell-outs (a native file dialog, a clipboard copy, a
+// trash move). Those vars exist precisely so tests never actually open a
+// dialog, touch the system clipboard, or move a file to the real Trash;
+// each restores the real implementation on cleanup, so a test that stubs
+// one can't affect the ones that follow.
 
 // StubChooser makes filepicker.Choose return out/err instead of opening the
 // OS file browser.
@@ -31,4 +33,14 @@ func StubClipboardCopy(t *testing.T, fn func(data []byte) error) {
 	orig := clipboard.CopyImage
 	t.Cleanup(func() { clipboard.CopyImage = orig })
 	clipboard.CopyImage = fn
+}
+
+// StubTrashMove makes trash.Move call fn instead of shelling out to the
+// OS's real trash/recycle-bin mover.
+func StubTrashMove(t *testing.T, fn func(path string) error) {
+	t.Helper()
+
+	orig := trash.Move
+	t.Cleanup(func() { trash.Move = orig })
+	trash.Move = fn
 }

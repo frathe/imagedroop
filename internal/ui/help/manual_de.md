@@ -367,13 +367,12 @@ Ordner voller Fotos wie einen digitalen Bilderrahmen laufen zu lassen.
 
 ## 10. Eine Datei löschen
 
-Drücken Sie **`Shift+Delete`**, um die gerade angezeigte Datei dauerhaft von
-der Festplatte zu löschen — nicht in den Papierkorb des Betriebssystems, es
-gibt also kein Rückgängig. Eine Bestätigungskarte erscheint mit zwei
-Schaltflächen:
+Drücken Sie **`Shift+Delete`**, um die gerade angezeigte Datei in den
+Papierkorb des Betriebssystems zu verschieben. Eine Bestätigungskarte
+erscheint mit zwei Schaltflächen:
 
 - **Abbrechen** — standardmäßig ausgewählt
-- **Endgültig löschen** (in Rot)
+- **In den Papierkorb verschieben** (in Rot)
 
 Die gerade ausgewählte Schaltfläche ist umrandet, sodass immer sichtbar ist,
 was `Return` auslösen wird, bevor Sie es drücken.
@@ -381,8 +380,9 @@ was `Return` auslösen wird, bevor Sie es drücken.
 Sie können auf beide Arten antworten:
 
 - **Mit der Maus**: Klicken Sie direkt auf eine der beiden Schaltflächen.
-- **Mit der Tastatur**: Drücken Sie **`→`**, um die Auswahl auf „Endgültig
-  löschen“ zu verschieben (**`←`** verschiebt sie zurück auf „Abbrechen“) —
+- **Mit der Tastatur**: Drücken Sie **`→`**, um die Auswahl auf „In den
+  Papierkorb verschieben“ zu verschieben (**`←`** verschiebt sie zurück auf
+  „Abbrechen“) —
   der Rahmen bewegt sich mit — und dann **`Return`**, um mit der jeweils
   ausgewählten Option fortzufahren. **`Esc`** bricht sofort ab, egal welche
   Option gerade ausgewählt ist.
@@ -441,8 +441,8 @@ ist, und die Datei bleibt in der Auswahl.
   Datei)
 - **`Cmd`/`Strg+Shift+C`** — den Dateipfad des aktuellen Bildes in die
   Zwischenablage kopieren
-- **`Shift+Delete`** — die aktuelle Datei nach Bestätigung dauerhaft von der
-  Festplatte löschen (siehe „Eine Datei löschen“ oben)
+- **`Shift+Delete`** — die aktuelle Datei nach Bestätigung in den Papierkorb
+  verschieben (siehe „Eine Datei löschen“ oben)
 - **`P`** — Diaschau-Modus ein-/ausschalten (Vollbild-Diaschau mit
   Überblendung zwischen den Bildern, siehe oben)
 - **`Shift+P`** — Zufällige Wiedergabe für den automatischen Wechsel im
@@ -640,8 +640,8 @@ Dinge, die Image Drop absichtlich (noch) nicht tut:
 - **Kopieren** — `Cmd`/`Strg+C` kopiert das aktuelle Bild,
   `Cmd`/`Strg+Shift+C` kopiert seinen Dateipfad
 - **Löschen** — `Shift+Delete` öffnet eine Bestätigungskarte (`←`/`→` zum
-  Auswählen, `Return` zum Bestätigen, `Esc` zum Abbrechen); dauerhaft, kein
-  Rückgängig
+  Auswählen, `Return` zum Bestätigen, `Esc` zum Abbrechen); verschiebt die
+  Datei in den Papierkorb
 - **Handbuch** — `F1`, oder Hilfe -> Handbuch
 - **Leeren / Beenden** — `Esc` (leert zuerst die geladenen Bilder, beendet
   dann; bricht stattdessen einen noch laufenden Ordner-Scan ab, falls einer
