@@ -2,6 +2,19 @@
 
 ## Done
 
+- **Bound a GIF's transient paletted decode** — the animation budget is now
+   applied *before* `gif.DecodeAll` instead of after it. `internal/imaging`'s
+   new `probeGIF` walks the raw GIF block structure (skipping every block by
+   the length fields the format already carries, decoding no pixels) to count
+   image descriptors and read the logical screen size, so an over-budget
+   animation allocates nothing at all. Because `image/gif` rejects any frame
+   larger than the logical screen, clearing the gate also caps `DecodeAll`'s
+   own paletted peak at a quarter of the budget — the transient cost that was
+   previously bounded only by `MaxEncodedBytes` and LZW expansion. Side
+   benefit: a single-frame GIF is no longer decoded twice. A fuzz target pins
+   `probeGIF` against `gif.DecodeAll`; it caught a real divergence on
+   application extensions within a second.
+
 - **Byte-bounded image memory** — both image caches are now bounded by an
    estimated byte budget instead of an entry count (`internal/imaging`'s new
    `ByteCache`), with the budgets, plus a ceiling on a file's encoded size,
@@ -35,14 +48,6 @@
 
 ## TODO
 
-- **Downsample very large stills before caching** — deferred out of the
-   byte-bounded memory work above, which bounds how much is *retained* but
-   still decodes every still at full resolution. `ReadAndProbe`'s own doc
-   comment already flags itself as the hook. Needs a full-resolution reload
-   path for File > Save Changes, clipboard copy, and zoom past the
-   downsample factor first, or each would silently operate on degraded
-   pixels.
-
 - **Bound a GIF's transient paletted decode** — `decodeAnimatedGIF`'s budget
    stops the 4-bytes-per-pixel composited copies, but `gif.DecodeAll` has
    already decoded every frame as paletted (~1 B/px) before the check can
@@ -71,3 +76,16 @@
    `internal/clipboard`/`internal/filepicker`/`internal/winpos`.
 
 ## not deemed worth implementing (edgecases)
+
+- **Downsample very large stills before caching** — the premise doesn't hold.
+   Downsampling can only run *after* `image.Decode` returns, so it shrinks
+   what is retained, never the transient full-resolution decode that was the
+   reason to want it: none of the decoders this module links (`image/jpeg`,
+   `image/png`, `x/image/{webp,bmp,tiff}`, `gen2brain/{avif,heic}`) expose a
+   reduced-resolution decode mode. The peak stays bounded by
+   `MaxEncodedBytes` and `maxImagePixels`, as it already is. What was left —
+   fitting more images in the cache budget, cheaper `RotateSteps`/redraw/
+   clipboard-encode — didn't justify a `LoadedImage` interface change plus a
+   full-resolution reload path for File > Save Changes, clipboard copy, and
+   zoom past the downsample factor, each of which would otherwise silently
+   operate on degraded pixels.
