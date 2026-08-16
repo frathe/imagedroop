@@ -35,6 +35,12 @@ type fakeHost struct {
 	index int
 	gen   uint64
 
+	// mods is what Modifiers reports - the keyboard state a tap is read
+	// against, which a Fyne tap event carries none of. Set around a
+	// wrap.Select call to stand in for holding a key while clicking (see
+	// the click helper in selection_test.go).
+	mods fyne.KeyModifier
+
 	shown     []int
 	repaints  int
 	unfocused int
@@ -47,6 +53,8 @@ func (f *fakeHost) Generation() uint64    { return f.gen }
 func (f *fakeHost) ShowImage(i int)       { f.shown = append(f.shown, i) }
 func (f *fakeHost) ForceRepaint()         { f.repaints++ }
 func (f *fakeHost) Unfocus()              { f.unfocused++ }
+
+func (f *fakeHost) Modifiers() fyne.KeyModifier { return f.mods }
 
 // hostWith returns a host holding n small real JPEGs - real files because
 // the decode path under test actually reads them.

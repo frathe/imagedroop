@@ -47,6 +47,17 @@ func StubClipboardCopy(t *testing.T, fn func(data []byte) error) {
 	clipboard.CopyImage = fn
 }
 
+// StubClipboardCopyFiles makes clipboard.CopyFiles call fn instead of
+// shelling out to the OS clipboard - the file-reference twin of
+// StubClipboardCopy, for the grid's batch copy.
+func StubClipboardCopyFiles(t *testing.T, fn func(paths []string) error) {
+	t.Helper()
+
+	orig := clipboard.CopyFiles
+	t.Cleanup(func() { clipboard.CopyFiles = orig })
+	clipboard.CopyFiles = fn
+}
+
 // StubTrashMove makes trash.Move call fn instead of shelling out to the
 // OS's real trash/recycle-bin mover.
 func StubTrashMove(t *testing.T, fn func(path string) error) {

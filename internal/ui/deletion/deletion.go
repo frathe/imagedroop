@@ -32,8 +32,11 @@ type Host interface {
 	// nothing is loaded.
 	CurrentFile() (u fyne.URI, index int, ok bool)
 
-	// RemoveFile drops the file at index i from the app's file set.
-	RemoveFile(i int)
+	// RemoveFiles drops every named index from the app's file set, in one
+	// call. One call rather than one per file on purpose: removing them
+	// one at a time would shift every later index out from under the list
+	// already captured here.
+	RemoveFiles(indices []int)
 
 	// ShowImage displays the file at index i, wrapping at both ends.
 	ShowImage(i int)
@@ -55,9 +58,25 @@ type Host interface {
 	Generation() uint64
 }
 
+// Target is one file a pending confirmation would move to the Trash: the
+// URI to move, and the index to drop from the app's file set afterwards.
+// Both are captured when the card opens - see performDelete on why the index
+// can't simply be looked up again once the move returns.
+type Target struct {
+	URI   fyne.URI
+	Index int
+}
+
 // Confirmer is the confirmation card and the state behind it.
 type Confirmer struct {
 	host Host
+
+	// targets is what confirming would move to the Trash: one file for the
+	// Shift+Delete on the image being viewed, or the grid's whole selection
+	// for a batch. Captured by Request/RequestFiles rather than read back
+	// when the danger button is pressed, so a card that is already up asks
+	// about exactly the files it named.
+	targets []Target
 
 	// visible is true while the card is up. The app's key dispatcher
 	// checks it before its own handling, so every other key is swallowed
@@ -151,18 +170,37 @@ func (c *Confirmer) Visible() bool {
 	return c.visible
 }
 
-// Request opens the confirmation card for the file currently on screen. A
-// no-op with nothing loaded, or if the card is already up: re-triggering
-// the shortcut mid-prompt shouldn't reset the selection out from under a
-// user who's already moved it onto the danger button and is reaching for
-// Return.
+// Request opens the confirmation card for the file currently on screen - the
+// plain Shift+Delete on the image being viewed. A no-op with nothing loaded.
 func (c *Confirmer) Request() {
-	u, _, ok := c.host.CurrentFile()
-	if !ok || c.visible {
+	u, i, ok := c.host.CurrentFile()
+	if !ok {
 		return
 	}
 
-	c.message.SetText(fmt.Sprintf(lang.L("Move %q to the Trash?"), u.Name()))
+	c.RequestFiles([]Target{{URI: u, Index: i}})
+}
+
+// RequestFiles opens the confirmation card for a whole set of files - the
+// grid's selection, via the app's batch glue. A no-op with no targets, or if
+// the card is already up: re-triggering the shortcut mid-prompt shouldn't
+// reset the selection out from under a user who's already moved it onto the
+// danger button and is reaching for Return.
+//
+// A single target is worded exactly as the single-file prompt always was,
+// naming the file; anything more names the count instead, since a card
+// listing forty file names would be unreadable and unbounded in height.
+func (c *Confirmer) RequestFiles(targets []Target) {
+	if len(targets) == 0 || c.visible {
+		return
+	}
+
+	c.targets = targets
+	if len(targets) == 1 {
+		c.message.SetText(fmt.Sprintf(lang.L("Move %q to the Trash?"), targets[0].URI.Name()))
+	} else {
+		c.message.SetText(fmt.Sprintf(lang.L("Move %d files to the Trash?"), len(targets)))
+	}
 
 	c.dangerSelected = false
 	c.updateSelectionVisual()
@@ -251,35 +289,54 @@ func (c *Confirmer) confirmSelection() {
 // goroutine (confirmed against a real NSWorkspace call, not just reasoned
 // about) keeps the UI goroutine free the whole time.
 //
-// The index and generation are captured up front, before the goroutine
+// The targets and the generation are captured up front, before the goroutine
 // starts: something else (a fresh drop, a reset, another navigation) can
 // change the app's file set while trash.Move is in flight, which would
-// make the captured index stale by the time it returns. The generation
-// check below catches that - if it no longer matches, the move to Trash
-// still happened (nothing is lost), but Host.RemoveFile/ShowImage aren't
-// called against an index that may no longer mean what it did; the
-// now-missing entry, if it's even still in the set, fails to decode the
-// ordinary way the next time it's navigated to, the same fallback a
+// make the captured indices stale by the time it returns. The generation
+// check below catches that - if it no longer matches, the moves to Trash
+// still happened (nothing is lost), but Host.RemoveFiles/ShowImage aren't
+// called against indices that may no longer mean what they did; the
+// now-missing entries, if they're even still in the set, fail to decode the
+// ordinary way the next time they're navigated to, the same fallback a
 // duplicate merge-mode path already relies on.
+//
+// The moves run one after another on that single goroutine rather than in
+// parallel: trash.Move's darwin implementation already blocks on a
+// completion handler per call, and a selection is tens of files, not
+// thousands. Failures are collected instead of aborting the batch - one file
+// the OS refuses to move shouldn't cost the user the rest of it - and only
+// what actually moved is removed from the file set, so anything left behind
+// on disk is also still in the app.
 func (c *Confirmer) performDelete() {
 	c.visible = false
 	c.overlay.Hide()
 
-	target, i, ok := c.host.CurrentFile()
-	if !ok {
+	targets := c.targets
+	if len(targets) == 0 {
 		return
 	}
-	name := target.Name()
-	path := target.Path()
 	gen := c.host.Generation()
 
 	c.pending.Go(func() {
 
-		err := trash.Move(path)
+		moved := make([]int, 0, len(targets))
+		var firstErr error
+		var firstFailed string
+
+		for _, t := range targets {
+			if err := trash.Move(t.URI.Path()); err != nil {
+				if firstErr == nil {
+					firstErr, firstFailed = err, t.URI.Name()
+				}
+
+				continue
+			}
+			moved = append(moved, t.Index)
+		}
 
 		fyne.Do(func() {
-			if err != nil {
-				c.host.ShowToast(fmt.Sprintf(lang.L("could not move %q to the Trash: %v"), name, err))
+			if len(moved) == 0 {
+				c.host.ShowToast(fmt.Sprintf(lang.L("could not move %q to the Trash: %v"), firstFailed, firstErr))
 				return
 			}
 
@@ -287,17 +344,35 @@ func (c *Confirmer) performDelete() {
 				return
 			}
 
-			c.host.RemoveFile(i)
+			c.host.RemoveFiles(moved)
 
-			if _, _, stillLoaded := c.host.CurrentFile(); !stillLoaded {
-				c.host.ShowEmptyStateError(fmt.Sprintf(lang.L("moved %q to the Trash"), name))
-				return
+			msg := c.movedMessage(targets, moved, firstFailed, firstErr)
+
+			if _, i, stillLoaded := c.host.CurrentFile(); stillLoaded {
+				c.host.ShowToast(msg)
+				c.host.ShowImage(i)
+			} else {
+				c.host.ShowEmptyStateError(msg)
 			}
-
-			c.host.ShowToast(fmt.Sprintf(lang.L("moved %q to the Trash"), name))
-			c.host.ShowImage(i)
 		})
 	})
+}
+
+// movedMessage is what the toast (or the empty-state notice) says once the
+// moves are done: the single-file wording when one file was asked for, a
+// count when more were, and a count of both when some of them failed - a
+// batch that silently reported success for files still sitting on disk would
+// be the worst of the three.
+func (c *Confirmer) movedMessage(targets []Target, moved []int, failedName string, failedErr error) string {
+	switch {
+	case len(moved) < len(targets):
+		return fmt.Sprintf(lang.L("moved %d of %d files to the Trash; %q failed: %v"),
+			len(moved), len(targets), failedName, failedErr)
+	case len(targets) == 1:
+		return fmt.Sprintf(lang.L("moved %q to the Trash"), targets[0].URI.Name())
+	default:
+		return fmt.Sprintf(lang.L("moved %d files to the Trash"), len(moved))
+	}
 }
 
 // Settle waits for any in-flight trash-move goroutine performDelete started
@@ -316,15 +391,15 @@ func (c *Confirmer) Settle() {
 // app has no cut action for - is correctly ignored rather than opening a
 // delete prompt.
 //
-// blocked reports whether something else is currently claiming the screen
-// (the grid overview): Shift+Delete is a global shortcut, not gated by the
-// app's own key dispatch, so without that check it would open a
-// confirmation card hidden behind the grid and capture the keyboard out
-// from under it.
-func ShortcutHandler(c *Confirmer, blocked func() bool) func(fyne.Shortcut) {
+// request is what a real Shift+Delete runs. A callback rather than this
+// package calling Request itself, because what the key should confirm
+// depends on state this package deliberately knows nothing about - the grid
+// overview's selection, when that is up. Telling the two apart is the app's
+// job (see internal/ui's requestDelete); recognising the key is this one's.
+func ShortcutHandler(request func()) func(fyne.Shortcut) {
 	return func(shortcut fyne.Shortcut) {
-		if cut, ok := shortcut.(*fyne.ShortcutCut); ok && cut.Secondary && !blocked() {
-			c.Request()
+		if cut, ok := shortcut.(*fyne.ShortcutCut); ok && cut.Secondary {
+			request()
 		}
 	}
 }

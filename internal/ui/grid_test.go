@@ -203,28 +203,6 @@ func TestHandleDrop_ClosesOpenGrid(t *testing.T) {
 	}
 }
 
-// TestShiftDelete_IgnoredWhileGridVisible drives the real shortcut rather
-// than the confirmation directly: Shift+Delete is a global shortcut, not
-// gated by handleKeyEvent's own grid guard, so without the check
-// wireDeleteShortcut passes to deletion.ShortcutHandler it would open a
-// confirmation card hidden behind the grid and capture the keyboard out
-// from under it. (The guard lives in the wiring, so neither feature
-// package needs to know about the other.)
-func TestShiftDelete_IgnoredWhileGridVisible(t *testing.T) {
-	v := newTestViewer(t)
-
-	a := uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White)
-	dropAndWait(t, v, a)
-
-	handler := &fyne.ShortcutHandler{}
-	wireDeleteShortcut(handler, v)
-
-	warmThumbs(t, v)
-	v.grid.Toggle()
-
-	handler.TypedShortcut(&fyne.ShortcutCut{Secondary: true})
-
-	if v.deletion.Visible() {
-		t.Error("Shift+Delete should be ignored while the grid is showing")
-	}
-}
+// Shift+Delete while the grid is up used to be ignored outright. It now
+// targets whatever the grid has picked instead - see batch_test.go, which
+// owns that behaviour along with the rest of the batch composition.

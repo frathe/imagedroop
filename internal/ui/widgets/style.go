@@ -38,6 +38,11 @@ const (
 	ButtonRingWidth = 2
 	GridRingWidth   = 3
 	RingRadius      = 6
+
+	// SelectionTintAlpha is how opaque the grid's multi-select wash is (see
+	// NewSelectionTint). Enough to read as "picked" across both themes and
+	// over any thumbnail, little enough to still see which image it is.
+	SelectionTintAlpha = 90
 )
 
 var (
@@ -75,4 +80,23 @@ func NewFocusRing(strokeWidth, cornerRadius float32) *canvas.Rectangle {
 	ring.CornerRadius = cornerRadius
 
 	return ring
+}
+
+// NewSelectionTint returns the translucent wash the grid overview draws over
+// a cell that is part of a multi-select. Returned visible; callers hide it on
+// the cells that start unselected.
+//
+// A filled wash rather than a second ring, because a cell can be both
+// selected and the keyboard's current position at the same time, and two
+// rings differing only in color would be unreadable. The tint is the same
+// primary hue NewFocusRing strokes with, so the pair reads as one idea: the
+// ring says "here", the wash says "picked".
+func NewSelectionTint() *canvas.Rectangle {
+	c := color.NRGBAModel.Convert(theme.Color(theme.ColorNamePrimary)).(color.NRGBA)
+	c.A = SelectionTintAlpha
+
+	tint := canvas.NewRectangle(c)
+	tint.CornerRadius = RingRadius
+
+	return tint
 }

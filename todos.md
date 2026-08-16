@@ -2,6 +2,27 @@
 
 ## Done
 
+- **Multi-select + batch ops in grid view** — Cmd/Ctrl-click toggles a
+   thumbnail, Shift-click extends a range, `Space` picks the highlighted one
+   and Cmd/Ctrl+A takes the lot; `Shift+Delete` then trashes all of them
+   through `internal/ui/deletion` and Cmd/Ctrl+C copies them as real file
+   references. A plain click still just opens an image, so nothing about
+   the old grid changed. The set itself is a new `internal/selection` —
+   integers and an anchor, no fyne — and it holds *host* indices, not the
+   display indices clicked, so a selection survives a `/` filter change;
+   that is what makes `/holiday` + Cmd+A + Shift+Delete work. `deletion`
+   grew from "the file on screen" to a set of `Target`s (`RequestFiles`),
+   wording one file exactly as before so the golden masters still hold, and
+   collecting per-file failures instead of aborting the batch. `internal/ui/
+   batch.go` is the only file that knows both sides exist — the grid still
+   imports neither deletion nor the clipboard. Two latent stacking bugs had
+   to be fixed to make it visible at all: the grid's opaque backdrop sat
+   *above* both the confirmation card and the toast, so a prompt raised over
+   it — and the "moved 12 files" that follows — would have rendered where
+   nobody could see them. Both selection gestures also have to call
+   `Unfocus` themselves, since GridWrap grabs canvas focus on every tap and
+   only `Close` used to hand it back.
+
 - **Filename search in the grid** — `/` opens a search bar in the grid
    overview (`internal/ui/grid`) and what follows filters the cells to the
    file names containing it, case-insensitively; `Esc` clears the filter,
@@ -77,10 +98,6 @@
    never machine-dependent.
 
 ## TODO
-
-- **Multi-select + batch ops in grid view** — Shift/Cmd-click to select
-   multiple thumbnails in `internal/ui/grid`, then batch-delete (through
-   `internal/ui/deletion`) or batch-copy the selection.
 
 - **Set current image as desktop wallpaper** — a per-OS action
    (AppleScript on macOS, PowerShell on Windows, gsettings on Linux)

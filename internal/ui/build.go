@@ -386,8 +386,16 @@ func buildViewer(application fyne.App) (*viewer, fyne.Window) {
 	// below it) keeps it pinned to the top instead of vertically centered.
 	infoOverlay := container.New(layout.NewVBoxLayout(), container.NewHBox(info.card, layout.NewSpacer()))
 
+	// Order is paint order, back to front, and the tail of it is load-bearing.
+	// The grid's backdrop is opaque and fills the window, so anything stacked
+	// below it is simply invisible while it is open - which is fine for the
+	// image view underneath, and wrong for the two things that now have to
+	// appear *over* an open grid: the batch delete confirmation (whose own
+	// scrim is translucent, so the grid dims through it) and the toast that
+	// reports what the batch did.
 	window.SetContent(container.New(windowSizeTracker{v: view},
-		view.zoom.Widget(), dz.root, scanContainer, sortContainer, overlay, toastOverlay, infoOverlay, view.deletion.Overlay(), view.grid.Overlay()))
+		view.zoom.Widget(), dz.root, scanContainer, sortContainer, overlay, infoOverlay,
+		view.grid.Overlay(), view.deletion.Overlay(), toastOverlay))
 	window.SetMainMenu(buildMainMenu(view))
 
 	// The saved window size (see internal/preferences) is only ever the
@@ -437,6 +445,7 @@ func buildViewer(application fyne.App) (*viewer, fyne.Window) {
 	wireOpenShortcuts(window.Canvas(), view)
 	wireClipboardShortcuts(window.Canvas(), view)
 	wireDeleteShortcut(window.Canvas(), view)
+	wireSelectAllShortcut(window.Canvas(), view)
 	wireSaveShortcut(window.Canvas(), view)
 
 	return view, window
@@ -501,11 +510,22 @@ func wireOpenShortcuts(c shortcutAdder, view *viewer) {
 // caught. Shift+Cmd/Ctrl+C isn't one of the driver's special-cased combos,
 // so it still becomes a CustomShortcut and needs no such treatment.
 func wireClipboardShortcuts(c shortcutAdder, view *viewer) {
-	c.AddShortcut(&fyne.ShortcutCopy{}, func(fyne.Shortcut) { view.copyImageToClipboard() })
+	c.AddShortcut(&fyne.ShortcutCopy{}, func(fyne.Shortcut) { view.copySelection() })
 	c.AddShortcut(&desktop.CustomShortcut{
 		KeyName:  fyne.KeyC,
 		Modifier: fyne.KeyModifierShortcutDefault | fyne.KeyModifierShift,
 	}, func(fyne.Shortcut) { view.copyPathToClipboard() })
+}
+
+// wireSelectAllShortcut binds Cmd/Ctrl+A to the grid's select-all
+// (batch.go's selectAllInGrid). A third instance of the same driver quirk
+// wireClipboardShortcuts documents: A is one of the bare combos
+// triggersShortcut special-cases into a built-in fyne.Shortcut type
+// (&fyne.ShortcutSelectAll{}) before it would ever build a
+// desktop.CustomShortcut, so a CustomShortcut for {KeyA,
+// KeyModifierShortcutDefault} could never be reached by a real key press.
+func wireSelectAllShortcut(c shortcutAdder, view *viewer) {
+	c.AddShortcut(&fyne.ShortcutSelectAll{}, func(fyne.Shortcut) { view.selectAllInGrid() })
 }
 
 // wireDeleteShortcut binds Shift+Delete to open the permanent-delete
@@ -522,8 +542,17 @@ func wireClipboardShortcuts(c shortcutAdder, view *viewer) {
 // (deletion.go) for how it tells a real Shift+Delete apart from a genuine
 // Ctrl/Cmd+X (which reaches the same handler, Secondary false, and is
 // correctly ignored: this app has no cut action).
+//
+// What it runs is batch.go's requestDelete rather than Confirmer.Request
+// directly: the same key means the grid's selection while the overview is up
+// and the file on screen otherwise, and deciding that is this package's job,
+// not either feature package's. It used to be gated behind a `blocked` check
+// that dropped the shortcut entirely while the grid was showing - there was
+// nothing then for it to act on there, and the card would have opened hidden
+// behind the grid's backdrop. Both of those are now handled instead of
+// avoided (see the window stack in buildViewer).
 func wireDeleteShortcut(c shortcutAdder, view *viewer) {
-	c.AddShortcut(&fyne.ShortcutCut{}, deletion.ShortcutHandler(view.deletion, view.grid.Visible))
+	c.AddShortcut(&fyne.ShortcutCut{}, deletion.ShortcutHandler(view.requestDelete))
 }
 
 // wireSaveShortcut binds Cmd/Ctrl+S to saveRotation (save.go). S isn't one

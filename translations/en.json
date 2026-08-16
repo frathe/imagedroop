@@ -36,6 +36,12 @@
    "Move %q to the Trash?": "Move %q to the Trash?",
    "moved %q to the Trash": "moved %q to the Trash",
    "could not move %q to the Trash: %v": "could not move %q to the Trash: %v",
+   "Move %d files to the Trash?": "Move %d files to the Trash?",
+   "moved %d files to the Trash": "moved %d files to the Trash",
+   "moved %d of %d files to the Trash; %q failed: %v": "moved %d of %d files to the Trash; %q failed: %v",
+   "copied 1 file": "copied 1 file",
+   "copied %d files": "copied %d files",
+   "could not copy the files: %v": "could not copy the files: %v",
    "EXIF Data": "EXIF Data",
    "Show EXIF data": "Show EXIF data",
    "Could not read this file's metadata.": "Could not read this file's metadata.",
@@ -82,5 +88,6 @@
    "Drop order": "Drop order",
    "Search: %s": "Search: %s",
    "%d of %d": "%d of %d",
-   "No file names match": "No file names match"
+   "No file names match": "No file names match",
+   "%d selected": "%d selected"
 }

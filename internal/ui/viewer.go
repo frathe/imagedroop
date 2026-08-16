@@ -3,6 +3,7 @@ package ui
 import (
 	"context"
 	"image"
+	"slices"
 	"sync"
 	"sync/atomic"
 
@@ -632,13 +633,55 @@ func (v *viewer) RemoveFile(i int) {
 	}
 }
 
-// FileCount, FileAt, CurrentIndex, Generation, Unfocus, and Advance
-// complete the exported vocabulary the feature packages' Host interfaces
-// bind to (see the note above CurrentFile). internal/ui/grid uses the
-// first five: the first three to draw the right cells, Generation to
-// discard a decode whose file set has since been replaced, and Unfocus to
-// hand the keyboard back after a thumbnail tap. internal/ui/slideshow
-// needs only FileCount and Advance.
+// RemoveFiles drops every named index in one pass - what internal/ui/deletion
+// calls once a batch of files has actually reached the Trash.
+//
+// Descending, so an earlier removal can't shift a later index out from under
+// the same call, and sorted first because the caller's order is not something
+// this should depend on. Duplicates are skipped rather than removing two
+// different files for one index named twice.
+//
+// The grid is reconciled here, at the end, rather than by the caller: every
+// index it holds - its selection, its filter's display→host mapping, its
+// highlight - is an index into the set that just changed underneath it. It
+// is also closed outright once nothing is left, since an open grid over an
+// empty file set has no cells to draw and Toggle itself refuses to open in
+// that state.
+func (v *viewer) RemoveFiles(indices []int) {
+	prev := -1
+	for _, i := range slices.Backward(slices.Sorted(slices.Values(indices))) {
+		if i == prev || i < 0 || i >= len(v.files) {
+			continue
+		}
+		prev = i
+
+		v.RemoveFile(i)
+	}
+
+	v.grid.FilesChanged()
+	if len(v.files) == 0 {
+		v.grid.Close()
+	}
+}
+
+// Modifiers is which keyboard modifiers are held right now, for the feature
+// packages that need to read a gesture rather than a key press -
+// internal/ui/grid's Cmd/Ctrl+click and Shift+click. A method over the
+// keyModifiers field rather than the field itself, so it satisfies grid.Host
+// alongside the rest of the vocabulary below; internal/ui/zoom takes the same
+// value as a bare func, which is why the field exists in the first place.
+func (v *viewer) Modifiers() fyne.KeyModifier {
+	return v.keyModifiers()
+}
+
+// FileCount, FileAt, CurrentIndex, Generation, Unfocus, Modifiers, and
+// Advance complete the exported vocabulary the feature packages' Host
+// interfaces bind to (see the note above CurrentFile). internal/ui/grid uses
+// the first six: the first three to draw the right cells, Generation to
+// discard a decode whose file set has since been replaced, Unfocus to
+// hand the keyboard back after a thumbnail tap, and Modifiers to tell its
+// three click gestures apart. internal/ui/slideshow needs only FileCount and
+// Advance.
 
 // FileCount is how many files are currently loaded.
 func (v *viewer) FileCount() int {

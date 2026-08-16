@@ -314,8 +314,33 @@ einzeln durchzublättern.
   Treffer genau wie sonst auf das ganze Raster, und **`Esc`** setzt die
   Suche zurück, sodass wieder alle Bilder erscheinen — ein zweites `Esc`
   verlässt dann wie gewohnt das Raster.
-- Solange das Raster geöffnet ist, wird jede andere Taste ignoriert — Zoom,
-  `S`/`M`/`P`/`I`, `Shift+Delete` bewirken nichts, bis Sie entweder eine
+- **Mehrere auf einmal auswählen**, um sie gemeinsam zu bearbeiten:
+  **`Cmd/Strg+Klick`** auf eine Miniaturansicht nimmt sie in die Auswahl auf
+  (ein erneuter Klick nimmt sie wieder heraus), **`Shift+Klick`** wählt
+  alles zwischen ihr und der zuletzt angeklickten aus, **`Leertaste`**
+  wählt die gerade hervorgehobene Miniaturansicht, und **`Cmd/Strg+A`**
+  wählt alle aus. Ausgewählte Miniaturansichten sind in der Akzentfarbe
+  eingefärbt, und die obere Leiste zählt sie (`12 ausgewählt`). Ein
+  einfacher Klick öffnet weiterhin nur ein Bild — ohne gedrückte
+  Zusatztaste ändert sich also nichts.
+- Mit einer getroffenen Auswahl verschiebt **`Shift+Delete`** alles davon in
+  den Papierkorb (nach der üblichen Nachfrage, die die Anzahl nennt statt
+  jeder einzelnen Datei), und **`Cmd/Strg+C`** kopiert die Dateien selbst in
+  die Zwischenablage — Einfügen im Finder, Explorer oder Ihrem
+  Dateimanager erzeugt Kopien davon. Ohne Auswahl wirken beide auf die
+  hervorgehobene Miniaturansicht allein, und das Raster bleibt danach
+  geöffnet, sodass Sie Ihre Position behalten.
+- Weil die Auswahl eine Menge von *Dateien* ist, wählt `Cmd/Strg+A` nach
+  einer Einschränkung mit `/` genau die Treffer aus — `/urlaub`,
+  `Cmd/Strg+A`, `Shift+Delete` räumt jedes Urlaubsfoto aus einem Ordner mit
+  Tausenden heraus. Das anschließende Zurücksetzen der Suche lässt die
+  Auswahl unberührt.
+- **`Esc`** nimmt jeweils eine Sache zurück: zuerst die Auswahl, dann die
+  Suche, dann das Raster selbst. `G` schließt das Raster wie gewohnt, bleibt
+  aber wirkungslos, solange eine Auswahl oder eine Suche besteht, damit es
+  keine begonnene Arbeit verwirft.
+- Davon abgesehen wird jede andere Taste ignoriert, solange das Raster
+  geöffnet ist — Zoom, `S`/`M`/`P`/`I` bewirken nichts, bis Sie entweder eine
   Miniaturansicht auswählen (Klick oder `Return`) oder mit `G`/`Esc`
   zurückgehen. Solange eine Suche geöffnet ist, sind die Buchstabentasten
   Zeichen Ihrer Eingabe — `G` schließt das Raster dann nicht mehr, `Esc`
@@ -323,7 +348,7 @@ einzeln durchzublättern.
 - Die Suche schränkt nur ein, was das Raster zeigt. An der Auswahl selbst
   ändert sie nichts: Nach dem Öffnen eines Bildes blättern die Pfeiltasten
   weiterhin durch alle abgelegten Dateien, und beim nächsten Öffnen
-  beginnt das Raster ungefiltert.
+  beginnt das Raster ungefiltert und ohne Auswahl.
 - Miniaturansichten werden im Hintergrund erzeugt, sobald sie ins Blickfeld
   scrollen, jeweils einige auf einmal, sodass das Öffnen des Rasters bei
   einem Ordner mit Tausenden von Bildern das Fenster nicht blockiert,
@@ -405,9 +430,7 @@ Sie können auf beide Arten antworten:
 
 Solange die Karte angezeigt wird, wird jede andere Taste ignoriert —
 Navigation, Zoom, `S`/`M`/`P`/`I`/`G` bewirken nichts, bis Sie die Nachfrage
-auf die eine oder andere Weise beantworten. `Shift+Delete` selbst ist an
-anderer Stelle in der App weiterhin erreichbar, bewirkt aber nichts, solange
-die Rasteransicht (`G`, siehe oben) angezeigt wird.
+auf die eine oder andere Weise beantworten.
 
 Das Löschen der aktuellen Datei entfernt sie aus der Auswahl und zeigt, was
 jetzt an ihre Stelle tritt, wobei die Navigation im Kreis läuft, genau wie
@@ -416,6 +439,13 @@ Ablegebildschirm. Stellt sich heraus, dass die Datei bereits verschwunden
 ist, oder kann sie aus einem anderen Grund nicht gelöscht werden (zum
 Beispiel wegen Berechtigungen), erklärt eine Toast-Meldung, was schiefgegangen
 ist, und die Datei bleibt in der Auswahl.
+
+Wird `Shift+Delete` gedrückt, während die Rasteransicht angezeigt wird,
+fragt es stattdessen nach allem, was dort ausgewählt ist (siehe oben). Die
+Karte erscheint über dem Raster, und das Raster bleibt nach Ihrer Antwort
+geöffnet. Was das System nicht verschieben kann, bleibt sowohl auf der
+Festplatte als auch in der Auswahl, und die Toast-Meldung nennt, wie viele
+tatsächlich verschoben wurden.
 
 ---
 
@@ -438,6 +468,13 @@ ist, und die Datei bleibt in der Auswahl.
   die Hervorhebung, `Return` oder ein Klick öffnet sie, `G`/`Esc` bricht ab
 - **`/`** — (nur im Raster) das Raster nach Dateinamen durchsuchen; `Esc`
   setzt die Suche zurück, ein zweites `Esc` verlässt das Raster
+- **`Leertaste`** — (nur im Raster) die hervorgehobene Miniaturansicht zur
+  Auswahl hinzufügen oder wieder herausnehmen
+- **`Cmd`/`Strg+A`** — (nur im Raster) alle gerade angezeigten
+  Miniaturansichten auswählen (bei aktiver Suche nur die Treffer)
+- **`Cmd`/`Strg+Klick`** / **`Shift+Klick`** — (nur im Raster) eine
+  Miniaturansicht zur Auswahl hinzufügen / den ganzen Bereich bis dorthin
+  auswählen
 - **`+`** / **`-`** — vergrößern / verkleinern
 - **`1`** — auf 100 % zoomen; **`0`** — zurück zur Fenstereinpassung (und
   setzt die Rotation zurück, siehe unten)
@@ -456,11 +493,13 @@ ist, und die Datei bleibt in der Auswahl.
   Info-Overlay erreichbar
 - **`Cmd`/`Strg+C`** — das aktuelle Bild in die Systemzwischenablage
   kopieren, als Bilddaten, die Sie in eine andere App einfügen können (keine
-  Datei)
+  Datei). In der Rasteransicht werden stattdessen die ausgewählten *Dateien*
+  kopiert, sodass ein Einfügen im Dateimanager Kopien davon erzeugt
 - **`Cmd`/`Strg+Shift+C`** — den Dateipfad des aktuellen Bildes in die
   Zwischenablage kopieren
 - **`Shift+Delete`** — die aktuelle Datei nach Bestätigung in den Papierkorb
-  verschieben (siehe „Eine Datei löschen“ oben)
+  verschieben (siehe „Eine Datei löschen“ oben); in der Rasteransicht alles
+  dort Ausgewählte
 - **`P`** — Diaschau-Modus ein-/ausschalten (Vollbild-Diaschau mit
   Überblendung zwischen den Bildern, siehe oben)
 - **`Shift+P`** — Zufällige Wiedergabe für den automatischen Wechsel im
@@ -663,7 +702,8 @@ Dinge, die Image Drop absichtlich (noch) nicht tut:
   öffnet, `G`/`Esc` bricht ohne Auswahl ab
 - **Suche nach Namen** — `/` im Raster filtert es auf die Dateinamen, die
   Ihre Eingabe enthalten; `Esc` setzt den Filter zurück, ein zweites `Esc`
-  verlässt das Raster
+  verlässt das Raster. Filter und Auswahl überleben einander, sodass `/`,
+  gefolgt von `Cmd`/`Strg+A`, genau auf die Treffer wirkt
 - **Zoom** — `+`/`-` vergrößern/verkleinern, `1` für 100 %, `0` für
   Fenstereinpassung, oder Scrollen zum Zoomen am Mauszeiger; ziehen, oder
   Shift+Scrollen, zum Verschieben nach dem Hineinzoomen
@@ -680,10 +720,14 @@ Dinge, die Image Drop absichtlich (noch) nicht tut:
   Auto-Weiterschalt-Intervall ein, solange sie aktiv ist; `Shift+P` schaltet
   die Zufällige Wiedergabe ein/aus (`[Zufällig]` in der Titelzeile)
 - **Kopieren** — `Cmd`/`Strg+C` kopiert das aktuelle Bild,
-  `Cmd`/`Strg+Shift+C` kopiert seinen Dateipfad
+  `Cmd`/`Strg+Shift+C` kopiert seinen Dateipfad; im Raster kopiert
+  `Cmd`/`Strg+C` die ausgewählten Dateien selbst
 - **Löschen** — `Shift+Delete` öffnet eine Bestätigungskarte (`←`/`→` zum
   Auswählen, `Return` zum Bestätigen, `Esc` zum Abbrechen); verschiebt die
-  Datei in den Papierkorb
+  Datei in den Papierkorb, oder die ganze Auswahl des Rasters
+- **Im Raster auswählen** — `Cmd`/`Strg+Klick` oder `Leertaste` für eine,
+  `Shift+Klick` für einen Bereich, `Cmd`/`Strg+A` für alle (bzw. alle
+  Suchtreffer); `Esc` setzt die Auswahl zurück
 - **Handbuch** — `F1`, oder Hilfe -> Handbuch
 - **Leeren / Beenden** — `Esc` (leert zuerst die geladenen Bilder, beendet
   dann; bricht stattdessen einen noch laufenden Ordner-Scan ab, falls einer

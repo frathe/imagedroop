@@ -3,6 +3,7 @@ package deletion
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -30,7 +31,14 @@ type fakeHost struct {
 	index int
 	gen   uint64
 
-	removed  []int
+	// removed flattens every index RemoveFiles was asked for, removedBatch
+	// is just the most recent call's list, and removeCalls counts the calls
+	// themselves - a batch has to arrive as one call, or the indices in it
+	// would shift out from under each other.
+	removed      []int
+	removedBatch []int
+	removeCalls  int
+
 	shown    []int
 	toasts   []string
 	emptied  []string
@@ -45,9 +53,17 @@ func (f *fakeHost) CurrentFile() (fyne.URI, int, bool) {
 	return f.files[f.index], f.index, true
 }
 
-func (f *fakeHost) RemoveFile(i int) {
-	f.removed = append(f.removed, i)
-	f.files = append(f.files[:i], f.files[i+1:]...)
+// RemoveFiles drops every named index in one pass, descending, so an earlier
+// removal can't shift a later index out from under the same call - the same
+// thing the real viewer has to do.
+func (f *fakeHost) RemoveFiles(indices []int) {
+	f.removeCalls++
+	f.removedBatch = slices.Clone(indices)
+	f.removed = append(f.removed, indices...)
+
+	for _, i := range slices.Backward(slices.Sorted(slices.Values(indices))) {
+		f.files = append(f.files[:i], f.files[i+1:]...)
+	}
 	if f.index >= len(f.files) {
 		f.index = 0
 	}
@@ -310,28 +326,22 @@ func TestPerformDelete_SkipsFileSetMutationIfGenerationChangesDuringTheMove(t *t
 	}
 }
 
-func TestShortcutHandler_OnlySecondaryCutAndOnlyWhenUnblocked(t *testing.T) {
-	host := &fakeHost{files: tempFiles(t, "a.jpg")}
-	c := New(host)
-
-	blocked := false
-	handle := ShortcutHandler(c, func() bool { return blocked })
+// TestShortcutHandler_RunsOnlyOnSecondaryCut: this package's whole job here
+// is telling a real Shift+Delete apart from the Ctrl/Cmd+X that arrives as
+// the same event type. What the key then confirms is the app's decision, so
+// the handler runs a callback rather than reaching for Request itself.
+func TestShortcutHandler_RunsOnlyOnSecondaryCut(t *testing.T) {
+	requests := 0
+	handle := ShortcutHandler(func() { requests++ })
 
 	// A real Ctrl/Cmd+X: same ShortcutName, not ours.
 	handle(&fyne.ShortcutCut{})
-	if c.Visible() {
-		t.Error("a plain cut shortcut should not open the confirmation")
+	if requests != 0 {
+		t.Errorf("requests = %d after a plain cut shortcut, want 0", requests)
 	}
 
-	blocked = true
 	handle(&fyne.ShortcutCut{Secondary: true})
-	if c.Visible() {
-		t.Error("Shift+Delete should be ignored while something else claims the screen")
-	}
-
-	blocked = false
-	handle(&fyne.ShortcutCut{Secondary: true})
-	if !c.Visible() {
-		t.Error("Shift+Delete should open the confirmation")
+	if requests != 1 {
+		t.Errorf("requests = %d after Shift+Delete, want 1", requests)
 	}
 }

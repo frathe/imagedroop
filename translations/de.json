@@ -36,6 +36,12 @@
    "Move %q to the Trash?": "%q in den Papierkorb verschieben?",
    "moved %q to the Trash": "%q in den Papierkorb verschoben",
    "could not move %q to the Trash: %v": "%q konnte nicht in den Papierkorb verschoben werden: %v",
+   "Move %d files to the Trash?": "%d Dateien in den Papierkorb verschieben?",
+   "moved %d files to the Trash": "%d Dateien in den Papierkorb verschoben",
+   "moved %d of %d files to the Trash; %q failed: %v": "%d von %d Dateien in den Papierkorb verschoben; %q fehlgeschlagen: %v",
+   "copied 1 file": "1 Datei kopiert",
+   "copied %d files": "%d Dateien kopiert",
+   "could not copy the files: %v": "Die Dateien konnten nicht kopiert werden: %v",
    "EXIF Data": "EXIF-Daten",
    "Show EXIF data": "EXIF-Daten anzeigen",
    "Could not read this file's metadata.": "Die Metadaten dieser Datei konnten nicht gelesen werden.",
@@ -82,5 +88,6 @@
    "Drop order": "Ablagereihenfolge",
    "Search: %s": "Suche: %s",
    "%d of %d": "%d von %d",
-   "No file names match": "Keine Dateinamen passen"
+   "No file names match": "Keine Dateinamen passen",
+   "%d selected": "%d ausgewählt"
 }

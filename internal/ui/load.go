@@ -126,8 +126,15 @@ func (v *viewer) attemptLoad(ctx context.Context, i int, gen uint64, done chan s
 			fyne.Do(func() {
 				// In picture-frame mode the window is already full-screen
 				// and there's nothing to resize to, same as the final
-				// resize below.
-				if gen == v.gen.Load() && !v.slides.Active() {
+				// resize below. The grid overview is skipped for the same
+				// reason it maximized the window in the first place: it
+				// fills the whole window, so sizing that window to one
+				// image means nothing while it's up - and undoGridMaximize
+				// would actively shrink it back out from under the open
+				// grid. Only reachable since the grid's batch delete, which
+				// re-shows whatever takes a deleted file's place without
+				// closing the grid first.
+				if gen == v.gen.Load() && !v.slides.Active() && !v.grid.Visible() {
 					v.undoGridMaximize()
 					resizeToImage(v.win, bounds, v.maxWinW, v.maxWinH)
 				}
@@ -236,8 +243,11 @@ func (v *viewer) finishLoad(ctx context.Context, _ int, u fyne.URI, loaded *imag
 	// In picture-frame mode the window is already full-screen and
 	// ImageFillContain scales the image to fit it without stretching, so
 	// there's nothing to resize to - and resizing a full-screen window is
-	// asking for platform-specific trouble.
-	if !v.slides.Active() {
+	// asking for platform-specific trouble. The grid overview is skipped on
+	// the same grounds and for the reason spelled out at the probe-time
+	// resize above: it fills the window it maximized, and undoGridMaximize
+	// would shrink that window while the grid is still drawn over it.
+	if !v.slides.Active() && !v.grid.Visible() {
 		v.undoGridMaximize()
 		resizeToImage(v.win, b, v.maxWinW, v.maxWinH)
 	}

@@ -23,6 +23,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/frathe/imagedrop/internal/imaging"
+	"github.com/frathe/imagedrop/internal/selection"
 	"github.com/frathe/imagedrop/internal/ui/widgets"
 	"github.com/frathe/imagedrop/internal/winpos"
 )
@@ -68,6 +69,15 @@ type Host interface {
 
 	// Unfocus releases canvas focus - see Close for why that matters.
 	Unfocus()
+
+	// Modifiers is which keyboard modifiers are held right now. A Fyne tap
+	// carries none of its own, so the multi-select gestures (Cmd/Ctrl+click
+	// to toggle a cell, Shift+click to extend a range) have to ask at the
+	// moment the tap arrives - the same accessor internal/ui/zoom already
+	// uses for its Shift+scroll pan, and stubbable per-viewer for the same
+	// reason: Fyne's test driver implements no desktop.Driver to read them
+	// from.
+	Modifiers() fyne.KeyModifier
 }
 
 // Overview is the grid overlay and the state behind it.
@@ -79,13 +89,15 @@ type Overview struct {
 	wrap    *widget.GridWrap
 	overlay *fyne.Container
 
-	// The search bar across the top of the overlay, hidden until '/' opens
-	// it: what was typed on the left, how much of the set still matches on
-	// the right. empty is the notice drawn over the grid in the one state
-	// that has no cells at all to explain itself.
+	// The bar across the top of the overlay, hidden until there is either a
+	// search or a selection to report: what was typed on the left, how much
+	// of the set still matches and how much of it is picked on the right.
+	// empty is the notice drawn over the grid in the one state that has no
+	// cells at all to explain itself.
 	searchBar   *fyne.Container
 	searchLabel *widget.Label
 	countLabel  *widget.Label
+	selLabel    *widget.Label
 	empty       *widget.Label
 
 	// maximized is true from the moment Toggle grows the window via
@@ -111,6 +123,12 @@ type Overview struct {
 	// query is the filter text typed so far, matched case-insensitively
 	// against each file's base name.
 	query string
+
+	// sel is the multi-select: which files are picked, and the anchor a
+	// Shift+click extends from. Holds host file indices rather than the
+	// display indices actually clicked, so it survives a filter change -
+	// see selection.go.
+	sel *selection.Set
 
 	// matches maps a display index - a cell's position in the grid - to
 	// the host's own file index, while a filter is active. nil means no
@@ -177,6 +195,7 @@ func New(host Host, win fyne.Window) *Overview {
 	g := &Overview{
 		host:   host,
 		win:    win,
+		sel:    selection.New(),
 		thumbs: imaging.NewThumbCache(imaging.DefaultThumbCacheBytes),
 		sem:    make(chan struct{}, thumbConcurrency),
 	}
@@ -189,18 +208,26 @@ func New(host Host, win fyne.Window) *Overview {
 			img.ScaleMode = canvas.ImageScaleFastest
 			img.SetMinSize(fyne.NewSize(cellSize, cellSize))
 
+			// The selection tint sits under the highlight ring so the ring's
+			// stroke stays crisp over it: the two mark different things and
+			// routinely land on the same cell.
+			tint := widgets.NewSelectionTint()
+			tint.Hide()
+
 			ring := widgets.NewFocusRing(widgets.GridRingWidth, widgets.RingRadius)
 			ring.Hide()
 
-			return container.NewStack(img, ring)
+			return container.NewStack(img, tint, ring)
 		},
 		func(id widget.GridWrapItemID, o fyne.CanvasObject) {
 			cell := o.(*fyne.Container)
 			img := cell.Objects[0].(*canvas.Image)
-			ring := cell.Objects[1].(*canvas.Rectangle)
+			tint := cell.Objects[1].(*canvas.Rectangle)
+			ring := cell.Objects[2].(*canvas.Rectangle)
 
 			g.cellIDs.Store(cell, id)
 			setCellHighlighted(ring, id == g.highlight)
+			setCellSelected(tint, g.isSelected(id))
 
 			// Refresh reaches this callback whether or not the overlay is
 			// actually open: every ForceRepaint refreshes the whole widget
@@ -227,17 +254,37 @@ func New(host Host, win fyne.Window) *Overview {
 		},
 	)
 
+	// A tap on a cell: which of the three things it means depends on what is
+	// held down at the time, which the event itself doesn't say - see
+	// Host.Modifiers.
+	//
+	// Both selection gestures have to hand the keyboard back themselves.
+	// Fyne's GridWrap grabs canvas focus on every tap, and this app
+	// dispatches every key from the *unfocused* canvas handler; Close is
+	// what normally undoes that, so a tap that deliberately leaves the grid
+	// open would otherwise leave a focused GridWrap swallowing the arrow
+	// keys, '/' and everything after it.
 	g.wrap.OnSelected = func(id widget.GridWrapItemID) {
-		// Resolved before Close, not after: closing clears the filter, and
-		// an id resolved past that point would map to itself rather than to
-		// the file this cell was actually showing.
-		i := g.fileIndex(id)
+		defer g.wrap.UnselectAll()
 
-		g.Close()
-		if i >= 0 {
-			g.host.ShowImage(i)
+		switch toggle, extend := pickModifier(g.host.Modifiers()); {
+		case toggle:
+			g.toggleAt(id)
+			g.host.Unfocus()
+		case extend:
+			g.extendTo(id)
+			g.host.Unfocus()
+		default:
+			// Resolved before Close, not after: closing clears the filter,
+			// and an id resolved past that point would map to itself rather
+			// than to the file this cell was actually showing.
+			i := g.fileIndex(id)
+
+			g.Close()
+			if i >= 0 {
+				g.host.ShowImage(i)
+			}
 		}
-		g.wrap.UnselectAll()
 	}
 
 	// Fired both by keyboard highlight movement (HandleKey forwards the
@@ -257,7 +304,9 @@ func New(host Host, win fyne.Window) *Overview {
 
 	g.searchLabel = widget.NewLabelWithStyle("", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
 	g.countLabel = widget.NewLabel("")
-	g.searchBar = container.NewBorder(nil, nil, nil, g.countLabel, g.searchLabel)
+	g.selLabel = widget.NewLabelWithStyle("", fyne.TextAlignTrailing, fyne.TextStyle{Bold: true})
+	g.searchBar = container.NewBorder(nil, nil, nil,
+		container.NewHBox(g.selLabel, g.countLabel), g.searchLabel)
 	g.searchBar.Hide()
 
 	g.empty = widget.NewLabelWithStyle(lang.L("No file names match"), fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
@@ -356,30 +405,40 @@ func (g *Overview) Close() {
 	}
 
 	g.visible = false
-	// The filter is a way of looking at the grid, not a standing setting:
-	// each open starts on the whole set. This also covers the app's
-	// defensive Close on every drop, where a query left over from the
-	// previous file set would otherwise be applied to the new one.
+	// The filter and the selection are both ways of working with the grid,
+	// not standing settings: each open starts on the whole set with nothing
+	// picked. This also covers the app's defensive Close on every drop,
+	// where a query or a selection left over from the previous file set
+	// would otherwise be applied to - or, worse, acted on against - the new
+	// one.
+	g.sel.Clear()
 	g.clearSearch()
+	// Explicitly, because clearSearch returns early with no search open and
+	// would otherwise leave the bar showing a selection count that no longer
+	// applies the next time the grid opens.
+	g.syncTopBar()
 	g.overlay.Hide()
 	g.host.Unfocus()
 	g.host.ForceRepaint()
 }
 
-// HandleKey handles a key press while the grid is up: Escape and G close
-// it, Return commits the highlighted cell, and the arrow keys move the
-// highlight. Every other key is deliberately swallowed by the caller.
+// HandleKey handles a key press while the grid is up: Escape and G back out
+// of it, Space picks the highlighted cell, Return commits it, and the arrow
+// keys move the highlight. Every other key is deliberately swallowed by the
+// caller.
 //
 // While a search is open the letter keys stop meaning anything here, since
 // each of them is also arriving at HandleRune as a query character - G
 // most visibly, which would otherwise close the grid on its way into the
-// query. Escape stages instead of closing: it clears the search first and
-// only closes once there is no search left to clear.
+// query. Space is left out of the search branch for exactly the same reason:
+// a space typed into a query must not also toggle a cell.
+//
+// Escape stages rather than closing outright - see escape.
 func (g *Overview) HandleKey(ev *fyne.KeyEvent) {
 	if g.searching {
 		switch ev.Name {
 		case fyne.KeyEscape:
-			g.clearSearch()
+			g.escape()
 		case fyne.KeyBackspace:
 			g.backspace()
 		case fyne.KeyReturn, fyne.KeyEnter:
@@ -396,8 +455,18 @@ func (g *Overview) HandleKey(ev *fyne.KeyEvent) {
 	}
 
 	switch ev.Name {
-	case fyne.KeyEscape, fyne.KeyG:
-		g.Close()
+	case fyne.KeyEscape:
+		g.escape()
+	case fyne.KeyG:
+		// Inert while a selection is pending, the same way it goes inert
+		// while a search is open: closing the grid discards the selection,
+		// and a user part-way through assembling one is far more likely to
+		// have meant Escape's first stage. Escape is the way out either way.
+		if g.sel.Len() == 0 {
+			g.Close()
+		}
+	case fyne.KeySpace:
+		g.toggleAt(g.highlight)
 	case fyne.KeyReturn, fyne.KeyEnter:
 		g.wrap.Select(g.highlight)
 	default:
@@ -405,6 +474,21 @@ func (g *Overview) HandleKey(ev *fyne.KeyEvent) {
 		// rows and columns, including the row arithmetic - forward the
 		// event rather than reimplementing it here.
 		g.wrap.TypedKey(ev)
+	}
+}
+
+// escape undoes one layer per press, smallest first: the selection, then the
+// search, then the grid itself. Each of those took the user effort to build,
+// so a single keystroke never throws away more than the one thing they were
+// most likely aiming at.
+func (g *Overview) escape() {
+	switch {
+	case g.sel.Len() > 0:
+		g.ClearSelection()
+	case g.searching:
+		g.clearSearch()
+	default:
+		g.Close()
 	}
 }
 
@@ -528,26 +612,44 @@ func (g *Overview) applyFilter() {
 		g.wrap.ScrollTo(0)
 	}
 
-	g.syncSearchBar()
+	g.syncTopBar()
 }
 
-// syncSearchBar redraws the bar from the current query and match count.
-func (g *Overview) syncSearchBar() {
-	if !g.searching {
+// syncTopBar redraws the bar from the current query, match count and
+// selection size. The bar earns its space whenever either of the two is
+// active, and each half appears on its own: a selection built without ever
+// opening the search shows only its count, and vice versa.
+func (g *Overview) syncTopBar() {
+	if g.searching {
+		g.searchLabel.SetText(fmt.Sprintf(lang.L("Search: %s"), g.query))
+		g.countLabel.SetText(fmt.Sprintf(lang.L("%d of %d"), g.count(), g.host.FileCount()))
+		g.searchLabel.Show()
+		g.countLabel.Show()
+	} else {
+		g.searchLabel.Hide()
+		g.countLabel.Hide()
+	}
+
+	if n := g.sel.Len(); n > 0 {
+		g.selLabel.SetText(fmt.Sprintf(lang.L("%d selected"), n))
+		g.selLabel.Show()
+	} else {
+		g.selLabel.Hide()
+	}
+
+	if !g.searching && g.sel.Len() == 0 {
 		g.searchBar.Hide()
 		g.empty.Hide()
 
 		return
 	}
 
-	g.searchLabel.SetText(fmt.Sprintf(lang.L("Search: %s"), g.query))
-	g.countLabel.SetText(fmt.Sprintf(lang.L("%d of %d"), g.count(), g.host.FileCount()))
 	g.searchBar.Show()
 
 	// Only when the query itself emptied the grid: with no files loaded at
 	// all there is no search to be in (Toggle refuses to open), so this
 	// can't misfire on an empty set.
-	if g.count() == 0 {
+	if g.searching && g.count() == 0 {
 		g.empty.Show()
 	} else {
 		g.empty.Hide()

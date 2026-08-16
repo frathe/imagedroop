@@ -279,15 +279,37 @@ instead of arrowing through them one at a time.
   arrow keys and `Return` work on the matches exactly as they do on the
   full grid, and **`Esc`** clears the search so every image is shown
   again — a second `Esc` then leaves the grid as usual.
-- While the grid is up, every other key is ignored - zoom, `S`/`M`/`P`/`I`,
-  `Shift+Delete` all do nothing until you either pick a thumbnail (click or
-  `Return`) or back out with `G`/`Esc`. While a search is open, the letter
-  keys are characters you are typing, so `G` no longer closes the grid -
-  `Esc` does.
+- **Select several at once** to act on them together:
+  **`Cmd/Ctrl+click`** a thumbnail to add it to the selection (or click it
+  again to take it back out), **`Shift+click`** to select everything
+  between it and the last one you clicked, **`Space`** to pick whichever
+  thumbnail is highlighted, and **`Cmd/Ctrl+A`** to select the lot.
+  Selected thumbnails are washed in the accent colour, and the top bar
+  counts them (`12 selected`). A plain click still just opens an image, so
+  nothing changes until you hold a modifier.
+- With a selection made, **`Shift+Delete`** moves all of it to the Trash
+  (after the usual confirmation, which names the count rather than every
+  file), and **`Cmd/Ctrl+C`** copies the files themselves to the clipboard
+  — paste in Finder, Explorer or your file manager to get copies of them.
+  Both work on the highlighted thumbnail alone if you haven't selected
+  anything, and the grid stays open afterwards so you keep your place.
+- Because the selection is a set of *files*, narrowing with `/` and then
+  pressing `Cmd/Ctrl+A` selects exactly the matches — `/holiday`,
+  `Cmd/Ctrl+A`, `Shift+Delete` clears every holiday photo out of a folder
+  of thousands. Clearing the search afterwards leaves the selection intact.
+- **`Esc`** undoes one thing at a time: the selection first, then the
+  search, then the grid itself. `G` closes the grid as usual, but goes
+  quiet while a selection or a search is still up, so it can't throw away
+  work in progress.
+- Apart from those, every other key is ignored while the grid is up - zoom,
+  `S`/`M`/`P`/`I` all do nothing until you either pick a thumbnail (click
+  or `Return`) or back out with `G`/`Esc`. While a search is open, the
+  letter keys are characters you are typing, so `G` no longer closes the
+  grid - `Esc` does.
 - The search only narrows what the grid shows. It changes nothing about the
   set itself: pick an image and the arrow keys still walk through every
   file you dropped, and the next time you open the grid it starts
-  unfiltered.
+  unfiltered, with nothing selected.
 - Thumbnails are generated in the background as they scroll into view, a
   few at a time, so opening the grid on a folder with thousands of images
   doesn't stall the window waiting for all of them to decode up front.
@@ -358,8 +380,7 @@ You can respond either way:
 
 While the card is up, every other key is ignored — navigation, zoom, `S`/`M`/
 `P`/`I`/`G` all do nothing until you respond to the prompt one way or the
-other. `Shift+Delete` itself is still reachable from elsewhere in the app,
-but does nothing while the grid overview (`G`, see above) is showing.
+other.
 
 Deleting the current file removes it from the set and shows whatever now
 takes its place, wrapping around the same way normal navigation does; if it
@@ -367,6 +388,12 @@ was the only file left, you're returned to the empty drop screen. If the
 file turns out to already be gone, or can't be deleted for some other reason
 (permissions, for example), a toast explains what went wrong and the file
 stays in the set.
+
+Pressed while the grid overview is showing, `Shift+Delete` asks about
+everything selected there instead (see above). The card appears over the
+grid, and the grid stays open once you've answered. Anything the system
+refuses to move stays both on disk and in the set, and the toast says how
+many of them actually went.
 
 ---
 
@@ -387,6 +414,12 @@ stays in the set.
   highlight, `Return` or a click opens it, `G`/`Esc` backs out
 - **`/`** — (grid only) search the grid by file name; `Esc` clears the
   search, a second `Esc` leaves the grid
+- **`Space`** — (grid only) add the highlighted thumbnail to the selection,
+  or take it back out
+- **`Cmd`/`Ctrl+A`** — (grid only) select every thumbnail the grid is
+  currently showing (just the matches, while a search narrows it)
+- **`Cmd`/`Ctrl+click`** / **`Shift+click`** — (grid only) add one
+  thumbnail to the selection / select the whole range up to it
 - **`+`** / **`-`** — zoom in / out
 - **`1`** — zoom to 100%; **`0`** — back to fit-to-window (and un-rotates, see
   below)
@@ -401,11 +434,14 @@ stays in the set.
   make/model, lens, exposure, aperture, ISO, focal length, capture date);
   also reachable via the **"Show EXIF data"** link in the info overlay
 - **`Cmd`/`Ctrl+C`** — copy the current image to the system clipboard, as
-  image data you can paste into another app (not a file)
+  image data you can paste into another app (not a file). In the grid
+  overview it copies the selected *files* instead, so a paste in your file
+  manager creates copies of them
 - **`Cmd`/`Ctrl+Shift+C`** — copy the current image's file path to the
   clipboard
 - **`Shift+Delete`** — move the current file to the Trash, after confirming
-  (see "Deleting a file" above)
+  (see "Deleting a file" above); in the grid overview, everything selected
+  there
 - **`P`** — toggle picture-frame mode (full-screen slideshow with a
   crossfade between images, see above)
 - **`Shift+P`** — toggle shuffle order for picture-frame mode's
@@ -578,7 +614,8 @@ Things Image Drop deliberately does not do (yet):
   without picking one
 - **Search by name** — `/` inside the grid filters it to the file names
   containing what you type; `Esc` clears the filter, a second `Esc` leaves
-  the grid
+  the grid. The filter survives a selection and vice versa, so `/`, then
+  `Cmd`/`Ctrl+A`, acts on exactly the matches
 - **Zoom** — `+`/`-` zoom in/out, `1` for 100%, `0` for fit-to-window, or
   scroll to zoom at the cursor; drag, or Shift+scroll, to pan once zoomed in
 - **Rotate** — `R`/`Shift+R` rotate 90° clockwise/counter-clockwise,
@@ -593,9 +630,14 @@ Things Image Drop deliberately does not do (yet):
   interval while it's on; `Shift+P` toggles shuffle order (`[shuffle]` in
   the title bar)
 - **Copy** — `Cmd`/`Ctrl+C` copies the current image, `Cmd`/`Ctrl+Shift+C`
-  copies its file path
+  copies its file path; in the grid, `Cmd`/`Ctrl+C` copies the selected
+  files themselves
 - **Delete** — `Shift+Delete` opens a confirmation card (`←`/`→` to choose,
-  `Return` to go, `Esc` to cancel); moves the file to the Trash
+  `Return` to go, `Esc` to cancel); moves the file to the Trash, or the
+  grid's whole selection
+- **Select in the grid** — `Cmd`/`Ctrl+click` or `Space` to pick one,
+  `Shift+click` for a range, `Cmd`/`Ctrl+A` for all of them (or all the
+  search matches); `Esc` clears the selection
 - **Manual** — `F1`, or Help -> Manual
 - **Clear / Quit** — `Esc` (clears the loaded images first, then quits;
   cancels a folder scan still in progress instead, if one is running)
