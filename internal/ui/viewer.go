@@ -82,6 +82,14 @@ type viewer struct {
 	// setters).
 	settings *settingswin.Window
 
+	// saveItem is the File menu's "Save Changes" item (save.go) - kept as
+	// its own field, unlike the other menu items built in menu.go, because
+	// its Disabled field needs updating from outside buildMainMenu itself,
+	// at every site that can change whether there's a pending rotation to
+	// save: rotate.go, load.go, clearToDropzone, and save.go itself - see
+	// updateSaveMenuState.
+	saveItem *fyne.MenuItem
+
 	// restoreLink offers to reload the file set saved when the window last
 	// closed (see session.go). Shown only while welcomeArt is - and only
 	// when savedSession is non-empty - and hidden together with it, since
@@ -454,6 +462,7 @@ func (v *viewer) clearToDropzone() {
 	v.setTitle(appTitle)
 	v.undoGridMaximize()
 	v.win.Resize(fyne.NewSize(startW, startH))
+	v.updateSaveMenuState()
 }
 
 // undoGridMaximize restores the window from a grid-triggered maximize (see

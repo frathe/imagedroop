@@ -404,6 +404,7 @@ func buildViewer(application fyne.App) (*viewer, fyne.Window) {
 	wireOpenShortcuts(window.Canvas(), view)
 	wireClipboardShortcuts(window.Canvas(), view)
 	wireDeleteShortcut(window.Canvas(), view)
+	wireSaveShortcut(window.Canvas(), view)
 
 	return view, window
 }
@@ -490,4 +491,16 @@ func wireClipboardShortcuts(c shortcutAdder, view *viewer) {
 // correctly ignored: this app has no cut action).
 func wireDeleteShortcut(c shortcutAdder, view *viewer) {
 	c.AddShortcut(&fyne.ShortcutCut{}, deletion.ShortcutHandler(view.deletion, view.grid.Visible))
+}
+
+// wireSaveShortcut binds Cmd/Ctrl+S to saveRotation (save.go). S isn't one
+// of the driver's specially-cased bare shortcuts (only Z/Y/V/C/Insert/X/A
+// are - see wireClipboardShortcuts' comment), so a plain desktop.
+// CustomShortcut reaches it the same way Cmd/Ctrl+O reaches
+// wireOpenShortcuts.
+func wireSaveShortcut(c shortcutAdder, view *viewer) {
+	c.AddShortcut(&desktop.CustomShortcut{
+		KeyName:  fyne.KeyS,
+		Modifier: fyne.KeyModifierShortcutDefault,
+	}, func(fyne.Shortcut) { view.saveRotation() })
 }

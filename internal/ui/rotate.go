@@ -19,6 +19,7 @@ func (v *viewer) rotateBy(steps int) {
 	v.rotation = ((v.rotation+steps)%4 + 4) % 4
 	v.redrawRotatedFrame()
 	v.applyRotationLayout()
+	v.updateSaveMenuState()
 }
 
 // resetRotation is the other half of the 0 key (see zoom.FitToWindow):
@@ -32,6 +33,7 @@ func (v *viewer) resetRotation() {
 	v.rotation = 0
 	v.redrawRotatedFrame()
 	v.applyRotationLayout()
+	v.updateSaveMenuState()
 }
 
 // redrawRotatedFrame recomputes v.img.Image from the current unrotated

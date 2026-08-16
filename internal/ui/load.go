@@ -45,6 +45,7 @@ func (v *viewer) ShowImage(i int) {
 
 	v.loading.Store(true)
 	v.loadingBar.Show()
+	v.updateSaveMenuState() // grey out Save Changes immediately - see canSaveRotation's !v.loading.Load() guard
 
 	if firstLoad {
 		v.hint.SetText(lang.L("Loading..."))
@@ -246,6 +247,7 @@ func (v *viewer) finishLoad(ctx context.Context, i int, u fyne.URI, loaded *imag
 
 	v.loading.Store(false)
 	v.loadingBar.Hide()
+	v.updateSaveMenuState() // rotation just reset to 0 above, and loading has just cleared - see canSaveRotation
 	v.ForceRepaint()
 
 	// Animated GIFs keep playing until a newer generation (a navigation or

@@ -35,18 +35,19 @@ interface.
 | File(s) | Responsibility |
 |---|---|
 | `run.go` | `Run` — the only exported symbol: builds the window, wires the startup drop (CLI arguments) and the shutdown save of session + preferences, then hands control to Fyne's event loop. Also the app-level constants (`appTitle`, the drop-zone size floor `startW`/`startH` — the window-size *ceiling* is `defaultMaxWindowWidth`/`defaultMaxWindowHeight` in `load.go`, next to the code that enforces it) |
-| `build.go` | `buildViewer` — constructs and wires the whole UI, composed from per-feature widget constructors (`newDropzoneUI`/`newScanUI`/`newInfoOverlayUI` here, `newToast` in toast.go, each returning a small widget-cluster struct/component); also the keyboard-shortcut wiring (`wireOpenShortcuts`/`wireClipboardShortcuts`/`wireDeleteShortcut`) |
+| `build.go` | `buildViewer` — constructs and wires the whole UI, composed from per-feature widget constructors (`newDropzoneUI`/`newScanUI`/`newInfoOverlayUI` here, `newToast` in toast.go, each returning a small widget-cluster struct/component); also the keyboard-shortcut wiring (`wireOpenShortcuts`/`wireClipboardShortcuts`/`wireDeleteShortcut`/`wireSaveShortcut`) |
 | `windowtrack.go` | The two window-geometry trackers: `windowSizeTracker` (a layout that records the window's current size on every pass) and `startWindowPosPolling` (a background poller keeping `viewer.winPos` current via `internal/winpos`, skipped while the slideshow is full-screen; returns a stop func `Run` calls at shutdown) |
 | `testdata/` | Golden-master screenshots for the e2e suite (moved here with the code that reads them, since a relative path can't reach a parent directory) |
 | `viewer.go` | The `viewer` struct (UI state, navigation, image cache) — the core of the app — plus its small core-state methods: title handling, `clearToDropzone`/`reset`/`showWelcomeState`, `closeFiles` (the File menu's "Close Files" item — like `reset` but never closes the window), `undoGridMaximize` (undoes a grid-triggered `winpos.Maximize` — see `grid/`'s `ConsumeMaximized` — before a resize elsewhere tries to shrink the window back down), merge-mode toggle/get/set, `showFileIfPresent`, and the exported vocabulary the feature packages' `Host` interfaces bind to (`CurrentFile`, `RemoveFile`, `ShowImage`, `ShowToast`, `ShowEmptyStateError`, `ForceRepaint`, `FileCount`, `FileAt`, `CurrentIndex`, `Generation`, `Unfocus`, `Advance`) |
 | `keys.go` | `handleKeyEvent` — the single keyboard dispatcher every unmodified key press runs through |
-| `menu.go` | `buildMainMenu` — the window's menu bar: a File menu (Open Files…/Close Files/Settings…, built here) composed with `help.Menu()`'s Help menu. The one place that decides how the two compose, per the cross-feature-composition rule below |
+| `menu.go` | `buildMainMenu` — the window's menu bar: a File menu (Open Files…/Save Changes/Close Files/Settings…, built here) composed with `help.Menu()`'s Help menu. The one place that decides how the two compose, per the cross-feature-composition rule below |
 | `drop.go` | Drop handling and the recursive folder scan: `handleDrop`, its shared completion step `applyScanResult`, `applyScannedFiles` (merges or replaces the file set, then reorders and displays it via `sort.go`'s `startSort` instead of sorting inline on the UI goroutine), `cancelScan`, `realPathOf`, the `maxScan` cap and its `MaxScan`/`SetMaxScan` get/set (the settings window's binding) |
 | `load.go` | Loading and displaying images: `ShowImage`/`attemptLoad`/`finishLoad`/`retryAfterLoadFailure`, neighbor preloading, the GIF `animate` loop, `resizeToImage` (takes its `maxW`/`maxH` cap as parameters rather than reading a package constant, so each call site passes the viewer's own `maxWinW`/`maxWinH`) plus `defaultMaxWindowWidth`/`defaultMaxWindowHeight` and the `MaxWindowWidth`/`SetMaxWindowWidth`/`MaxWindowHeight`/`SetMaxWindowHeight` get/set pairs (the settings window's binding) |
 | `toast.go` | The `toast` component - owns its widgets and a cancellable auto-hide lifecycle (atomic generation, per-show stop/done channels, injected duration) - plus the viewer's `showToast` wrapper |
 | `info.go` | The persistent info overlay (I key): toggle/sync/update, `formatFileSize` |
 | `sort.go` | `toggleSort` (the `S` key) and `SetSortMode`/`SortMode` (the settings window's binding — jumps directly to a mode rather than cycling, safe to call before any files are loaded), plus `startSort`/`finishSort`: the shared background-reorder mechanism (own spinner/label, staleness generation `sortGen`, completion callback) used by both `SetSortMode` and `drop.go`'s `applyScannedFiles`, so neither freezes the UI on a large stat/Exif-heavy sort — the orderings themselves live in `internal/filesort` |
-| `rotate.go` | View-only 90°-step image rotation (`rotateBy`/`resetRotation`/`redrawRotatedFrame`), composed with EXIF orientation at render time - never written to disk. Stays here rather than becoming a package: it writes `img.Image` on the core load/animation path, which is the app's own side of the contract `zoom/` is written against |
+| `rotate.go` | View-only 90°-step image rotation (`rotateBy`/`resetRotation`/`redrawRotatedFrame`), composed with EXIF orientation at render time - not written to disk until the File > Save Changes action (see `save.go`) explicitly persists it. Stays here rather than becoming a package: it writes `img.Image` on the core load/animation path, which is the app's own side of the contract `zoom/` is written against |
+| `save.go` | `canSaveRotation`/`saveRotation`/`updateSaveMenuState`: the File menu's "Save Changes" item (also Cmd/Ctrl+S, see `build.go`'s `wireSaveShortcut`) that persists `rotate.go`'s view-only rotation back to the file it came from, via `internal/imaging`'s `SaveRotated`/`CanEncode`. Disabled except when there's a loaded, non-animated, encodable-format image with a pending rotation and no load in flight - see `canSaveRotation`'s own doc comment for why each of those matters; a successful save folds the just-written pixels into `displayFrames` and resets `rotation` to 0 so nothing visibly changes |
 | `slideshow.go` | `togglePictureFrameMode` — the five-line glue that closes the grid before handing over to `slideshow.Toggle`, i.e. the one thing the slideshow package must not know — plus `toggleSlideshowShuffle` and the `SlideShuffle`/`SetSlideShuffle`/`SlideInterval`/`SetSlideInterval` get/set pairs (the settings window's binding) |
 | `session.go` | `restoreSession` — thin `*viewer` glue over `internal/session` |
 | `clipboard.go` | `copyPathToClipboard`, `copyImageToClipboard`, `reportClipboardError` — thin `*viewer` glue over `internal/clipboard` |
@@ -109,11 +110,12 @@ own state now does — the structural extractions are finished.
 ### `internal/imaging`
 
 Read → probe → decode → EXIF-orient → cache pipeline for image files
-(JPEG/PNG/GIF including animated, WebP, BMP, TIFF, ICO, XPM, HEIC, AVIF).
-HEIC/AVIF decode via `github.com/gen2brain/{heic,avif}` (WASM/wazero, no
-cgo) and apply their own orientation/transform internally, so
-`readEXIFOrientation` deliberately leaves them alone. Zero dependency on
-`viewer`.
+(JPEG/PNG/GIF including animated, WebP, BMP, TIFF, ICO, XPM, HEIC, AVIF),
+plus a narrower encode-and-write-back path (`save.go`) for the subset of
+those formats this module can also re-encode. HEIC/AVIF decode via
+`github.com/gen2brain/{heic,avif}` (WASM/wazero, no cgo) and apply their own
+orientation/transform internally, so `readEXIFOrientation` deliberately
+leaves them alone. Zero dependency on `viewer`.
 
 | File | Responsibility |
 |---|---|
@@ -122,6 +124,7 @@ cgo) and apply their own orientation/transform internally, so
 | `orientation.go` | Pixel-level rotate/flip transforms (`ApplyOrientation`, `RotateSteps`) |
 | `gif.go` | Animated GIF frame decoding/compositing (unexported: `decodeAnimatedGIF`) |
 | `thumbnail.go` | `NewThumbCache`, `LoadThumbnail`, unexported `scaleToFit` — decodes via `LoadImage` then downsamples (`golang.org/x/image/draw`, `ApproxBiLinear`) for `internal/ui/grid` |
+| `save.go` | `SaveRotated`, `CanEncode`, an unexported extension→encoder table (JPEG at quality 95 rather than the stdlib's lossier default 75, PNG, single-frame GIF, BMP, TIFF, AVIF - all already linked in for decode). `SaveRotated` writes to a temp file in the target's own directory and `os.Rename`s it over the original, so a failed or interrupted encode can never corrupt it; it does not preserve the original file's Exif metadata, since it's a plain re-encode rather than a patch of the existing bytes. WebP/HEIC have no Encode in the libraries this module depends on, and ICO/XPM aren't meaningful save targets, so `CanEncode` reports false for all four - `internal/ui/save.go`'s `canSaveRotation` checks it before ever offering the File > Save Changes action |
 
 Extracted from `library.go` + the root `orientation.go`/`exif.go`/`gif.go` on
 2026-08-13 — see `legacy/2026-08-13_refactoring.md`.
@@ -355,6 +358,7 @@ the embedded FS, so they check what actually ships.
 - "How is an image shown/preloaded/animated once loaded?" → `load.go`
 - "Which keys do what?" → `keys.go`'s `handleKeyEvent`
 - "How does zoom/pan work?" → `internal/ui/zoom` (the state, the geometry, and the widget); the keys that drive it are in `keys.go`
+- "How does rotation work, and how is it saved to disk?" → `internal/ui/rotate.go` (the view-only R/Shift+R rotation) + `internal/ui/save.go` (the File > Save Changes action/Cmd+S that persists it) + `internal/imaging/save.go` (the per-format encoders and the atomic temp-file-then-rename write)
 - "How does the slideshow / picture-frame mode work?" → `internal/ui/slideshow` (the mode itself) + `slideshow.go` (the grid guard around it)
 - "How does delete work?" → `internal/ui/deletion` (the flow) + `internal/trash` (per-OS move-to-Trash) + `build.go`'s wireDeleteShortcut (how Shift+Delete reaches it)
 - "How are native file-open dialogs implemented?" → `internal/filepicker/` (per-OS chooser) + `openfiles.go` (`*viewer` glue)

@@ -6,17 +6,20 @@
    Shift+Delete flow now routes through the new per-OS `internal/trash`
    package instead of calling `os.Remove` directly.
 
+- **Save rotation to disk** — a File > "Save Changes" menu item (also
+   Cmd/Ctrl+S), grayed out except when there's a pending rotation to save,
+   writes `rotate.go`'s view-only rotation back to the file via the new
+   `internal/imaging/save.go` (`SaveRotated`/`CanEncode`: JPEG/PNG/GIF/
+   BMP/TIFF/AVIF, atomic temp-file-then-rename write). Animated images and
+   formats with no encoder (WebP/HEIC/ICO/XPM) are excluded, not converted.
+
 ## TODO
 
-- **Save rotation to disk** — `rotate.go`'s 90°-step rotation
-   (`rotateBy`/`resetRotation`) is view-only; add an explicit save action
-   that writes the rotated pixels back to the file via `internal/imaging`'s
-   orientation transforms (`ApplyOrientation`/`RotateSteps`).
-
-- **Save As / convert image format** — `internal/imaging` decodes many
-   formats (HEIC/AVIF/BMP/TIFF/WebP/...) but the app never writes any of
-   them back out; add an export/"save as" action to convert the current
-   image to a common format (PNG/JPEG).
+- **Save As / convert image format** — `internal/imaging/save.go` can only
+   overwrite a file in its own original format (see "Save rotation to disk"
+   above), and has no encoder at all for WebP/HEIC/ICO/XPM; add an
+   export/"save as" action to convert the current image to a common format
+   (PNG/JPEG) regardless of its source format.
 
 - **Filename search / jump-to-file** — a type-ahead search (e.g. bound to
    `/`) that filters or jumps to a file by name within the current file

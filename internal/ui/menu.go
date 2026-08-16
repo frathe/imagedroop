@@ -23,10 +23,18 @@ func buildMainMenu(view *viewer) *fyne.MainMenu {
 		Modifier: fyne.KeyModifierShortcutDefault,
 	}
 
+	save := fyne.NewMenuItem(lang.L("Save Changes"), func() { view.saveRotation() })
+	save.Disabled = true // updateSaveMenuState (save.go) enables it once there's a pending rotation to save
+	save.Shortcut = &desktop.CustomShortcut{
+		KeyName:  fyne.KeyS,
+		Modifier: fyne.KeyModifierShortcutDefault,
+	}
+	view.saveItem = save
+
 	closeFiles := fyne.NewMenuItem(lang.L("Close Files"), func() { view.closeFiles() })
 	settings := fyne.NewMenuItem(lang.L("Settings…"), func() { view.settings.Show() })
 
-	fileMenu := fyne.NewMenu(lang.L("File"), open, closeFiles, fyne.NewMenuItemSeparator(), settings)
+	fileMenu := fyne.NewMenu(lang.L("File"), open, save, closeFiles, fyne.NewMenuItemSeparator(), settings)
 
 	return fyne.NewMainMenu(fileMenu, view.help.Menu())
 }
