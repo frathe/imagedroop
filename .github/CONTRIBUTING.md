@@ -53,7 +53,12 @@ make run
    counterpart), update both. Fyne's markdown renderer has no table
    extension, so keep the manual table-free.
 6. If a golden-image e2e test fails because of a legitimate visual change,
-   the failing test writes the new render to
+   regenerate the master with `make golden` rather than a plain `go test` —
+   it renders inside a `linux/amd64` container matching CI exactly (needs
+   Docker). Fyne's software rasterizer renders slightly different
+   anti-aliased pixels depending on CPU architecture, so a master captured
+   by running `go test` directly on, say, an Apple Silicon Mac can pass
+   there and still fail in CI. `make golden` writes the new render to
    `internal/ui/testdata/failed/<name>.png` — inspect it, and if it looks
    right, copy it over `internal/ui/testdata/<name>.png` to accept it as the
    new baseline. See the [README](../README.md#end-to-end-suite-internaluie2e_testgo)

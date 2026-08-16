@@ -109,7 +109,8 @@ isn't actually corrupted — to open it anyway:
 - A C toolchain for cgo (Fyne's OpenGL bindings require it) — Xcode Command
   Line Tools on macOS, `gcc` + `libgl1-mesa-dev`/`xorg-dev` on Linux
 - [Docker](https://www.docker.com/) — only needed to cross-compile the
-  Windows or Linux builds via `fyne-cross`
+  Windows or Linux builds via `fyne-cross`, or to regenerate e2e golden
+  masters via `make golden`
 - [`govulncheck`](https://go.dev/security/vuln) and the
   [GitHub CLI](https://cli.github.com/) (`gh`) — only needed for the
   `make security*` targets. `govulncheck` is installed by
@@ -211,10 +212,17 @@ go test -run TestE2E -v ./...
 ```
 
 **Updating a golden master:** if a legitimate visual change makes one
-stale, the failing test writes the new render to
+stale, regenerate it with `make golden` rather than a plain `go test` -
+Fyne's software rasterizer renders slightly different anti-aliased pixels
+depending on CPU architecture (its own test harness even special-cases
+darwin/arm64 for this), so a master captured by running `go test` directly
+on a non-amd64-Linux machine can pass there and still fail in CI, which
+runs on `ubuntu-latest`/amd64 with no such leniency. `make golden` renders
+inside a `linux/amd64` container matching CI exactly (needs Docker), so the
+result is never machine-dependent. Either way, the new render lands at
 `internal/ui/testdata/failed/<name>.png` (gitignored — never committed) and
-reports that path. Inspect it, and if it looks right, copy it over
-`internal/ui/testdata/<name>.png` to accept it as the new baseline.
+the failure reports that path. Inspect it, and if it looks right, copy it
+over `internal/ui/testdata/<name>.png` to accept it as the new baseline.
 
 **Known gap:** F1/the manual window isn't covered. Fyne's test theme only
 defines fonts for 6 specific `TextStyle` combinations, and the manual's

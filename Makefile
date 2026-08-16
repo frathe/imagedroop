@@ -6,7 +6,7 @@ BIN_DIR  := bin
 WIN_ARCH := amd64
 LINUX_ARCHES := amd64 arm64
 
-.PHONY: all build build-linux-all run fmt vet test tidy clean package-mac package-windows package-windows-debug package-linux package-linux-debug build-all install-tools install-linux-tools security security-govulncheck security-github bump-version help
+.PHONY: all build build-linux-all run fmt vet test golden tidy clean package-mac package-windows package-windows-debug package-linux package-linux-debug build-all install-tools install-linux-tools security security-govulncheck security-github bump-version help
 
 all: build
 
@@ -25,6 +25,27 @@ vet: ## Run go vet
 
 test: ## Run tests
 	go test ./...
+
+golden: ## Regenerate the e2e golden-master screenshots via Docker (linux/amd64, matching CI exactly - needs Docker)
+	@# Fyne's software rasterizer renders slightly different anti-aliased
+	@# pixels depending on CPU architecture - fyne.io/fyne/v2's own test
+	@# harness even special-cases darwin/arm64 for it. A master captured by
+	@# running `go test` directly on a non-amd64-Linux machine can pass there
+	@# and still fail in CI, which runs on ubuntu-latest/amd64 with no such
+	@# leniency - this target renders in the same environment CI does so the
+	@# result is never machine-dependent. See CONTRIBUTING.md for the full
+	@# accept-a-new-master workflow.
+	docker run --rm --platform linux/amd64 \
+		-v "$(CURDIR):/work" -w /work \
+		-e HOST_UID=$$(id -u) -e HOST_GID=$$(id -g) \
+		ubuntu:24.04 bash -c '\
+			set -e; \
+			apt-get update -qq; \
+			apt-get install -y -qq gcc libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev golang-go ca-certificates >/dev/null; \
+			go test -run TestE2E ./internal/ui/... -v || true; \
+			if [ -d internal/ui/testdata/failed ]; then chown -R "$$HOST_UID:$$HOST_GID" internal/ui/testdata/failed; fi \
+		'
+	@echo "Inspect internal/ui/testdata/failed/*.png (if any), and if they look right, copy the ones you want over the matching internal/ui/testdata/*.png to accept them as the new baseline."
 
 tidy: ## Tidy go.mod / go.sum
 	go mod tidy
