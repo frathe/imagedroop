@@ -12,7 +12,9 @@ package trash
 
 import (
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 )
@@ -56,8 +58,38 @@ func moveLinux(path string) error {
 		args = []string{path}
 	}
 
-	_, err = runTrashCommand(exec.Command(bin, args...))
+	cmd := exec.Command(bin, args...)
+	cmd.Env = homeTrashEnv()
+	_, err = runTrashCommand(cmd)
 	return err
+}
+
+// homeTrashEnv is os.Environ() with XDG_DATA_HOME forced to its
+// freedesktop.org default of $HOME/.local/share. gio/trash-put resolve the
+// home trash directory as $XDG_DATA_HOME/Trash, and confined launchers -
+// notably a snap-packaged terminal like VS Code's, which this app is
+// routinely built and run from - override XDG_DATA_HOME to a private
+// per-app data directory for sandboxing, without touching HOME. Inheriting
+// that override makes trash.Move report success while the file lands
+// somewhere the desktop's own file manager never looks, which is
+// indistinguishable from a silent permanent delete. HOME itself isn't
+// touched by that redirection (confirmed against a real snap-confined
+// shell), so overriding just XDG_DATA_HOME here is enough to put the file
+// where the file manager's Trash view actually looks.
+func homeTrashEnv() []string {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return os.Environ()
+	}
+
+	env := os.Environ()
+	out := env[:0]
+	for _, kv := range env {
+		if !strings.HasPrefix(kv, "XDG_DATA_HOME=") {
+			out = append(out, kv)
+		}
+	}
+	return append(out, "XDG_DATA_HOME="+filepath.Join(home, ".local", "share"))
 }
 
 // moveWindows shells out to Microsoft.VisualBasic.FileIO.FileSystem's

@@ -2,7 +2,9 @@ package trash
 
 import (
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -55,6 +57,53 @@ func TestMoveLinux_FallsBackToTrashPut(t *testing.T) {
 	}
 	if !strings.Contains(strings.Join(gotArgs, " "), "/tmp/photo.jpg") {
 		t.Errorf("trash-put args = %v, want the path passed through", gotArgs)
+	}
+}
+
+// TestMoveLinux_OverridesConfinedXDGDataHome guards against a real bug: a
+// snap-confined launcher (VS Code's own snap, notably - this app is
+// routinely built and run from its integrated terminal) sets XDG_DATA_HOME
+// to a private per-app directory without touching HOME. gio/trash-put
+// resolve the trash directory as $XDG_DATA_HOME/Trash, so inheriting that
+// override moves the file somewhere the desktop's file manager never shows
+// - indistinguishable from a silent permanent delete. moveLinux must force
+// XDG_DATA_HOME back to $HOME/.local/share for the child process regardless
+// of what the parent process's environment says.
+func TestMoveLinux_OverridesConfinedXDGDataHome(t *testing.T) {
+	origGio, origTrashPut, origRun := lookupGio, lookupTrashPut, runTrashCommand
+	t.Cleanup(func() { lookupGio, lookupTrashPut, runTrashCommand = origGio, origTrashPut, origRun })
+
+	t.Setenv("XDG_DATA_HOME", "/home/me/snap/code/257/.local/share")
+	home, err := os.UserHomeDir()
+	if err != nil {
+		t.Fatalf("os.UserHomeDir() error = %v", err)
+	}
+	wantDataHome := "XDG_DATA_HOME=" + filepath.Join(home, ".local", "share")
+
+	lookupGio = func() (string, error) { return "/usr/bin/gio", nil }
+	lookupTrashPut = func() (string, error) { return "", errors.New("not found") }
+
+	var gotEnv []string
+	runTrashCommand = func(cmd *exec.Cmd) ([]byte, error) {
+		gotEnv = cmd.Env
+		return nil, nil
+	}
+
+	if err := moveLinux("/tmp/photo.jpg"); err != nil {
+		t.Fatalf("moveLinux() error = %v", err)
+	}
+
+	found := false
+	for _, kv := range gotEnv {
+		if strings.HasPrefix(kv, "XDG_DATA_HOME=") {
+			if kv != wantDataHome {
+				t.Errorf("XDG_DATA_HOME = %q, want %q", kv, wantDataHome)
+			}
+			found = true
+		}
+	}
+	if !found {
+		t.Error("cmd.Env has no XDG_DATA_HOME entry")
 	}
 }
 
