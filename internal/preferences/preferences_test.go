@@ -34,6 +34,15 @@ func TestLoadPreferences_NothingSavedReturnsDefaults(t *testing.T) {
 	if got.MaxWindowHeight != 0 {
 		t.Errorf("MaxWindowHeight = %v, want 0", got.MaxWindowHeight)
 	}
+	if got.MaxImageCacheMB != 0 {
+		t.Errorf("MaxImageCacheMB = %d, want 0", got.MaxImageCacheMB)
+	}
+	if got.MaxThumbCacheMB != 0 {
+		t.Errorf("MaxThumbCacheMB = %d, want 0", got.MaxThumbCacheMB)
+	}
+	if got.MaxFileSizeMB != 0 {
+		t.Errorf("MaxFileSizeMB = %d, want 0", got.MaxFileSizeMB)
+	}
 	if got.WindowSize != (fyne.Size{}) {
 		t.Errorf("WindowSize = %v, want zero value", got.WindowSize)
 	}
@@ -53,6 +62,9 @@ func TestSavePreferences_RoundTrip(t *testing.T) {
 		MaxScanFiles:      5000,
 		MaxWindowWidth:    1800,
 		MaxWindowHeight:   1100,
+		MaxImageCacheMB:   384,
+		MaxThumbCacheMB:   192,
+		MaxFileSizeMB:     256,
 		WindowSize:        fyne.NewSize(640, 480),
 		WindowPosX:        120,
 		WindowPosY:        340,
@@ -109,6 +121,19 @@ func TestSavePreferences_ZeroMaxWindowSizeDoesNotOverwritePreviouslySaved(t *tes
 	got := Load(app)
 	if got.MaxWindowWidth != 1600 || got.MaxWindowHeight != 1000 {
 		t.Errorf("MaxWindowWidth/Height = %v/%v, want 1600/1000 (should survive a zero-value Save)", got.MaxWindowWidth, got.MaxWindowHeight)
+	}
+}
+
+func TestSavePreferences_ZeroMemoryLimitsDoNotOverwritePreviouslySaved(t *testing.T) {
+	app := test.NewApp()
+
+	Save(app, State{MaxImageCacheMB: 384, MaxThumbCacheMB: 192, MaxFileSizeMB: 256})
+	Save(app, State{MaxImageCacheMB: 0, MaxThumbCacheMB: 0, MaxFileSizeMB: 0})
+
+	got := Load(app)
+	if got.MaxImageCacheMB != 384 || got.MaxThumbCacheMB != 192 || got.MaxFileSizeMB != 256 {
+		t.Errorf("memory limits = %d/%d/%d, want 384/192/256 (should survive a zero-value Save)",
+			got.MaxImageCacheMB, got.MaxThumbCacheMB, got.MaxFileSizeMB)
 	}
 }
 

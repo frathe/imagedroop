@@ -304,7 +304,7 @@ func TestLoadImage(t *testing.T) {
 	t.Run("valid jpeg", func(t *testing.T) {
 		path := writeTempFile(t, "photo.jpg", encodeJPEG(t, 12, 8, color.RGBA{R: 200, G: 20, B: 20, A: 255}))
 
-		loaded, err := LoadImage(storage.NewFileURI(path))
+		loaded, err := LoadImage(storage.NewFileURI(path), DefaultImgCacheBytes)
 		if err != nil {
 			t.Fatalf("LoadImage returned error: %v", err)
 		}
@@ -322,7 +322,7 @@ func TestLoadImage(t *testing.T) {
 	t.Run("valid png", func(t *testing.T) {
 		path := writeTempFile(t, "photo.png", encodePNG(t, 12, 8, color.RGBA{R: 200, G: 20, B: 20, A: 255}))
 
-		loaded, err := LoadImage(storage.NewFileURI(path))
+		loaded, err := LoadImage(storage.NewFileURI(path), DefaultImgCacheBytes)
 		if err != nil {
 			t.Fatalf("LoadImage returned error: %v", err)
 		}
@@ -340,7 +340,7 @@ func TestLoadImage(t *testing.T) {
 	t.Run("valid single-frame gif", func(t *testing.T) {
 		path := writeTempFile(t, "photo.gif", encodeGIF(t, 12, 8, color.RGBA{R: 200, G: 20, B: 20, A: 255}))
 
-		loaded, err := LoadImage(storage.NewFileURI(path))
+		loaded, err := LoadImage(storage.NewFileURI(path), DefaultImgCacheBytes)
 		if err != nil {
 			t.Fatalf("LoadImage returned error: %v", err)
 		}
@@ -358,7 +358,7 @@ func TestLoadImage(t *testing.T) {
 	t.Run("valid bmp", func(t *testing.T) {
 		path := writeTempFile(t, "photo.bmp", encodeBMP(t, 12, 8, color.RGBA{R: 200, G: 20, B: 20, A: 255}))
 
-		loaded, err := LoadImage(storage.NewFileURI(path))
+		loaded, err := LoadImage(storage.NewFileURI(path), DefaultImgCacheBytes)
 		if err != nil {
 			t.Fatalf("LoadImage returned error: %v", err)
 		}
@@ -376,7 +376,7 @@ func TestLoadImage(t *testing.T) {
 	t.Run("valid tiff", func(t *testing.T) {
 		path := writeTempFile(t, "photo.tiff", encodeTIFF(t, 12, 8, color.RGBA{R: 200, G: 20, B: 20, A: 255}))
 
-		loaded, err := LoadImage(storage.NewFileURI(path))
+		loaded, err := LoadImage(storage.NewFileURI(path), DefaultImgCacheBytes)
 		if err != nil {
 			t.Fatalf("LoadImage returned error: %v", err)
 		}
@@ -394,7 +394,7 @@ func TestLoadImage(t *testing.T) {
 	t.Run("valid ico", func(t *testing.T) {
 		path := writeTempFile(t, "photo.ico", encodeICO(t, 12, 8, color.RGBA{R: 200, G: 20, B: 20, A: 255}))
 
-		loaded, err := LoadImage(storage.NewFileURI(path))
+		loaded, err := LoadImage(storage.NewFileURI(path), DefaultImgCacheBytes)
 		if err != nil {
 			t.Fatalf("LoadImage returned error: %v", err)
 		}
@@ -412,7 +412,7 @@ func TestLoadImage(t *testing.T) {
 	t.Run("valid xpm", func(t *testing.T) {
 		path := writeTempFile(t, "photo.xpm", encodeXPM(t, 12, 8, color.RGBA{R: 200, G: 20, B: 20, A: 255}))
 
-		loaded, err := LoadImage(storage.NewFileURI(path))
+		loaded, err := LoadImage(storage.NewFileURI(path), DefaultImgCacheBytes)
 		if err != nil {
 			t.Fatalf("LoadImage returned error: %v", err)
 		}
@@ -430,7 +430,7 @@ func TestLoadImage(t *testing.T) {
 	t.Run("valid avif", func(t *testing.T) {
 		path := writeTempFile(t, "photo.avif", encodeAVIF(t, 12, 8, color.RGBA{R: 200, G: 20, B: 20, A: 255}))
 
-		loaded, err := LoadImage(storage.NewFileURI(path))
+		loaded, err := LoadImage(storage.NewFileURI(path), DefaultImgCacheBytes)
 		if err != nil {
 			t.Fatalf("LoadImage returned error: %v", err)
 		}
@@ -452,7 +452,7 @@ func TestLoadImage(t *testing.T) {
 		}
 		path := writeTempFile(t, "photo.heic", data)
 
-		loaded, err := LoadImage(storage.NewFileURI(path))
+		loaded, err := LoadImage(storage.NewFileURI(path), DefaultImgCacheBytes)
 		if err != nil {
 			t.Fatalf("LoadImage returned error: %v", err)
 		}
@@ -478,7 +478,7 @@ func TestLoadImage(t *testing.T) {
 			[]color.Color{color.RGBA{R: 255, A: 255}, color.RGBA{B: 255, A: 255}},
 			[]int{5, 10}))
 
-		loaded, err := LoadImage(storage.NewFileURI(path))
+		loaded, err := LoadImage(storage.NewFileURI(path), DefaultImgCacheBytes)
 		if err != nil {
 			t.Fatalf("LoadImage returned error: %v", err)
 		}
@@ -498,7 +498,7 @@ func TestLoadImage(t *testing.T) {
 	t.Run("corrupt file", func(t *testing.T) {
 		path := writeTempFile(t, "corrupt.jpg", []byte("this is not a jpeg"))
 
-		if _, err := LoadImage(storage.NewFileURI(path)); err == nil {
+		if _, err := LoadImage(storage.NewFileURI(path), DefaultImgCacheBytes); err == nil {
 			t.Fatal("expected an error decoding a corrupt file, got nil")
 		}
 	})
@@ -506,7 +506,7 @@ func TestLoadImage(t *testing.T) {
 	t.Run("missing file", func(t *testing.T) {
 		path := filepath.Join(t.TempDir(), "missing.jpg")
 
-		if _, err := LoadImage(storage.NewFileURI(path)); err == nil {
+		if _, err := LoadImage(storage.NewFileURI(path), DefaultImgCacheBytes); err == nil {
 			t.Fatal("expected an error reading a missing file, got nil")
 		}
 	})
@@ -514,7 +514,7 @@ func TestLoadImage(t *testing.T) {
 	t.Run("rejects an absurd header-declared size without a full decode", func(t *testing.T) {
 		path := writeTempFile(t, "bomb.png", truncatedPNGHeader(t, 60000, 60000))
 
-		_, err := LoadImage(storage.NewFileURI(path))
+		_, err := LoadImage(storage.NewFileURI(path), DefaultImgCacheBytes)
 		if err == nil {
 			t.Fatal("expected an error for a decompression-bomb-sized header, got nil")
 		}
@@ -608,7 +608,7 @@ func TestDecodeJPEG_AppliesEXIFOrientation(t *testing.T) {
 	// the top: the corrected image should be 10x20 with red on top.
 	path := writeTempFile(t, "rotated.jpg", halfRedHalfBlueJPEG(t, 20, 10, 6))
 
-	loaded, err := LoadImage(storage.NewFileURI(path))
+	loaded, err := LoadImage(storage.NewFileURI(path), DefaultImgCacheBytes)
 	if err != nil {
 		t.Fatalf("LoadImage returned error: %v", err)
 	}
@@ -652,6 +652,79 @@ func TestReadAndProbe_AccountsForEXIFOrientation(t *testing.T) {
 	}
 }
 
+// --- the encoded-input limit -------------------------------------------------
+
+// withMaxEncodedBytes points the process-wide limit at n for the duration of
+// one test and puts it back afterward. Zero restores "never set", which
+// MaxEncodedBytes reports as the shipped default - see its own comment.
+func withMaxEncodedBytes(t *testing.T, n int64) {
+	t.Helper()
+
+	SetMaxEncodedBytes(n)
+	t.Cleanup(func() { SetMaxEncodedBytes(0) })
+}
+
+func TestMaxEncodedBytes_UnsetReportsTheShippedDefault(t *testing.T) {
+	if got := MaxEncodedBytes(); got != DefaultMaxEncodedBytes {
+		t.Errorf("MaxEncodedBytes() = %d with nothing set, want the default %d", got, DefaultMaxEncodedBytes)
+	}
+
+	withMaxEncodedBytes(t, 1234)
+
+	if got := MaxEncodedBytes(); got != 1234 {
+		t.Errorf("MaxEncodedBytes() = %d after SetMaxEncodedBytes(1234), want 1234", got)
+	}
+}
+
+func TestReadAndProbe_RejectsInputPastTheEncodedSizeLimit(t *testing.T) {
+	data := encodeJPEG(t, 40, 40, color.RGBA{R: 200, G: 20, B: 20, A: 255})
+	path := writeTempFile(t, "big.jpg", data)
+
+	// One byte short of the file's real size, so the read is refused on
+	// size alone - the file itself is a perfectly valid JPEG, which is what
+	// distinguishes this from the InvalidDimensionsError case.
+	withMaxEncodedBytes(t, int64(len(data))-1)
+
+	_, _, err := ReadAndProbe(context.Background(), storage.NewFileURI(path))
+
+	var tooBig *InputTooLargeError
+	if !errors.As(err, &tooBig) {
+		t.Fatalf("ReadAndProbe() = %v, want an *InputTooLargeError", err)
+	}
+	if tooBig.limit != int64(len(data))-1 {
+		t.Errorf("error's limit = %d, want %d", tooBig.limit, int64(len(data))-1)
+	}
+}
+
+// TestReadAndProbe_AcceptsInputExactlyAtTheEncodedSizeLimit is the boundary
+// readRawBytes' limit+1 LimitReader exists for: without the extra byte,
+// io.ReadAll can't tell a file that ended at the limit from one truncated
+// there, and a file of exactly the permitted size would be rejected.
+func TestReadAndProbe_AcceptsInputExactlyAtTheEncodedSizeLimit(t *testing.T) {
+	data := encodeJPEG(t, 40, 40, color.RGBA{R: 200, G: 20, B: 20, A: 255})
+	path := writeTempFile(t, "exact.jpg", data)
+
+	withMaxEncodedBytes(t, int64(len(data)))
+
+	if _, _, err := ReadAndProbe(context.Background(), storage.NewFileURI(path)); err != nil {
+		t.Errorf("ReadAndProbe() = %v for a file exactly at the limit, want no error", err)
+	}
+}
+
+// CaptureDate reads through the same limited path, and the sort that calls it
+// walks every file in the set - so an oversized file has to fall back to its
+// mtime rather than stalling or blowing up the sort.
+func TestCaptureDate_ReportsNotOKForInputPastTheEncodedSizeLimit(t *testing.T) {
+	data := jpegWithDateTimeOriginal(t, "2021:07:04 09:10:11")
+	path := writeTempFile(t, "dated.jpg", data)
+
+	withMaxEncodedBytes(t, int64(len(data))-1)
+
+	if _, ok := CaptureDate(storage.NewFileURI(path)); ok {
+		t.Error("CaptureDate() reported ok for a file past the encoded-size limit, want false")
+	}
+}
+
 // TestReadAndProbe_StopsEarlyWhenContextIsCancelled mirrors
 // internal/filesort's TestOrder_StopsEarlyWhenContextIsCancelled: an
 // already-cancelled ctx, checked deterministically rather than by racing a
@@ -682,7 +755,7 @@ func TestDecodeLoaded_StopsEarlyWhenContextIsCancelled(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 
-	_, err := DecodeLoaded(ctx, data)
+	_, err := DecodeLoaded(ctx, data, DefaultImgCacheBytes)
 	if !errors.Is(err, context.Canceled) {
 		t.Errorf("DecodeLoaded() with an already-cancelled ctx = %v, want context.Canceled", err)
 	}

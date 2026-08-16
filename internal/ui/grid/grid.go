@@ -12,8 +12,6 @@ import (
 	"image"
 	"sync"
 
-	lru "github.com/hashicorp/golang-lru/v2"
-
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
@@ -93,11 +91,12 @@ type Overview struct {
 	highlight int
 
 	// thumbs holds small, already-downsampled thumbnails keyed by URI
-	// string - a separate LRU cache and budget from the app's full-size
+	// string - a separate cache and byte budget from the app's full-size
 	// image cache (imaging.NewThumbCache vs NewImgCache), since reusing
 	// one for both would evict full-size decodes the normal viewing path
-	// still needs, and vice versa.
-	thumbs *lru.Cache[string, image.Image]
+	// still needs, and vice versa. SetCacheBytes retunes the budget while
+	// the app runs; see its own comment.
+	thumbs *imaging.ByteCache[image.Image]
 
 	// sem bounds concurrent decodes; pending counts them, so Settle can
 	// wait for every spawned decode to finish.
@@ -140,7 +139,7 @@ func New(host Host, win fyne.Window) *Overview {
 	g := &Overview{
 		host:   host,
 		win:    win,
-		thumbs: imaging.NewThumbCache(),
+		thumbs: imaging.NewThumbCache(imaging.DefaultThumbCacheBytes),
 		sem:    make(chan struct{}, thumbConcurrency),
 	}
 
@@ -363,11 +362,21 @@ func (g *Overview) Settle() {
 	g.pending.Wait()
 }
 
-// Cached reports whether u's thumbnail is in the cache.
+// Cached reports whether u's thumbnail is in the cache. Contains rather
+// than Get, so asking the question doesn't reorder the cache's own idea of
+// what was used least recently.
 func (g *Overview) Cached(u fyne.URI) bool {
-	_, ok := g.thumbs.Get(u.String())
+	return g.thumbs.Contains(u.String())
+}
 
-	return ok
+// SetCacheBytes retunes the thumbnail cache's byte budget and evicts down
+// to it right away - the settings window's binding, reached through
+// internal/ui's SetMaxThumbCacheMB. A setter rather than a New parameter
+// for the same reason slideshow.Controller.SetInterval is one: the value
+// changes while the app runs, and the overview is built once and lives in
+// the window's content stack for the process's lifetime.
+func (g *Overview) SetCacheBytes(n int64) {
+	g.thumbs.SetBudget(n)
 }
 
 // setCellHighlighted shows or hides a cell's highlight ring.

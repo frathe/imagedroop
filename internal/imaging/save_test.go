@@ -50,7 +50,7 @@ func TestSaveRotated(t *testing.T) {
 			t.Fatalf("SaveRotated: %v", err)
 		}
 
-		got, err := LoadImage(u)
+		got, err := LoadImage(u, DefaultImgCacheBytes)
 		if err != nil {
 			t.Fatalf("reload after save: %v", err)
 		}
@@ -138,7 +138,7 @@ func TestSaveRotated(t *testing.T) {
 			t.Error("SaveRotated replaced the symlink instead of updating its target")
 		}
 
-		loaded, err := LoadImage(storage.NewFileURI(target))
+		loaded, err := LoadImage(storage.NewFileURI(target), DefaultImgCacheBytes)
 		if err != nil {
 			t.Fatalf("load saved target: %v", err)
 		}
@@ -158,7 +158,7 @@ func TestSaveRotated(t *testing.T) {
 					t.Fatalf("SaveRotated: %v", err)
 				}
 
-				loaded, err := LoadImage(u)
+				loaded, err := LoadImage(u, DefaultImgCacheBytes)
 				if err != nil {
 					t.Fatalf("reload after save: %v", err)
 				}

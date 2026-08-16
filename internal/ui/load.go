@@ -136,7 +136,11 @@ func (v *viewer) attemptLoad(ctx context.Context, i int, gen uint64, done chan s
 
 		var loaded *imaging.LoadedImage
 		if err == nil {
-			loaded, err = imaging.DecodeLoaded(ctx, data)
+			// The image cache's budget doubles as the animation budget: an
+			// animation whose composited frames couldn't fit in the cache
+			// at all is exactly the one not worth compositing, so this
+			// needs no limit of its own.
+			loaded, err = imaging.DecodeLoaded(ctx, data, v.imgCache.Budget())
 			if err == nil {
 				loaded.FileSize = int64(len(data))
 			}
@@ -150,10 +154,17 @@ func (v *viewer) attemptLoad(ctx context.Context, i int, gen uint64, done chan s
 
 			if err != nil {
 				msg := fmt.Sprintf(lang.L("could not read %q: %v"), u.Name(), err)
+
 				var dimErr *imaging.InvalidDimensionsError
-				if errors.As(err, &dimErr) {
+				var bigErr *imaging.InputTooLargeError
+
+				switch {
+				case errors.As(err, &dimErr):
 					msg = fmt.Sprintf(lang.L("invalid image dimensions for %q"), u.Name())
+				case errors.As(err, &bigErr):
+					msg = fmt.Sprintf(lang.L("%q is too large to open"), u.Name())
 				}
+
 				v.retryAfterLoadFailure(ctx, msg, i, gen, done)
 				return
 			}
@@ -164,6 +175,13 @@ func (v *viewer) attemptLoad(ctx context.Context, i int, gen uint64, done chan s
 				msg := fmt.Sprintf(lang.L("invalid image dimensions for %q"), u.Name())
 				v.retryAfterLoadFailure(ctx, msg, i, gen, done)
 				return
+			}
+
+			// Reported here rather than in finishLoad, which a cache hit
+			// also runs: the user needs telling once, on the decode that
+			// discovered it, not again every time they navigate back.
+			if loaded.AnimationTruncated {
+				v.ShowToast(fmt.Sprintf(lang.L("animation in %q is too large to play"), u.Name()))
 			}
 
 			v.imgCache.Add(u.String(), loaded)
@@ -318,7 +336,10 @@ const preloadConcurrency = 2
 func (v *viewer) preloadOne(ctx context.Context, u fyne.URI, gen uint64) {
 	key := u.String()
 
-	if _, cached := v.imgCache.Get(key); cached {
+	// Contains, not Get: a presence test on a speculative path shouldn't
+	// promote the neighbor to most-recently-used, which under a tight byte
+	// budget could make it outlive the image actually on screen.
+	if v.imgCache.Contains(key) {
 		return
 	}
 	if _, inFlight := v.preloading.LoadOrStore(key, struct{}{}); inFlight {
@@ -339,12 +360,27 @@ func (v *viewer) preloadOne(ctx context.Context, u fyne.URI, gen uint64) {
 			return
 		}
 
-		data, _, err := imaging.ReadAndProbe(ctx, u)
+		data, bounds, err := imaging.ReadAndProbe(ctx, u)
 		if err != nil {
 			return
 		}
 
-		loaded, err := imaging.DecodeLoaded(ctx, data)
+		// Read once: the settings window can change the budget between
+		// these two uses, and a gate that passed under one value shouldn't
+		// then decode under another.
+		budget := v.imgCache.Budget()
+
+		// Preloading exists to make the *next* navigation instant. An
+		// image big enough that caching it would evict what's on screen
+		// turns that speculative win into a guaranteed re-decode of the
+		// current image, so bail on the header alone rather than paying
+		// for the decode first. Half the budget is where the current image
+		// and one neighbor stop both fitting.
+		if imaging.EstimateDecodedBytes(bounds) > budget/2 {
+			return
+		}
+
+		loaded, err := imaging.DecodeLoaded(ctx, data, budget)
 		if err != nil {
 			return
 		}
@@ -359,7 +395,11 @@ func (v *viewer) preloadOne(ctx context.Context, u fyne.URI, gen uint64) {
 			return
 		}
 
-		v.imgCache.Add(key, loaded)
+		// AddIfFits, not Add: nothing is displaying this image, so a
+		// refusal costs only the decode that just happened, whereas Add's
+		// never-evict-the-newest rule would let a preloaded neighbor
+		// displace the image the user is looking at.
+		_ = v.imgCache.AddIfFits(key, loaded)
 	})
 }
 

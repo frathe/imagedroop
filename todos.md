@@ -2,6 +2,18 @@
 
 ## Done
 
+- **Byte-bounded image memory** — both image caches are now bounded by an
+   estimated byte budget instead of an entry count (`internal/imaging`'s new
+   `ByteCache`), with the budgets, plus a ceiling on a file's encoded size,
+   exposed in File > Settings… (`internal/ui/memlimits.go`). Animated GIFs
+   get a cumulative budget checked before any frame is composited, falling
+   back to a static first frame with a toast rather than refusing the file;
+   thumbnails pass a zero animation budget, so a long GIF no longer
+   composites every frame just to keep frame 0. Neighbor preloading bails on
+   the header when a decode would evict the image on screen. Worst-case
+   retained image memory drops from roughly 12 GB to the configured
+   budgets.
+
 - **Move to Trash instead of permanent delete** — `internal/ui/deletion`'s
    Shift+Delete flow now routes through the new per-OS `internal/trash`
    package instead of calling `os.Remove` directly.
@@ -22,6 +34,22 @@
    never machine-dependent.
 
 ## TODO
+
+- **Downsample very large stills before caching** — deferred out of the
+   byte-bounded memory work above, which bounds how much is *retained* but
+   still decodes every still at full resolution. `ReadAndProbe`'s own doc
+   comment already flags itself as the hook. Needs a full-resolution reload
+   path for File > Save Changes, clipboard copy, and zoom past the
+   downsample factor first, or each would silently operate on degraded
+   pixels.
+
+- **Bound a GIF's transient paletted decode** — `decodeAnimatedGIF`'s budget
+   stops the 4-bytes-per-pixel composited copies, but `gif.DecodeAll` has
+   already decoded every frame as paletted (~1 B/px) before the check can
+   run, because the standard library exposes no way to learn a GIF's frame
+   count without decoding it. Retained memory is bounded; that transient
+   peak is bounded only by `MaxEncodedBytes` and LZW expansion. Closing it
+   means counting image descriptors in the raw GIF blocks before decoding.
 
 - **Save As / convert image format** — `internal/imaging/save.go` can only
    overwrite a file in its own original format (see "Save rotation to disk"

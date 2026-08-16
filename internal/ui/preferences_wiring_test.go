@@ -14,6 +14,7 @@ import (
 	"fyne.io/fyne/v2/test"
 
 	"github.com/frathe/imagedrop/internal/filesort"
+	"github.com/frathe/imagedrop/internal/imaging"
 	"github.com/frathe/imagedrop/internal/preferences"
 )
 
@@ -24,6 +25,9 @@ func TestBuildViewer_LoadsSavedPreferences(t *testing.T) {
 		MergeMode:         true,
 		SlideInterval:     7 * time.Second,
 		SlideShuffle:      true,
+		MaxImageCacheMB:   384,
+		MaxThumbCacheMB:   192,
+		MaxFileSizeMB:     256,
 		WindowSize:        fyne.NewSize(700, 500),
 		WindowPosX:        120,
 		WindowPosY:        340,
@@ -32,6 +36,7 @@ func TestBuildViewer_LoadsSavedPreferences(t *testing.T) {
 
 	v, win := buildViewer(application)
 	defer win.Close()
+	t.Cleanup(func() { imaging.SetMaxEncodedBytes(0) }) // process-wide - see memlimits.go
 
 	if v.sortMode != filesort.BySize {
 		t.Errorf("sortMode = %v, want filesort.BySize (from saved preferences)", v.sortMode)
@@ -47,6 +52,26 @@ func TestBuildViewer_LoadsSavedPreferences(t *testing.T) {
 	}
 	if got, want := win.Canvas().Size(), fyne.NewSize(700, 500); got != want {
 		t.Errorf("initial window size = %v, want %v", got, want)
+	}
+
+	// The three memory limits reach three different places (memlimits.go):
+	// the image cache's own budget, the grid's, and process-wide state in
+	// internal/imaging - so each is checked where it actually landed rather
+	// than only on the viewer's bookkeeping field.
+	if got, want := v.MaxImageCacheMB(), 384; got != want {
+		t.Errorf("MaxImageCacheMB() = %d, want %d (from saved preferences)", got, want)
+	}
+	if got, want := v.imgCache.Budget(), int64(384*bytesPerMB); got != want {
+		t.Errorf("imgCache.Budget() = %d, want %d", got, want)
+	}
+	if got, want := v.MaxThumbCacheMB(), 192; got != want {
+		t.Errorf("MaxThumbCacheMB() = %d, want %d (from saved preferences)", got, want)
+	}
+	if got, want := v.MaxFileSizeMB(), 256; got != want {
+		t.Errorf("MaxFileSizeMB() = %d, want %d (from saved preferences)", got, want)
+	}
+	if got, want := imaging.MaxEncodedBytes(), int64(256*bytesPerMB); got != want {
+		t.Errorf("imaging.MaxEncodedBytes() = %d, want %d", got, want)
 	}
 
 	x, y, ok := v.winPos.Get()
@@ -75,6 +100,15 @@ func TestBuildViewer_NoSavedPreferencesUsesShippedDefaults(t *testing.T) {
 	}
 	if v.slides.Shuffle() {
 		t.Error("slides.Shuffle() = true, want false (the shipped default)")
+	}
+	if got, want := v.MaxImageCacheMB(), defaultMaxImageCacheMB; got != want {
+		t.Errorf("MaxImageCacheMB() = %d, want %d (the shipped default)", got, want)
+	}
+	if got, want := v.MaxThumbCacheMB(), defaultMaxThumbCacheMB; got != want {
+		t.Errorf("MaxThumbCacheMB() = %d, want %d (the shipped default)", got, want)
+	}
+	if got, want := v.MaxFileSizeMB(), defaultMaxFileSizeMB; got != want {
+		t.Errorf("MaxFileSizeMB() = %d, want %d (the shipped default)", got, want)
 	}
 	if got, want := win.Canvas().Size(), fyne.NewSize(startW, startH); got != want {
 		t.Errorf("initial window size = %v, want %v (startW/startH)", got, want)

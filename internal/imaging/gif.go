@@ -20,10 +20,35 @@ const minFrameDelay = 100 * time.Millisecond
 // (typically partial) region that frame updates. It returns a nil slice —
 // not an error — for anything that isn't a multi-frame GIF, so callers fall
 // back to decoding it as a static image.
-func decodeAnimatedGIF(data []byte) ([]image.Image, []time.Duration) {
+//
+// budget caps the total bytes the composited frames may retain. An
+// animation over budget takes the same nil-slice path, with truncated set
+// so the caller can tell the user why a GIF isn't moving; a budget of zero
+// or less means "never composite an animation at all", which is what the
+// thumbnail path passes since it keeps only the first frame anyway.
+//
+// One limit worth knowing: gif.DecodeAll below has already decoded every
+// frame as a paletted image (about one byte per pixel) before the budget
+// can be consulted, because the standard library exposes no way to learn a
+// GIF's frame count without decoding it. What the check bounds is the four-
+// bytes-per-pixel composited copies, which are both the dominant cost and
+// the only part that stays referenced after this returns; the paletted
+// decode is transient and bounded by MaxEncodedBytes and maxImagePixels.
+func decodeAnimatedGIF(data []byte, budget int64) ([]image.Image, []time.Duration, bool) {
 	g, err := gif.DecodeAll(bytes.NewReader(data))
 	if err != nil || len(g.Image) <= 1 {
-		return nil, nil
+		return nil, nil, false
+	}
+
+	// Checked before the loop, not inside it, so an animation that can't
+	// fit allocates nothing at all rather than filling up to the limit and
+	// then throwing the work away.
+	perFrame := int64(g.Config.Width) * int64(g.Config.Height) * 4
+
+	if budget <= 0 || perFrame*int64(len(g.Image)) > budget {
+		// Not "truncated" when the caller asked for no animation in the
+		// first place - only when one was genuinely refused.
+		return nil, nil, budget > 0
 	}
 
 	bounds := image.Rect(0, 0, g.Config.Width, g.Config.Height)
@@ -63,7 +88,7 @@ func decodeAnimatedGIF(data []byte) ([]image.Image, []time.Duration) {
 		}
 	}
 
-	return frames, delays
+	return frames, delays, false
 }
 
 func copyRGBA(src *image.RGBA) *image.RGBA {

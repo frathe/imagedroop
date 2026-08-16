@@ -56,7 +56,7 @@ func imageOfSize(t *testing.T, w, h int) *image.RGBA {
 // --- NewThumbCache ----------------------------------------------------------
 
 func TestNewThumbCache_IsEmptyAndUsable(t *testing.T) {
-	c := NewThumbCache()
+	c := NewThumbCache(DefaultThumbCacheBytes)
 
 	if c.Len() != 0 {
 		t.Fatalf("Len() = %d, want 0 for a fresh cache", c.Len())
@@ -81,6 +81,37 @@ func TestLoadThumbnail_DecodesAndDownsamples(t *testing.T) {
 	b := thumb.Bounds()
 	if b.Dx() != ThumbnailSize || b.Dy() != ThumbnailSize/2 {
 		t.Errorf("thumbnail size = %dx%d, want %dx%d", b.Dx(), b.Dy(), ThumbnailSize, ThumbnailSize/2)
+	}
+}
+
+// TestLoadThumbnail_DoesNotCompositeEveryAnimationFrame guards the zero
+// animation budget LoadThumbnail passes. The two paths are told apart by the
+// concrete type rather than by pixels, since both would end up showing frame
+// 0's content: compositing runs every frame through copyRGBA and so yields an
+// *image.RGBA, while the static path hands back what gif.Decode produced - a
+// paletted first frame, untouched, because ApplyOrientation is a no-op for
+// orientation 1 and the image is already inside ThumbnailSize so scaleToFit
+// returns it unchanged. Before the budget existed, a long animation composited
+// every frame to a full canvas here just to keep one and discard the rest.
+func TestLoadThumbnail_DoesNotCompositeEveryAnimationFrame(t *testing.T) {
+	red := color.RGBA{R: 255, A: 255}
+	blue := color.RGBA{B: 255, A: 255}
+
+	path := writeTempFile(t, "anim.gif",
+		encodeAnimatedGIF(t, 20, 20, []color.Color{red, blue, blue}, []int{5, 5, 5}))
+
+	thumb, err := LoadThumbnail(storage.NewFileURI(path))
+	if err != nil {
+		t.Fatalf("LoadThumbnail returned error: %v", err)
+	}
+
+	if _, composited := thumb.(*image.RGBA); composited {
+		t.Error("thumbnail is an *image.RGBA, which means every frame was composited before one was kept")
+	}
+
+	// Still the first frame's content, which is what the grid should show.
+	if r, _, _, _ := thumb.At(10, 10).RGBA(); r == 0 {
+		t.Error("thumbnail should be the animation's first (red) frame")
 	}
 }
 

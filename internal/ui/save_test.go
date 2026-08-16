@@ -133,7 +133,7 @@ func TestSaveRotation_WritesRotatedPixelsAndResetsState(t *testing.T) {
 		t.Error("Save Changes menu item should be disabled again once there's nothing left to save")
 	}
 
-	loaded, err := imaging.LoadImage(u)
+	loaded, err := imaging.LoadImage(u, imaging.DefaultImgCacheBytes)
 	if err != nil {
 		t.Fatalf("reload the saved file: %v", err)
 	}

@@ -22,6 +22,9 @@ const (
 	keyMaxScanFiles    = "maxScanFiles"
 	keyMaxWindowWidth  = "maxWindowWidth"
 	keyMaxWindowHeight = "maxWindowHeight"
+	keyMaxImageCacheMB = "maxImageCacheMB"
+	keyMaxThumbCacheMB = "maxThumbCacheMB"
+	keyMaxFileSizeMB   = "maxFileSizeMB"
 	keyWindowWidth     = "windowWidth"
 	keyWindowHeight    = "windowHeight"
 	keyWindowPosX      = "windowPosX"
@@ -66,6 +69,17 @@ type State struct {
 	MaxWindowWidth  float32
 	MaxWindowHeight float32
 
+	// MaxImageCacheMB/MaxThumbCacheMB are the byte budgets, in megabytes,
+	// for the decoded-image and thumbnail caches (internal/imaging's
+	// ByteCache). MaxFileSizeMB is the ceiling on a file's encoded size,
+	// before any of it is decoded - see imaging.MaxEncodedBytes. All three
+	// use the same zero-means-unset sentinel MaxScanFiles above does; the
+	// megabyte unit rather than raw bytes is what the settings window shows
+	// and what the user typed, so it's what gets stored.
+	MaxImageCacheMB int
+	MaxThumbCacheMB int
+	MaxFileSizeMB   int
+
 	WindowSize fyne.Size // zero Size means "nothing saved yet"
 
 	// WindowPosX/WindowPosY are the on-screen position (see
@@ -102,6 +116,15 @@ func Save(app fyne.App, s State) {
 	if s.MaxWindowHeight > 0 {
 		p.SetFloat(keyMaxWindowHeight, float64(s.MaxWindowHeight))
 	}
+	if s.MaxImageCacheMB > 0 {
+		p.SetInt(keyMaxImageCacheMB, s.MaxImageCacheMB)
+	}
+	if s.MaxThumbCacheMB > 0 {
+		p.SetInt(keyMaxThumbCacheMB, s.MaxThumbCacheMB)
+	}
+	if s.MaxFileSizeMB > 0 {
+		p.SetInt(keyMaxFileSizeMB, s.MaxFileSizeMB)
+	}
 	if s.WindowSize.Width > 0 && s.WindowSize.Height > 0 {
 		p.SetFloat(keyWindowWidth, float64(s.WindowSize.Width))
 		p.SetFloat(keyWindowHeight, float64(s.WindowSize.Height))
@@ -132,6 +155,9 @@ func Load(app fyne.App) State {
 		MaxScanFiles:    p.Int(keyMaxScanFiles),
 		MaxWindowWidth:  float32(p.Float(keyMaxWindowWidth)),
 		MaxWindowHeight: float32(p.Float(keyMaxWindowHeight)),
+		MaxImageCacheMB: p.Int(keyMaxImageCacheMB),
+		MaxThumbCacheMB: p.Int(keyMaxThumbCacheMB),
+		MaxFileSizeMB:   p.Int(keyMaxFileSizeMB),
 		WindowSize: fyne.NewSize(
 			float32(p.Float(keyWindowWidth)),
 			float32(p.Float(keyWindowHeight)),

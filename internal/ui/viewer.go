@@ -6,8 +6,6 @@ import (
 	"sync"
 	"sync/atomic"
 
-	lru "github.com/hashicorp/golang-lru/v2"
-
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/lang"
@@ -275,11 +273,13 @@ type viewer struct {
 	// imgCache holds recently decoded frames keyed by URI string, so
 	// navigating back to an image already seen this session - or one
 	// preloadNeighbors decoded speculatively ahead of time - is a cache hit
-	// instead of a fresh disk read plus decode. *lru.Cache is safe for
-	// concurrent use on its own, so both attemptLoad's decode goroutine and
-	// preloadOne's background goroutines can populate it without going
-	// through fyne.Do.
-	imgCache *lru.Cache[string, *imaging.LoadedImage]
+	// instead of a fresh disk read plus decode. Bounded by a byte budget
+	// (imgCacheMB below, the settings window's binding) rather than an
+	// entry count, since a decoded image's size varies by four orders of
+	// magnitude - see imaging.ByteCache, which is safe for concurrent use
+	// on its own, so both attemptLoad's decode goroutine and preloadOne's
+	// background goroutines can populate it without going through fyne.Do.
+	imgCache *imaging.ByteCache[*imaging.LoadedImage]
 
 	// preloading tracks URIs a preloadOne goroutine is currently decoding,
 	// so rapid navigation doesn't pile up a second decode of the same
@@ -375,6 +375,12 @@ type viewer struct {
 	// and tests can shrink/grow them without touching a global.
 	maxWinW, maxWinH float32
 
+	// imgCacheMB/thumbCacheMB/maxFileMB are the app's memory budget, in
+	// the megabytes the settings window shows - see memlimits.go, which
+	// holds their getter/setter pairs and converts each to the byte budget
+	// its consumer actually enforces.
+	imgCacheMB, thumbCacheMB, maxFileMB int
+
 	// keyModifiers reports the keyboard modifiers currently held -
 	// defaultKeyModifiers (keys.go) in production, stubbed by tests (the
 	// fyne test driver can't synthesize modifier state at all). Read by
@@ -444,6 +450,11 @@ func (v *viewer) clearToDropzone() {
 	v.files = nil
 	v.unsortedFiles = nil
 	v.index = 0
+
+	// Purged, not left to age out: with no files open, every decode the
+	// cache holds is of something unreachable, so keeping them just spends
+	// the byte budget on nothing until the next drop happens to refill it.
+	v.imgCache.Purge()
 
 	v.img.Image = nil
 	v.img.Hide()

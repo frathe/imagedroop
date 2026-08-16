@@ -12,9 +12,8 @@ import (
 	_ "image/png"  // registers PNG with image.Decode
 	"io"
 	"strings"
+	"sync/atomic"
 	"time"
-
-	lru "github.com/hashicorp/golang-lru/v2"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/storage"
@@ -58,6 +57,13 @@ type LoadedImage struct {
 	Frames   []image.Image
 	Delays   []time.Duration // parallel to Frames; unused when len(Frames) == 1
 	FileSize int64           // raw byte count read by ReadAndProbe, for the info overlay
+
+	// AnimationTruncated reports that this was a multi-frame GIF whose
+	// composited frames would have exceeded the animation budget, so only
+	// its first frame was decoded. The image still displays - it just
+	// doesn't move - which is a far better outcome for a valid file than
+	// refusing it outright; internal/ui says so with a toast.
+	AnimationTruncated bool
 }
 
 // maxImagePixels caps the pixel count a decoded image header is allowed to
@@ -68,21 +74,21 @@ type LoadedImage struct {
 // professional camera output.
 const maxImagePixels = 200_000_000
 
-// imgCacheSize bounds how many decoded images NewImgCache keeps in memory at
-// once - each entry holds full pixel data, so this is a small multiple of
-// "the current image plus its immediate neighbors", not the whole set.
-const imgCacheSize = 16
+// DefaultImgCacheBytes is the shipped byte budget for NewImgCache, until
+// the settings window (internal/ui/settingswin) changes it. Bounded in
+// bytes rather than entries because a decoded image ranges over four orders
+// of magnitude in size: 16 entries could mean 2 MB or 12 GB, which is no
+// bound at all. 512 MB holds a good run of ordinary photos while staying
+// well inside what a desktop can spare.
+const DefaultImgCacheBytes = 512 << 20
 
-// NewImgCache builds the LRU cache callers use to hold recently decoded
-// images. lru.New only errors for a non-positive size, which imgCacheSize
-// never is, so a failure here would be a programmer error worth crashing on
-// immediately rather than limping along with a nil cache.
-func NewImgCache() *lru.Cache[string, *LoadedImage] {
-	c, err := lru.New[string, *LoadedImage](imgCacheSize)
-	if err != nil {
-		panic(err)
-	}
-	return c
+// NewImgCache builds the byte-bounded cache callers use to hold recently
+// decoded images, weighing each entry by the pixel memory all of its frames
+// retain - see loadedImageBytes, and ByteCache for the eviction rule that
+// keeps the image currently on screen resident even when it alone exceeds
+// budget.
+func NewImgCache(budget int64) *ByteCache[*LoadedImage] {
+	return NewByteCache(budget, loadedImageBytes)
 }
 
 // InvalidDimensionsError reports that an image's header declared dimensions
@@ -94,6 +100,56 @@ type InvalidDimensionsError struct {
 
 func (e *InvalidDimensionsError) Error() string {
 	return fmt.Sprintf("invalid image dimensions %dx%d", e.w, e.h)
+}
+
+// DefaultMaxEncodedBytes is the shipped ceiling on a file's *encoded* size,
+// until the settings window (internal/ui/settingswin) changes it. Sized off
+// what real cameras actually produce rather than off an arbitrary small
+// number: a 100-megapixel uncompressed TIFF lands near 600 MB, so 512 MB is
+// deliberately generous while still stopping a file that would blow out
+// memory before a single pixel is decoded. maxImagePixels above bounds the
+// *decoded* side; this bounds the read that precedes it.
+const DefaultMaxEncodedBytes = 512 << 20
+
+// maxEncodedBytes is the live limit MaxEncodedBytes reports. Package-level
+// rather than threaded through ReadAndProbe/LoadImage/CaptureDate/
+// LoadThumbnail (and on into internal/filesort's Order) because it is a
+// genuinely process-wide decode policy, not per-viewer state - the same
+// reason clipboard.CopyImage and filepicker.Choose are package vars. Atomic
+// because the settings window writes it on the UI goroutine while
+// preloadOne's and the grid's background decodes read it.
+var maxEncodedBytes atomic.Int64
+
+// MaxEncodedBytes reports the current encoded-size ceiling. Zero means
+// "never set", falling back to the shipped default - the same
+// zero-means-unset sentinel internal/preferences uses for every numeric
+// preference.
+func MaxEncodedBytes() int64 {
+	if n := maxEncodedBytes.Load(); n > 0 {
+		return n
+	}
+
+	return DefaultMaxEncodedBytes
+}
+
+// SetMaxEncodedBytes changes the encoded-size ceiling - the settings
+// window's binding, via internal/ui's SetMaxFileSizeMB. Applies to the next
+// read; one already in flight finishes under the limit it started with.
+func SetMaxEncodedBytes(n int64) {
+	maxEncodedBytes.Store(n)
+}
+
+// InputTooLargeError reports that a file's encoded bytes exceed
+// MaxEncodedBytes, so it was never read into memory in full. Distinct from
+// InvalidDimensionsError because the two say different things to the user:
+// that one means the file claims a size no real image has, this one means
+// the file is real but larger than the limit they set.
+type InputTooLargeError struct {
+	limit int64
+}
+
+func (e *InputTooLargeError) Error() string {
+	return fmt.Sprintf("file exceeds the %d-byte input limit", e.limit)
 }
 
 // ctxReader wraps r so a Read call fails with ctx's error once ctx is
@@ -114,9 +170,9 @@ func (cr ctxReader) Read(p []byte) (int, error) {
 	return cr.r.Read(p)
 }
 
-// readRawBytes reads u's entire contents into memory - the first step
-// shared by ReadAndProbe (which goes on to decode the header) and
-// CaptureDate (which only needs the bytes to walk for Exif). ctx is
+// readRawBytes reads u's contents into memory, up to MaxEncodedBytes - the
+// first step shared by ReadAndProbe (which goes on to decode the header)
+// and CaptureDate (which only needs the bytes to walk for Exif). ctx is
 // checked once up front, before even opening u - cheap enough there's no
 // reason not to, mirroring internal/filesort's Order - and then on every
 // Read the io.ReadAll loop makes, via ctxReader, so a load abandoned
@@ -131,9 +187,24 @@ func readRawBytes(ctx context.Context, u fyne.URI) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	defer rc.Close()
+	defer func() { _ = rc.Close() }()
 
-	return io.ReadAll(ctxReader{ctx: ctx, r: rc})
+	// Read one byte past the limit rather than exactly up to it: io.ReadAll
+	// on a LimitReader returns the same short slice whether the file ended
+	// at the limit or was cut off there, so the extra byte is what
+	// distinguishes "fits exactly" from "too large".
+	limit := MaxEncodedBytes()
+
+	data, err := io.ReadAll(io.LimitReader(ctxReader{ctx: ctx, r: rc}, limit+1))
+	if err != nil {
+		return nil, err
+	}
+
+	if int64(len(data)) > limit {
+		return nil, &InputTooLargeError{limit: limit}
+	}
+
+	return data, nil
 }
 
 // CaptureDate reads u's raw bytes and returns its Exif capture date (see
@@ -209,22 +280,31 @@ func ReadAndProbe(ctx context.Context, u fyne.URI) (data []byte, bounds image.Re
 // interrupt mid-flight - only a possibly-wasted one to skip entirely if
 // ctx is already done by the time this runs (e.g. a generation that went
 // stale while queued behind preloadOne's semaphore).
-func DecodeLoaded(ctx context.Context, data []byte) (*LoadedImage, error) {
+func DecodeLoaded(ctx context.Context, data []byte, maxAnimBytes int64) (*LoadedImage, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
 	}
 
-	if frames, delays := decodeAnimatedGIF(data); len(frames) > 1 {
+	frames, delays, truncated := decodeAnimatedGIF(data, maxAnimBytes)
+
+	if len(frames) > 1 {
 		return &LoadedImage{Frames: frames, Delays: delays}, nil
 	}
 
+	// An animation refused for its size falls through to exactly the same
+	// path a static image takes, since image.Decode on a GIF returns its
+	// first frame - so the static fallback costs nothing beyond carrying
+	// the flag out to the caller.
 	decoded, _, err := image.Decode(bytes.NewReader(data))
 
 	if err != nil {
 		return nil, err
 	}
 
-	return &LoadedImage{Frames: []image.Image{ApplyOrientation(decoded, readEXIFOrientation(data))}}, nil
+	return &LoadedImage{
+		Frames:             []image.Image{ApplyOrientation(decoded, readEXIFOrientation(data))},
+		AnimationTruncated: truncated,
+	}, nil
 }
 
 // LoadImage reads and decodes an image file of any format registered with
@@ -237,12 +317,12 @@ func DecodeLoaded(ctx context.Context, data []byte) (*LoadedImage, error) {
 // guard (a generation the caller checks against once a thumbnail comes
 // back) rather than the cancellable-context one internal/ui's main decode
 // path (ShowImage/attemptLoad/preloadOne) uses.
-func LoadImage(u fyne.URI) (*LoadedImage, error) {
+func LoadImage(u fyne.URI, maxAnimBytes int64) (*LoadedImage, error) {
 	data, _, err := ReadAndProbe(context.Background(), u)
 
 	if err != nil {
 		return nil, err
 	}
 
-	return DecodeLoaded(context.Background(), data)
+	return DecodeLoaded(context.Background(), data, maxAnimBytes)
 }

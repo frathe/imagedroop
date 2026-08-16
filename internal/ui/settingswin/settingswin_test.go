@@ -7,6 +7,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
+	"fyne.io/fyne/v2/widget"
 
 	"github.com/frathe/imagedrop/internal/filesort"
 )
@@ -35,6 +36,9 @@ type fakeHost struct {
 	maxScan      int
 	maxWinW      float32
 	maxWinH      float32
+	imgCacheMB   int
+	thumbCacheMB int
+	maxFileMB    int
 
 	sortModeCalls     []filesort.Mode
 	mergeModeCalls    []bool
@@ -43,6 +47,9 @@ type fakeHost struct {
 	maxScanCalls      []int
 	maxWinWCalls      []float32
 	maxWinHCalls      []float32
+	imgCacheCalls     []int
+	thumbCacheCalls   []int
+	maxFileCalls      []int
 }
 
 func (f *fakeHost) SortMode() filesort.Mode { return f.sortMode }
@@ -77,6 +84,21 @@ func (f *fakeHost) SetMaxWindowHeight(h float32) {
 	f.maxWinH = h
 	f.maxWinHCalls = append(f.maxWinHCalls, h)
 }
+func (f *fakeHost) MaxImageCacheMB() int { return f.imgCacheMB }
+func (f *fakeHost) SetMaxImageCacheMB(n int) {
+	f.imgCacheMB = n
+	f.imgCacheCalls = append(f.imgCacheCalls, n)
+}
+func (f *fakeHost) MaxThumbCacheMB() int { return f.thumbCacheMB }
+func (f *fakeHost) SetMaxThumbCacheMB(n int) {
+	f.thumbCacheMB = n
+	f.thumbCacheCalls = append(f.thumbCacheCalls, n)
+}
+func (f *fakeHost) MaxFileSizeMB() int { return f.maxFileMB }
+func (f *fakeHost) SetMaxFileSizeMB(n int) {
+	f.maxFileMB = n
+	f.maxFileCalls = append(f.maxFileCalls, n)
+}
 
 // TestShow_SeedsEveryControlFromHostWithoutRoundTripping checks both halves
 // of build's own contract: every control reflects the host's current value,
@@ -87,6 +109,7 @@ func TestShow_SeedsEveryControlFromHostWithoutRoundTripping(t *testing.T) {
 	host := &fakeHost{
 		sortMode: filesort.BySize, mergeMode: true, slideShuffle: true,
 		slideInt: 42 * time.Second, maxScan: 777, maxWinW: 1800, maxWinH: 1100,
+		imgCacheMB: 384, thumbCacheMB: 192, maxFileMB: 256,
 	}
 	w := New(testApp, host)
 
@@ -114,9 +137,19 @@ func TestShow_SeedsEveryControlFromHostWithoutRoundTripping(t *testing.T) {
 	if got, want := w.maxHeightEntry.Text, "1100"; got != want {
 		t.Errorf("maxHeightEntry.Text = %q, want %q", got, want)
 	}
+	if got, want := w.imgCacheEntry.Text, "384"; got != want {
+		t.Errorf("imgCacheEntry.Text = %q, want %q", got, want)
+	}
+	if got, want := w.thumbCacheEntry.Text, "192"; got != want {
+		t.Errorf("thumbCacheEntry.Text = %q, want %q", got, want)
+	}
+	if got, want := w.maxFileSizeEntry.Text, "256"; got != want {
+		t.Errorf("maxFileSizeEntry.Text = %q, want %q", got, want)
+	}
 
 	if len(host.sortModeCalls)+len(host.mergeModeCalls)+len(host.slideShuffleCalls)+
-		len(host.slideIntCalls)+len(host.maxScanCalls)+len(host.maxWinWCalls)+len(host.maxWinHCalls) != 0 {
+		len(host.slideIntCalls)+len(host.maxScanCalls)+len(host.maxWinWCalls)+len(host.maxWinHCalls)+
+		len(host.imgCacheCalls)+len(host.thumbCacheCalls)+len(host.maxFileCalls) != 0 {
 		t.Errorf("seeding the controls should not call any Set* method on the host, got calls: %+v", host)
 	}
 }
@@ -278,6 +311,85 @@ func TestMaxHeightEntry_InvalidTextIsIgnored(t *testing.T) {
 
 	if len(host.maxWinHCalls) != 0 {
 		t.Errorf("SetMaxWindowHeight calls = %v, want none for invalid input", host.maxWinHCalls)
+	}
+}
+
+func TestImgCacheEntry_ValidChangeCallsSetMaxImageCacheMB(t *testing.T) {
+	host := &fakeHost{}
+	w := New(testApp, host)
+	w.Show()
+	t.Cleanup(func() { w.win.Window().Close() })
+
+	w.imgCacheEntry.SetText("768")
+
+	if len(host.imgCacheCalls) != 1 || host.imgCacheCalls[0] != 768 {
+		t.Errorf("SetMaxImageCacheMB calls = %v, want one call with 768", host.imgCacheCalls)
+	}
+}
+
+func TestThumbCacheEntry_ValidChangeCallsSetMaxThumbCacheMB(t *testing.T) {
+	host := &fakeHost{}
+	w := New(testApp, host)
+	w.Show()
+	t.Cleanup(func() { w.win.Window().Close() })
+
+	w.thumbCacheEntry.SetText("128")
+
+	if len(host.thumbCacheCalls) != 1 || host.thumbCacheCalls[0] != 128 {
+		t.Errorf("SetMaxThumbCacheMB calls = %v, want one call with 128", host.thumbCacheCalls)
+	}
+}
+
+func TestMaxFileSizeEntry_ValidChangeCallsSetMaxFileSizeMB(t *testing.T) {
+	host := &fakeHost{}
+	w := New(testApp, host)
+	w.Show()
+	t.Cleanup(func() { w.win.Window().Close() })
+
+	w.maxFileSizeEntry.SetText("64")
+
+	if len(host.maxFileCalls) != 1 || host.maxFileCalls[0] != 64 {
+		t.Errorf("SetMaxFileSizeMB calls = %v, want one call with 64", host.maxFileCalls)
+	}
+}
+
+// The memory entries reject one thing the other numeric entries don't: a
+// value past maxMemoryMB, which the host would shift left by 20 into an
+// int64 byte budget. "1048577" is one megabyte past the ceiling, and
+// "99999999999999999999" is past what Atoi can parse at all - both have to
+// be ignored rather than wrapped into a nonsense budget, the same guard
+// TestIntervalEntry_InvalidTextIsIgnored makes for time.Duration.
+func TestMemoryEntries_InvalidTextIsIgnored(t *testing.T) {
+	bad := []string{"", "abc", "-1", "0", "1048577", "99999999999999999999"}
+
+	cases := []struct {
+		name  string
+		entry func(*Window) *widget.Entry
+		calls func(*fakeHost) []int
+	}{
+		{"image cache", func(w *Window) *widget.Entry { return w.imgCacheEntry },
+			func(f *fakeHost) []int { return f.imgCacheCalls }},
+		{"thumbnail cache", func(w *Window) *widget.Entry { return w.thumbCacheEntry },
+			func(f *fakeHost) []int { return f.thumbCacheCalls }},
+		{"max file size", func(w *Window) *widget.Entry { return w.maxFileSizeEntry },
+			func(f *fakeHost) []int { return f.maxFileCalls }},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			host := &fakeHost{}
+			w := New(testApp, host)
+			w.Show()
+			t.Cleanup(func() { w.win.Window().Close() })
+
+			for _, text := range bad {
+				c.entry(w).SetText(text)
+			}
+
+			if got := c.calls(host); len(got) != 0 {
+				t.Errorf("setter calls = %v, want none for invalid input", got)
+			}
+		})
 	}
 }
 

@@ -10,6 +10,7 @@ import (
 	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/test"
 
+	"github.com/frathe/imagedrop/internal/imaging"
 	"github.com/frathe/imagedrop/internal/uitest"
 )
 
@@ -271,6 +272,45 @@ func TestRequestThumbnail_DecodesInBackgroundAndCaches(t *testing.T) {
 	}
 	if img.Image == nil {
 		t.Error("img.Image should be set once the background decode finishes")
+	}
+}
+
+// TestSetCacheBytes_RetunesTheThumbnailBudget covers the one setter this
+// package exposes - the settings window's route to the thumbnail cache, via
+// internal/ui's SetMaxThumbCacheMB. An 8x8 JPEG stays 8x8 through scaleToFit
+// (already inside ThumbnailSize) and decodes to a 4:2:0 *image.YCbCr, so each
+// one weighs well under 200 bytes; a 100-byte budget therefore fits exactly
+// one of them and Warm's second file has to evict its first.
+func TestSetCacheBytes_RetunesTheThumbnailBudget(t *testing.T) {
+	host := hostWith(t, "a.jpg", "b.jpg")
+	g := newOverview(t, host)
+
+	g.SetCacheBytes(100)
+
+	if err := g.Warm(); err != nil {
+		t.Fatalf("Warm() returned error: %v", err)
+	}
+
+	if g.thumbs.Len() != 1 {
+		t.Errorf("cached thumbnails = %d, want 1 under a 100-byte budget", g.thumbs.Len())
+	}
+	if g.Cached(host.files[0]) {
+		t.Error("the first thumbnail should have been evicted by the second")
+	}
+	if !g.Cached(host.files[1]) {
+		t.Error("the most recently warmed thumbnail should still be cached")
+	}
+
+	// Raising the budget doesn't resurrect anything, but it does stop the
+	// eviction: warming again now holds both.
+	g.SetCacheBytes(imaging.DefaultThumbCacheBytes)
+
+	if err := g.Warm(); err != nil {
+		t.Fatalf("Warm() returned error: %v", err)
+	}
+
+	if g.thumbs.Len() != 2 {
+		t.Errorf("cached thumbnails = %d after raising the budget, want 2", g.thumbs.Len())
 	}
 }
 

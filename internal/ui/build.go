@@ -266,6 +266,23 @@ func buildViewer(application fyne.App) (*viewer, fyne.Window) {
 		maxWinH = prefs.MaxWindowHeight
 	}
 
+	// The three memory limits (memlimits.go) fall back the same way. The
+	// image cache's budget is applied in the literal below, since the cache
+	// is built there; the other two need view/grid to exist first and are
+	// applied through their setters further down.
+	imgCacheMB := defaultMaxImageCacheMB
+	if prefs.MaxImageCacheMB > 0 {
+		imgCacheMB = prefs.MaxImageCacheMB
+	}
+	thumbCacheMB := defaultMaxThumbCacheMB
+	if prefs.MaxThumbCacheMB > 0 {
+		thumbCacheMB = prefs.MaxThumbCacheMB
+	}
+	maxFileMB := defaultMaxFileSizeMB
+	if prefs.MaxFileSizeMB > 0 {
+		maxFileMB = prefs.MaxFileSizeMB
+	}
+
 	view = &viewer{
 		app:           application,
 		win:           window,
@@ -291,11 +308,12 @@ func buildViewer(application fyne.App) (*viewer, fyne.Window) {
 		baseTitle:     appTitle,
 		help:          help.New(application, appTitle, assets.WelcomeWebP),
 		exif:          exifwin.New(application, func() (fyne.URI, bool) { return view.displayedFile() }),
-		imgCache:      imaging.NewImgCache(),
+		imgCache:      imaging.NewImgCache(int64(imgCacheMB) * bytesPerMB),
 		preloadSem:    make(chan struct{}, preloadConcurrency),
 		maxScan:       maxScan,
 		maxWinW:       maxWinW,
 		maxWinH:       maxWinH,
+		imgCacheMB:    imgCacheMB,
 		keyModifiers:  defaultKeyModifiers,
 	}
 
@@ -319,6 +337,13 @@ func buildViewer(application fyne.App) (*viewer, fyne.Window) {
 	// reason the zoom view is: grid.New takes the viewer as its Host. Also
 	// takes window directly, to maximize it on open - see grid.New.
 	view.grid = grid.New(view, window)
+
+	// The thumbnail cache's budget and the encoded-input ceiling, applied
+	// through the same setters the settings window uses (memlimits.go) -
+	// the first needs view.grid to exist, and the second writes
+	// process-wide state in internal/imaging rather than a viewer field.
+	view.SetMaxThumbCacheMB(thumbCacheMB)
+	view.SetMaxFileSizeMB(maxFileMB)
 
 	// The delete-confirmation flow, same reason again: deletion.New takes
 	// the viewer as its Host, so it can only be built once view exists.

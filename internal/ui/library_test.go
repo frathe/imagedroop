@@ -1877,6 +1877,209 @@ func TestRemoveFile_PurgesCacheEntry(t *testing.T) {
 	}
 }
 
+// --- byte-bounded image memory ---------------------------------------------
+
+// TestAttemptLoad_DisplaysAnImageLargerThanTheWholeCacheBudget is the
+// completion criterion the byte budget had to be designed around: a budget
+// smaller than a single decode must not make the app unable to show that
+// image. ByteCache never evicts its most recently added entry, and
+// attemptLoad adds the image it is about to display, so the one on screen is
+// always the survivor.
+func TestAttemptLoad_DisplaysAnImageLargerThanTheWholeCacheBudget(t *testing.T) {
+	v := newTestViewer(t)
+
+	// One byte - past anything the settings window allows (it floors at
+	// 1 MB), so this is the extreme the cache itself still has to handle.
+	v.imgCache.SetBudget(1)
+
+	u := uitest.TempJPEGURI(t, "big.jpg", 64, 64, color.White)
+	dropAndWait(t, v, u)
+
+	if v.img.Image == nil {
+		t.Fatal("no image displayed - an image larger than the whole cache budget must still show")
+	}
+	if len(v.displayFrames) != 1 {
+		t.Errorf("displayFrames = %d, want 1", len(v.displayFrames))
+	}
+	if !v.imgCache.Contains(u.String()) {
+		t.Error("the displayed image should still be cached - ByteCache never evicts its newest entry")
+	}
+}
+
+// TestPreloadOne_SkipsANeighborTooLargeForTheBudget covers the other
+// completion criterion: neighbor preloading must not multiply one oversized
+// image into several retained decodes. The bail happens on the header alone,
+// before the decode, so an over-large neighbor costs nothing but the probe.
+func TestPreloadOne_SkipsANeighborTooLargeForTheBudget(t *testing.T) {
+	v := newTestViewer(t)
+
+	a := uitest.TempJPEGURI(t, "a.jpg", 64, 64, color.White)
+	b := uitest.TempJPEGURI(t, "b.jpg", 64, 64, color.White)
+
+	// 64x64 estimates at 16,384 decoded bytes (4 per pixel). A 16 KiB budget
+	// puts that exactly at the budget and so past the half-budget line
+	// preloadOne bails at - the point where the current image and one
+	// neighbor stop both fitting.
+	v.imgCache.SetBudget(16 * 1024)
+
+	dropAndWait(t, v, a, b)
+
+	if !v.imgCache.Contains(a.String()) {
+		t.Error("the displayed image should be cached")
+	}
+	if v.imgCache.Contains(b.String()) {
+		t.Error("a neighbor whose decode would evict the current image should not have been preloaded")
+	}
+}
+
+// TestAttemptLoad_ReportsAFileTooLargeToOpen wires imaging's
+// *InputTooLargeError through attemptLoad's errors.As branch to its own
+// message - distinct from the "invalid image dimensions" one, since the file
+// here is a perfectly valid JPEG that is merely bigger than the limit.
+func TestAttemptLoad_ReportsAFileTooLargeToOpen(t *testing.T) {
+	v := newTestViewer(t)
+
+	u := uitest.TempJPEGURI(t, "big.jpg", 64, 64, color.White)
+
+	imaging.SetMaxEncodedBytes(1)
+	t.Cleanup(func() { imaging.SetMaxEncodedBytes(0) })
+
+	dropAndWait(t, v, u)
+
+	if v.img.Image != nil {
+		t.Error("no image should be loaded after a file is refused for its size")
+	}
+	if len(v.files) != 0 {
+		t.Errorf("files = %v, want the refused file dropped from the set", v.files)
+	}
+	if !v.toast.card.Visible() {
+		t.Fatal("expected a toast after a file was refused for its size")
+	}
+	if got, want := v.toast.text.Text, fmt.Sprintf(lang.L("%q is too large to open"), "big.jpg"); got != want {
+		t.Errorf("toast text = %q, want %q", got, want)
+	}
+	settleToast(t, v)
+}
+
+// TestAttemptLoad_ToastsAndFallsBackToAStaticFrameForAnOversizedAnimation
+// covers the deliberate choice not to refuse an over-budget animation the way
+// an oversized file is refused: the image is valid, so it stays in the set and
+// on screen, and only the motion is given up.
+func TestAttemptLoad_ToastsAndFallsBackToAStaticFrameForAnOversizedAnimation(t *testing.T) {
+	v := newTestViewer(t)
+
+	anim := storage.NewFileURI(uitest.WriteTempFile(t, "anim.gif", uitest.EncodeAnimatedGIF(t, 20, 20,
+		[]color.Color{color.RGBA{R: 255, A: 255}, color.RGBA{B: 255, A: 255}},
+		[]int{50, 50})))
+
+	// One frame of this GIF is 20*20*4 = 1600 bytes, so a 1000-byte budget
+	// can't hold even one - let alone both composited frames.
+	v.imgCache.SetBudget(1000)
+
+	dropAndWait(t, v, anim)
+
+	if v.img.Image == nil {
+		t.Fatal("an over-budget animation must still display its first frame")
+	}
+	if len(v.displayFrames) != 1 {
+		t.Errorf("displayFrames = %d, want 1 - the animation should not have been composited", len(v.displayFrames))
+	}
+	if v.animStop != nil {
+		t.Error("animStop is armed, want no animation goroutine for a refused animation")
+	}
+	if len(v.files) != 1 {
+		t.Errorf("files = %v, want the file kept - it is valid, just too big to animate", v.files)
+	}
+	if !v.toast.card.Visible() {
+		t.Fatal("expected a toast explaining why the animation isn't playing")
+	}
+	if got, want := v.toast.text.Text, fmt.Sprintf(lang.L("animation in %q is too large to play"), "anim.gif"); got != want {
+		t.Errorf("toast text = %q, want %q", got, want)
+	}
+	settleToast(t, v)
+}
+
+func TestClearToDropzone_PurgesTheImageCache(t *testing.T) {
+	v := newTestViewer(t)
+
+	u := uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White)
+	dropAndWait(t, v, u)
+
+	if !v.imgCache.Contains(u.String()) {
+		t.Fatal("the displayed image should be cached before the file set is closed")
+	}
+
+	v.closeFiles()
+
+	if v.imgCache.Bytes() != 0 {
+		t.Errorf("imgCache holds %d bytes after closing the file set, want 0", v.imgCache.Bytes())
+	}
+}
+
+// --- the memory-limit getter/setter pairs ------------------------------------
+
+func TestMemoryLimitGettersAndSetters(t *testing.T) {
+	v := newTestViewer(t)
+	t.Cleanup(func() { imaging.SetMaxEncodedBytes(0) }) // process-wide - see memlimits.go
+
+	if got, want := v.MaxImageCacheMB(), defaultMaxImageCacheMB; got != want {
+		t.Errorf("MaxImageCacheMB() = %d, want the shipped default %d", got, want)
+	}
+	if got, want := v.MaxThumbCacheMB(), defaultMaxThumbCacheMB; got != want {
+		t.Errorf("MaxThumbCacheMB() = %d, want the shipped default %d", got, want)
+	}
+	if got, want := v.MaxFileSizeMB(), defaultMaxFileSizeMB; got != want {
+		t.Errorf("MaxFileSizeMB() = %d, want the shipped default %d", got, want)
+	}
+
+	// Each setter has to reach past the viewer's own bookkeeping field to
+	// the thing that actually enforces the limit.
+	v.SetMaxImageCacheMB(64)
+	if got, want := v.MaxImageCacheMB(), 64; got != want {
+		t.Errorf("MaxImageCacheMB() = %d, want %d", got, want)
+	}
+	if got, want := v.imgCache.Budget(), int64(64*bytesPerMB); got != want {
+		t.Errorf("imgCache.Budget() = %d, want %d", got, want)
+	}
+
+	v.SetMaxThumbCacheMB(32)
+	if got, want := v.MaxThumbCacheMB(), 32; got != want {
+		t.Errorf("MaxThumbCacheMB() = %d, want %d", got, want)
+	}
+
+	v.SetMaxFileSizeMB(16)
+	if got, want := v.MaxFileSizeMB(), 16; got != want {
+		t.Errorf("MaxFileSizeMB() = %d, want %d", got, want)
+	}
+	if got, want := imaging.MaxEncodedBytes(), int64(16*bytesPerMB); got != want {
+		t.Errorf("imaging.MaxEncodedBytes() = %d, want %d", got, want)
+	}
+}
+
+// A zero or negative megabyte figure isn't a "no limit" any of this is
+// written to understand, so every setter floors at 1 - the same guard
+// SetMaxScan makes for the scan cap.
+func TestMemoryLimitSetters_FloorAtOne(t *testing.T) {
+	v := newTestViewer(t)
+	t.Cleanup(func() { imaging.SetMaxEncodedBytes(0) })
+
+	for _, n := range []int{0, -5} {
+		v.SetMaxImageCacheMB(n)
+		v.SetMaxThumbCacheMB(n)
+		v.SetMaxFileSizeMB(n)
+
+		if got := v.MaxImageCacheMB(); got != 1 {
+			t.Errorf("MaxImageCacheMB() = %d after SetMaxImageCacheMB(%d), want 1", got, n)
+		}
+		if got := v.MaxThumbCacheMB(); got != 1 {
+			t.Errorf("MaxThumbCacheMB() = %d after SetMaxThumbCacheMB(%d), want 1", got, n)
+		}
+		if got := v.MaxFileSizeMB(); got != 1 {
+			t.Errorf("MaxFileSizeMB() = %d after SetMaxFileSizeMB(%d), want 1", got, n)
+		}
+	}
+}
+
 // --- stage-2 stop signals --------------------------------------------------
 
 // TestStopAnimation_WakesAnimateImmediately parks animate in a frame-delay

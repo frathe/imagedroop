@@ -7,7 +7,6 @@ require (
 	github.com/fyne-io/image v0.1.1
 	github.com/gen2brain/avif v0.6.0
 	github.com/gen2brain/heic v0.7.1
-	github.com/hashicorp/golang-lru/v2 v2.0.7
 	golang.org/x/image v0.45.0
 )
 
