@@ -2,6 +2,19 @@
 
 ## Done
 
+- **Save As / convert image format** — File > "Export as PNG…"/"Export as
+   JPEG…" (`internal/ui/export.go`) writes the frame on screen to a new file
+   in a format chosen by the menu item rather than by the source, via
+   `internal/filepicker`'s new `ChooseSave` (per-OS save panel: `NSSavePanel`
+   on macOS, `zenity --save` on Linux, `SaveFileDialog` on Windows) and
+   `internal/imaging`'s new `Export`. Deliberately available wherever "Save
+   Changes" isn't: WebP/HEIC/ICO/XPM sources and animated GIFs both export
+   fine, since the destination's format is what's re-encoded. `SaveRotated`
+   and `Export` now share one atomic temp-file-then-rename writer. The name
+   the user types wins when it already carries an encodable extension,
+   otherwise the menu item's is appended — so a file's bytes always match
+   its extension.
+
 - **Bound a GIF's transient paletted decode** — the animation budget is now
    applied *before* `gif.DecodeAll` instead of after it. `internal/imaging`'s
    new `probeGIF` walks the raw GIF block structure (skipping every block by
@@ -47,20 +60,6 @@
    never machine-dependent.
 
 ## TODO
-
-- **Bound a GIF's transient paletted decode** — `decodeAnimatedGIF`'s budget
-   stops the 4-bytes-per-pixel composited copies, but `gif.DecodeAll` has
-   already decoded every frame as paletted (~1 B/px) before the check can
-   run, because the standard library exposes no way to learn a GIF's frame
-   count without decoding it. Retained memory is bounded; that transient
-   peak is bounded only by `MaxEncodedBytes` and LZW expansion. Closing it
-   means counting image descriptors in the raw GIF blocks before decoding.
-
-- **Save As / convert image format** — `internal/imaging/save.go` can only
-   overwrite a file in its own original format (see "Save rotation to disk"
-   above), and has no encoder at all for WebP/HEIC/ICO/XPM; add an
-   export/"save as" action to convert the current image to a common format
-   (PNG/JPEG) regardless of its source format.
 
 - **Filename search / jump-to-file** — a type-ahead search (e.g. bound to
    `/`) that filters or jumps to a file by name within the current file

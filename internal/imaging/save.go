@@ -51,12 +51,23 @@ func encodeJPEGForSave(w io.Writer, img image.Image) error {
 
 // CanEncode reports whether SaveRotated has an encoder for u's format, so a
 // caller (internal/ui's canSaveRotation) can decide whether to offer saving
-// at all instead of finding out only after attempting it.
+// at all instead of finding out only after attempting it. It resolves a
+// symlink first, matching SaveRotated's own behavior: what governs there is
+// the format of the file that will actually be written.
 func CanEncode(u fyne.URI) bool {
 	ext := u.Extension()
 	if path, err := filepath.EvalSymlinks(u.Path()); err == nil {
 		ext = filepath.Ext(path)
 	}
+	return CanEncodeExt(ext)
+}
+
+// CanEncodeExt reports whether ext (a leading-dot file extension, as
+// filepath.Ext and fyne.URI.Extension both produce, in any case) has an
+// encoder. It is the check the export path wants - internal/ui asks it
+// about a destination the user just named, which may not exist yet and so
+// has no symlink for CanEncode above to resolve.
+func CanEncodeExt(ext string) bool {
 	_, ok := encoders[strings.ToLower(ext)]
 	return ok
 }
@@ -69,11 +80,9 @@ func CanEncode(u fyne.URI) bool {
 // SaveRotated is a plain pixel round-trip, not a metadata-preserving edit.
 //
 // It resolves a symlink before writing, so saving an image opened through a
-// link updates the target instead of replacing the link itself. It writes to
-// a temp file in the target's directory first and renames it over the target
-// only once the encode has fully succeeded, so a failed or
-// interrupted encode can never leave the original file truncated or
-// corrupted. The replacement keeps the original file's permission bits.
+// link updates the target instead of replacing the link itself, and the
+// replacement keeps the original file's permission bits. See writeEncoded
+// for the atomic write both this and Export go through.
 func SaveRotated(u fyne.URI, img image.Image) error {
 	path, err := filepath.EvalSymlinks(u.Path())
 	if err != nil {
@@ -91,7 +100,52 @@ func SaveRotated(u fyne.URI, img image.Image) error {
 		return err
 	}
 
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".imagedrop-save-*"+ext)
+	return writeEncoded(path, info.Mode().Perm(), encode, img)
+}
+
+// defaultExportPerm is what a file Export creates from scratch gets, the
+// same 0644-before-umask a plain os.WriteFile would produce - os.CreateTemp
+// opens at 0600, so writeEncoded has to be told the mode either way.
+const defaultExportPerm = 0o644
+
+// Export writes img to u as a new file, encoded in *u's* format rather than
+// the source image's - the File > "Export as…" actions, and the one way to
+// get pixels out of a file this module can decode but not encode (WebP,
+// HEIC) or out of a single frame of an animation. Like SaveRotated it is a
+// plain pixel round-trip that carries no Exif metadata across.
+//
+// The destination's extension alone picks the encoder: unlike SaveRotated,
+// no symlink is resolved first, since u is a destination the user just
+// named rather than a file already open in the viewer, and the format they
+// typed is the format they asked for. An existing destination is replaced
+// (keeping its own permission bits), atomically, by the same
+// temp-file-then-rename writeEncoded gives SaveRotated - so an export over
+// a previous copy cannot damage it if the encode fails partway.
+func Export(u fyne.URI, img image.Image) error {
+	ext := u.Extension()
+	encode, ok := encoders[strings.ToLower(ext)]
+	if !ok {
+		return &UnsupportedSaveFormatError{ext: ext}
+	}
+	path := u.Path()
+	perm := os.FileMode(defaultExportPerm)
+	if info, err := os.Stat(path); err == nil {
+		perm = info.Mode().Perm()
+	}
+
+	return writeEncoded(path, perm, encode, img)
+}
+
+// writeEncoded encodes img into a temp file in path's own directory and
+// renames it over path only once the encode has fully succeeded, so a
+// failed or interrupted encode can never leave the destination truncated or
+// corrupted - and, since the rename is within one directory, never leaves a
+// half-written file where the caller asked for a whole one either. Shared
+// by SaveRotated (overwriting the file on screen) and Export (writing a
+// copy elsewhere), which differ only in how they arrive at path, perm, and
+// encode.
+func writeEncoded(path string, perm os.FileMode, encode func(io.Writer, image.Image) error, img image.Image) error {
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".imagedrop-save-*"+filepath.Ext(path))
 	if err != nil {
 		return err
 	}
@@ -101,7 +155,7 @@ func SaveRotated(u fyne.URI, img image.Image) error {
 	// on an error return above.
 	defer func() { _ = os.Remove(tmpPath) }()
 
-	if err := tmp.Chmod(info.Mode().Perm()); err != nil {
+	if err := tmp.Chmod(perm); err != nil {
 		_ = tmp.Close()
 		return err
 	}

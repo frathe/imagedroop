@@ -126,10 +126,12 @@ Wenn ein Foto trotzdem nicht so ausgerichtet ist, wie Sie es möchten —
 EXIF-korrigiert, aber aus einem anderen Grund seitlich, oder Sie möchten es
 einfach gedreht betrachten —, drücken Sie **`R`**, um es um weitere 90° im
 Uhrzeigersinn zu drehen, oder **`Shift+R`** für gegen den Uhrzeigersinn. Das
-ist rein eine Ansichtsoption: Sie wird nie in die Datei zurückgeschrieben,
-wird mit **`0`** (zusammen mit dem Zoom) wieder auf aufrecht zurückgesetzt
-und beginnt — wie beim Wechsel zum nächsten Bild — beim nächsten
-betrachteten Foto wieder aufrecht. Beim Drehen wechselt das Fenster zwischen
+ist zunächst nur eine Ansichtsoption: Sie wird mit **`0`** (zusammen mit dem
+Zoom) wieder auf aufrecht zurückgesetzt und beginnt — wie beim Wechsel zum
+nächsten Bild — beim nächsten betrachteten Foto wieder aufrecht. Um sie zu
+behalten, schreiben Sie sie mit **Datei -> Änderungen speichern**
+(`Cmd/Strg+S`) in die Datei zurück oder legen mit **Datei -> Als PNG/JPEG
+exportieren…** eine gedrehte Kopie an; siehe „Menü“ oben. Beim Drehen wechselt das Fenster zwischen
 Quer- und Hochformat, um sich der neuen Ausrichtung des Bildes anzupassen,
 genau wie beim Laden eines anderen Bildes.
 
@@ -473,6 +475,26 @@ benötigen in beiden Fällen nichts Zusätzliches.
 
 ## 12. Menü
 
+- **Datei -> Dateien öffnen…** — öffnet den Dateibrowser des Systems, genau
+  wie `Cmd/Strg+O`
+- **Datei -> Änderungen speichern** (`Cmd/Strg+S`) — schreibt eine mit
+  `R`/`Shift+R` vorgenommene Drehung in die Ursprungsdatei zurück, in deren
+  eigenem Format. Ausgegraut, solange es keine Drehung zu speichern gibt;
+  nicht verfügbar für Animationen und für Formate, die Image Drop lesen,
+  aber nicht schreiben kann (WebP, HEIC, ICO, XPM). Die Originaldatei wird
+  dabei ersetzt und neu kodiert statt bearbeitet, EXIF-Metadaten bleiben
+  also nicht erhalten
+- **Datei -> Als PNG exportieren… / Als JPEG exportieren…** — speichert das
+  Bild so, wie es gerade angezeigt wird, Drehung eingeschlossen, in eine
+  neue Datei Ihrer Wahl. Anders als „Änderungen speichern“ funktioniert das
+  für jedes anzeigbare Bild, auch für WebP- und HEIC-Dateien und für ein
+  einzelnes Bild eines animierten GIFs, und die Originaldatei bleibt
+  unangetastet. Endet der von Ihnen eingegebene Name bereits auf ein Format,
+  das Image Drop schreiben kann, hat dieses Vorrang vor dem gewählten
+  Menüeintrag
+- **Datei -> Dateien schließen** — zurück zum Ablagebereich, ohne das
+  Programm zu beenden
+- **Datei -> Einstellungen…** — öffnet das Einstellungsfenster
 - **Hilfe -> Handbuch** — öffnet dieses Handbuch, genau wie `F1`
 
 ---
@@ -593,10 +615,11 @@ Dinge, die Image Drop absichtlich (noch) nicht tut:
 - Keine Zoomsteuerung innerhalb des Diaschau-Modus selbst, und keine
   bildspezifische Zeitsteuerung — jedes Bild erhält dasselbe Intervall
   (animierte GIFs ausgenommen)
-- Kein Bearbeiten, Konvertieren oder Speichern von Dateien, und die Rotation
-  (`R`/`Shift+R`, siehe „Fotorotation“ oben) ist nur eine Ansichtsoption,
-  wird nie auf die Festplatte geschrieben (Löschen wird unterstützt — siehe
-  „Eine Datei löschen“ oben —, alles andere nicht)
+- Keine Bildbearbeitung über das Drehen hinaus: kein Zuschneiden, keine
+  Farb- oder Belichtungskorrektur, keine Größenänderung. Auf die Festplatte
+  schreiben lassen sich eine Drehung (**Datei -> Änderungen speichern**) und
+  eine Kopie in einem anderen Format (**Datei -> Als PNG/JPEG
+  exportieren…**), beide unter „Menü“ oben beschrieben
 - Keine Unterstützung für RAW, SVG oder PDF
 - Keine Wiedergabesteuerung (Pause, Einzelschritt, Neustart) für animierte
   GIFs

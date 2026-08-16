@@ -24,17 +24,29 @@ func buildMainMenu(view *viewer) *fyne.MainMenu {
 	}
 
 	save := fyne.NewMenuItem(lang.L("Save Changes"), func() { view.saveRotation() })
-	save.Disabled = true // updateSaveMenuState (save.go) enables it once there's a pending rotation to save
+	save.Disabled = true // updateFileMenuState (save.go) enables it once there's a pending rotation to save
 	save.Shortcut = &desktop.CustomShortcut{
 		KeyName:  fyne.KeyS,
 		Modifier: fyne.KeyModifierShortcutDefault,
 	}
 	view.saveItem = save
 
+	// The two export items carry no accelerator: they sit next to Save
+	// Changes' own Cmd/Ctrl+S, and a "which of these two formats did I just
+	// bind?" shortcut is worse than none at all.
+	exportPNG := fyne.NewMenuItem(lang.L("Export as PNG…"), func() { view.exportAs(exportPNGExt) })
+	exportPNG.Disabled = true // updateFileMenuState (save.go) enables both once an image is loaded
+	view.exportPNGItem = exportPNG
+
+	exportJPEG := fyne.NewMenuItem(lang.L("Export as JPEG…"), func() { view.exportAs(exportJPEGExt) })
+	exportJPEG.Disabled = true
+	view.exportJPEGItem = exportJPEG
+
 	closeFiles := fyne.NewMenuItem(lang.L("Close Files"), func() { view.closeFiles() })
 	settings := fyne.NewMenuItem(lang.L("Settings…"), func() { view.settings.Show() })
 
-	fileMenu := fyne.NewMenu(lang.L("File"), open, save, closeFiles, fyne.NewMenuItemSeparator(), settings)
+	fileMenu := fyne.NewMenu(lang.L("File"),
+		open, save, exportPNG, exportJPEG, closeFiles, fyne.NewMenuItemSeparator(), settings)
 
 	return fyne.NewMainMenu(fileMenu, view.help.Menu())
 }

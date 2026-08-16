@@ -3,6 +3,7 @@ package filepicker
 import (
 	"errors"
 	"os/exec"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -105,6 +106,84 @@ func TestBuildPowerShellCmd(t *testing.T) {
 		if strings.Contains(script, notWant) {
 			t.Errorf("script contains %q, want the folder-sentinel workaround gone:\n%s", notWant, script)
 		}
+	}
+}
+
+// The save panel gets the same treatment as the open chooser above: its
+// darwin implementation is an in-process cgo/AppKit modal with no
+// non-interactive test, and the other two are covered by asserting on the
+// command each builds rather than by running it.
+func TestBuildPowerShellSaveCmd(t *testing.T) {
+	cmd := buildPowerShellSaveCmd(`C:\photos\holiday.png`)
+
+	if got := cmd.Args[0]; !strings.HasSuffix(got, "powershell") {
+		t.Errorf("cmd.Args[0] = %q, want it to name powershell", got)
+	}
+
+	var script string
+	for i, a := range cmd.Args {
+		if a == "-Command" && i+1 < len(cmd.Args) {
+			script = cmd.Args[i+1]
+		}
+	}
+	if script == "" {
+		t.Fatalf("cmd.Args = %v, expected a -Command argument", cmd.Args)
+	}
+
+	for _, want := range []string{
+		"SaveFileDialog",
+		"holiday.png",
+		`C:\photos`,
+		"$dlg.OverwritePrompt = $true",
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("script does not contain %q:\n%s", want, script)
+		}
+	}
+}
+
+func TestChooseSaveLinux_ReturnsErrorWhenZenityMissing(t *testing.T) {
+	origLookup := lookupZenity
+	t.Cleanup(func() { lookupZenity = origLookup })
+	lookupZenity = func(string) (string, error) { return "", errors.New("zenity not found") }
+
+	if _, err := chooseSaveLinux("/photos/holiday.png"); err == nil {
+		t.Error("expected an error when zenity isn't installed")
+	}
+}
+
+func TestChooseSaveLinux_RunsZenityInSaveModeWithTheSuggestedPath(t *testing.T) {
+	origLookup := lookupZenity
+	origRun := runZenityCommand
+	t.Cleanup(func() {
+		lookupZenity = origLookup
+		runZenityCommand = origRun
+	})
+	lookupZenity = func(string) (string, error) { return "/usr/bin/zenity", nil }
+
+	var gotArgs []string
+	runZenityCommand = func(cmd *exec.Cmd) ([]byte, error) {
+		gotArgs = cmd.Args
+		return []byte("/photos/holiday.png\n"), nil
+	}
+
+	out, err := chooseSaveLinux("/photos/holiday.png")
+	if err != nil {
+		t.Fatalf("chooseSaveLinux() error = %v", err)
+	}
+	if string(out) != "/photos/holiday.png\n" {
+		t.Errorf("out = %q, want the stubbed zenity output", out)
+	}
+
+	// --filename carries the whole suggested path, not just the base name,
+	// so the panel opens in the image's own folder rather than the CWD.
+	for _, want := range []string{"--save", "--confirm-overwrite", "--filename=/photos/holiday.png"} {
+		if !slices.Contains(gotArgs, want) {
+			t.Errorf("zenity args = %v, want %q present", gotArgs, want)
+		}
+	}
+	if slices.Contains(gotArgs, "--multiple") {
+		t.Errorf("zenity args = %v, want no --multiple on a save panel", gotArgs)
 	}
 }
 

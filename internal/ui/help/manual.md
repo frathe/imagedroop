@@ -112,9 +112,11 @@ corrected image.
 If a photo still isn't the way up you want — EXIF-corrected but sideways for
 some other reason, or you just want to look at it rotated — press **`R`** to
 rotate it a further 90° clockwise, or **`Shift+R`** for counter-clockwise.
-This is purely a viewing option: it's never written back to the file, resets
-back to upright with **`0`** (along with zoom), and — like navigating to a
-different image — starts over at upright on the next picture you view.
+This is a viewing option by default: it resets back to upright with **`0`**
+(along with zoom) and — like navigating to a different image — starts over at
+upright on the next picture you view. To keep it, use **File -> Save
+Changes** (`Cmd/Ctrl+S`) to write it back into the file, or **File -> Export
+as PNG…/JPEG…** to write a rotated copy elsewhere; see "Menu" below.
 Rotating swaps the window between landscape and portrait to fit the image's
 new orientation, the same as loading a different image would.
 
@@ -415,6 +417,22 @@ needed. macOS and Windows need nothing extra either way.
 
 ## 12. Menu
 
+- **File -> Open Files…** — opens the system file browser, same as
+  `Cmd/Ctrl+O`
+- **File -> Save Changes** (`Cmd/Ctrl+S`) — writes a rotation you made with
+  `R`/`Shift+R` back into the file it came from, in that file's own format.
+  Greyed out unless there is a rotation to save; unavailable for animations
+  and for formats Image Drop can read but not write (WebP, HEIC, ICO, XPM).
+  This replaces the original file, and re-encodes rather than patching it,
+  so EXIF metadata is not carried over
+- **File -> Export as PNG… / Export as JPEG…** — saves the image as it
+  currently appears, rotation included, to a new file you name. Unlike Save
+  Changes it works for every image the app can display, including WebP and
+  HEIC files and a single frame of an animated GIF, and it never touches the
+  original. If the name you type already ends in a format Image Drop can
+  write, that format wins over the menu item you picked
+- **File -> Close Files** — returns to the drop zone without quitting
+- **File -> Settings…** — opens the settings window
 - **Help -> Manual** — opens this manual, same as `F1`
 
 ---
@@ -517,9 +535,10 @@ Things Image Drop deliberately does not do (yet):
   stand-in for two-finger pan (see "Zoom and pan" above)
 - No zoom control within picture-frame mode itself, and no per-image timing
   override — every image gets the same interval (animated GIFs aside)
-- No editing, converting, or saving of files, and rotation (`R`/`Shift+R`,
-  see "Photo rotation" above) is view-only, never written to disk (deleting
-  is supported - see "Deleting a file" above - everything else isn't)
+- No image editing beyond rotation: no cropping, no colour or exposure
+  adjustment, no resizing. What you can write to disk is a rotation
+  (**File -> Save Changes**) and a copy in another format
+  (**File -> Export as PNG…/JPEG…**), both described in "Menu" below
 - No support for RAW, SVG, or PDF
 - No playback controls (pause, step, restart) for animated GIFs
 - No EXIF GPS/location display — deliberately left out of the EXIF data

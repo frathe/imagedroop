@@ -31,10 +31,32 @@ static char *runOpenPanel(const char *message) {
 	}
 	return strdup([paths componentsJoinedByString:@"\n"].UTF8String);
 }
+
+// runSavePanel shows an app-modal NSSavePanel pre-filled with name, opened
+// on dir. Same main-thread requirement as runOpenPanel above;
+// chooseSaveDarwin guarantees it the same way. No allowedContentTypes is
+// set: the format is already decided by which "Export as…" item the user
+// picked, and constraining the panel would only stop them naming the file
+// whatever they want. Returns a malloc'd POSIX path; "" on cancel.
+static char *runSavePanel(const char *message, const char *dir, const char *name) {
+	NSSavePanel *panel = [NSSavePanel savePanel];
+	panel.message = [NSString stringWithUTF8String:message];
+	panel.nameFieldStringValue = [NSString stringWithUTF8String:name];
+	panel.canCreateDirectories = YES;
+	if (strlen(dir) > 0) {
+		panel.directoryURL = [NSURL fileURLWithPath:[NSString stringWithUTF8String:dir] isDirectory:YES];
+	}
+
+	if ([panel runModal] != NSModalResponseOK) {
+		return strdup("");
+	}
+	return strdup(panel.URL.path.UTF8String);
+}
 */
 import "C"
 
 import (
+	"path/filepath"
 	"unsafe"
 
 	"fyne.io/fyne/v2"
@@ -68,6 +90,29 @@ func chooseFilesDarwin() ([]byte, error) {
 	var out []byte
 	fyne.DoAndWait(func() {
 		cOut := C.runOpenPanel(cMsg)
+		defer C.free(unsafe.Pointer(cOut))
+		out = []byte(C.GoString(cOut))
+	})
+	return out, nil
+}
+
+// chooseSaveDarwin is chooseFilesDarwin's save-panel twin, in-process and
+// main-thread-bound for exactly the same reasons - see the comment above,
+// every word of which applies here too. Splitting suggestedPath with
+// filepath is safe in this file in a way it wouldn't be in the Windows
+// builder: this only ever compiles for darwin, where filepath's separator
+// is already the right one.
+func chooseSaveDarwin(suggestedPath string) ([]byte, error) {
+	cMsg := C.CString(lang.L("Export image"))
+	defer C.free(unsafe.Pointer(cMsg))
+	cDir := C.CString(filepath.Dir(suggestedPath))
+	defer C.free(unsafe.Pointer(cDir))
+	cName := C.CString(filepath.Base(suggestedPath))
+	defer C.free(unsafe.Pointer(cName))
+
+	var out []byte
+	fyne.DoAndWait(func() {
+		cOut := C.runSavePanel(cMsg, cDir, cName)
 		defer C.free(unsafe.Pointer(cOut))
 		out = []byte(C.GoString(cOut))
 	})

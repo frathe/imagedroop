@@ -40,6 +40,32 @@ func TestCanEncode(t *testing.T) {
 	}
 }
 
+// TestCanEncodeExt covers the extension check on its own, without
+// CanEncode's symlink resolution: it is what the export path asks, since an
+// export destination is a name the user just typed rather than a file
+// already on disk.
+func TestCanEncodeExt(t *testing.T) {
+	cases := []struct {
+		ext  string
+		want bool
+	}{
+		{".png", true},
+		{".JPG", true},
+		{".webp", false},
+		{".heic", false},
+		{"", false},
+		{"png", false}, // no leading dot: not what filepath.Ext or URI.Extension ever produce
+	}
+
+	for _, c := range cases {
+		t.Run(c.ext, func(t *testing.T) {
+			if got := CanEncodeExt(c.ext); got != c.want {
+				t.Errorf("CanEncodeExt(%q) = %v, want %v", c.ext, got, c.want)
+			}
+		})
+	}
+}
+
 func TestSaveRotated(t *testing.T) {
 	t.Run("overwrites the file with the given pixels, exactly for a lossless format", func(t *testing.T) {
 		path := writeTempFile(t, "photo.png", []byte("placeholder, never read back"))
@@ -166,6 +192,108 @@ func TestSaveRotated(t *testing.T) {
 					t.Errorf("bounds after save = %v, want %dx%d", b, w, h)
 				}
 			})
+		}
+	})
+}
+
+func TestExport(t *testing.T) {
+	t.Run("creates a new file in the destination's own format", func(t *testing.T) {
+		for _, ext := range []string{".png", ".jpg"} {
+			t.Run(ext, func(t *testing.T) {
+				dest := filepath.Join(t.TempDir(), "copy"+ext)
+
+				const w, h = 4, 3
+				if err := Export(storage.NewFileURI(dest), markedImage(w, h)); err != nil {
+					t.Fatalf("Export: %v", err)
+				}
+
+				loaded, err := LoadImage(storage.NewFileURI(dest), DefaultImgCacheBytes)
+				if err != nil {
+					t.Fatalf("reload the exported file: %v", err)
+				}
+				if b := loaded.Frames[0].Bounds(); b.Dx() != w || b.Dy() != h {
+					t.Errorf("exported bounds = %v, want %dx%d", b, w, h)
+				}
+			})
+		}
+	})
+
+	// The point of Export over SaveRotated: the destination's format is
+	// chosen by where the pixels are going, with no relationship at all to
+	// where they came from - which is what makes exporting a WebP or HEIC
+	// (formats this module can decode but never encode) possible.
+	t.Run("encodes by the destination extension, exactly for a lossless format", func(t *testing.T) {
+		dest := filepath.Join(t.TempDir(), "from-a-webp.png")
+
+		const w, h = 3, 2
+		if err := Export(storage.NewFileURI(dest), markedImage(w, h)); err != nil {
+			t.Fatalf("Export: %v", err)
+		}
+
+		loaded, err := LoadImage(storage.NewFileURI(dest), DefaultImgCacheBytes)
+		if err != nil {
+			t.Fatalf("reload the exported file: %v", err)
+		}
+		for y := range h {
+			for x := range w {
+				c := loaded.Frames[0].At(x, y).(color.RGBA)
+				if int(c.R) != x || int(c.G) != y {
+					t.Errorf("(%d,%d) = (%d,%d), want (%d,%d)", x, y, c.R, c.G, x, y)
+				}
+			}
+		}
+	})
+
+	t.Run("overwrites an existing destination", func(t *testing.T) {
+		dest := writeTempFile(t, "existing.png", []byte("placeholder, never read back"))
+
+		const w, h = 5, 2
+		if err := Export(storage.NewFileURI(dest), markedImage(w, h)); err != nil {
+			t.Fatalf("Export: %v", err)
+		}
+
+		loaded, err := LoadImage(storage.NewFileURI(dest), DefaultImgCacheBytes)
+		if err != nil {
+			t.Fatalf("reload the exported file: %v", err)
+		}
+		if b := loaded.Frames[0].Bounds(); b.Dx() != w || b.Dy() != h {
+			t.Errorf("exported bounds = %v, want %dx%d", b, w, h)
+		}
+	})
+
+	// A destination this module has no encoder for must fail before any
+	// file exists - including the temp file the atomic write goes through,
+	// which would otherwise be left behind in the user's chosen folder.
+	t.Run("unsupported destination format writes nothing at all", func(t *testing.T) {
+		dir := t.TempDir()
+
+		if err := Export(storage.NewFileURI(filepath.Join(dir, "copy.webp")), markedImage(2, 2)); err == nil {
+			t.Fatal("Export: want error for a format with no encoder, got nil")
+		}
+
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			t.Fatalf("read dir: %v", err)
+		}
+		if len(entries) != 0 {
+			t.Errorf("destination directory holds %d entries, want none left behind", len(entries))
+		}
+	})
+
+	t.Run("leaves an existing destination untouched when the encode fails", func(t *testing.T) {
+		original := []byte("the previous copy, which a failed export must not damage")
+		dest := writeTempFile(t, "copy.webp", original)
+
+		if err := Export(storage.NewFileURI(dest), markedImage(2, 2)); err == nil {
+			t.Fatal("Export: want error for a format with no encoder, got nil")
+		}
+
+		got, err := os.ReadFile(dest)
+		if err != nil {
+			t.Fatalf("read back: %v", err)
+		}
+		if string(got) != string(original) {
+			t.Error("Export modified the destination despite returning an error")
 		}
 	})
 }

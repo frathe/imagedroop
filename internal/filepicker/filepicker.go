@@ -31,6 +31,28 @@ var Choose = func() ([]byte, error) {
 	}
 }
 
+// ChooseSave produces the single destination path the current OS's own save
+// panel returned, for internal/ui's File > "Export as…" actions - the
+// counterpart to Choose, and a var for the same reason. suggestedPath is a
+// full path, not a bare name: every panel below uses its directory as the
+// one to open in (the image's own folder, in practice) and its base name as
+// the pre-filled file name.
+//
+// The output is newline-terminated exactly like Choose's, so callers decode
+// it with the same ParseFileList; a cancel yields no path at all rather
+// than an error on macOS and Windows, and an error indistinguishable from a
+// failure on Linux - see chooseFilesLinux for why.
+var ChooseSave = func(suggestedPath string) ([]byte, error) {
+	switch runtime.GOOS {
+	case "darwin":
+		return chooseSaveDarwin(suggestedPath)
+	case "windows":
+		return chooseSaveWindows(suggestedPath)
+	default:
+		return chooseSaveLinux(suggestedPath)
+	}
+}
+
 // lookupZenity finds the zenity binary; a var so tests can force either
 // outcome of chooseFilesLinux deterministically instead of depending on
 // whether the machine running the test happens to have zenity installed.
@@ -58,6 +80,22 @@ func chooseFilesLinux() ([]byte, error) {
 	return runZenityCommand(cmd)
 }
 
+// chooseSaveLinux is chooseFilesLinux's save-panel twin: the same zenity
+// file selector in --save mode. --confirm-overwrite makes zenity itself ask
+// before returning an existing path, so imaging.Export is never the first
+// thing to find out it's replacing a file. Multi-select is meaningless here,
+// so --multiple is deliberately absent.
+func chooseSaveLinux(suggestedPath string) ([]byte, error) {
+	path, err := lookupZenity("zenity")
+	if err != nil {
+		return nil, err
+	}
+
+	cmd := exec.Command(path, "--file-selection", "--save", "--confirm-overwrite",
+		"--filename="+suggestedPath, "--title="+lang.L("Export image"))
+	return runZenityCommand(cmd)
+}
+
 // chooseFilesWindows shells out to a WinForms OpenFileDialog via
 // PowerShell - the closest thing to a native Fyne-dialog replacement on
 // Windows. Files only: Windows' own shell dialogs have no mode that
@@ -82,6 +120,36 @@ $dlg.Multiselect = $true
 $dlg.Title = "` + powerShellEscape(lang.L("Open images")) + `"
 if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 	$dlg.FileNames | ForEach-Object { Write-Output $_ }
+}`
+
+	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", script)
+	hideConsoleWindow(cmd)
+	return cmd
+}
+
+// chooseSaveWindows is chooseFilesWindows' save-panel twin: a WinForms
+// SaveFileDialog via PowerShell. None of the open dialog's folder-selection
+// trouble applies here - a save panel names exactly one file by design.
+func chooseSaveWindows(suggestedPath string) ([]byte, error) {
+	return buildPowerShellSaveCmd(suggestedPath).Output()
+}
+
+// buildPowerShellSaveCmd builds that dialog's script. The suggested path is
+// embedded whole and split by PowerShell's own [System.IO.Path], not by Go's
+// filepath: this function's test runs on whatever machine builds the module,
+// where a `C:\...` path is one long base name to filepath.Dir. Letting the
+// platform that will actually run the script do its own splitting keeps the
+// two from disagreeing.
+func buildPowerShellSaveCmd(suggestedPath string) *exec.Cmd {
+	escaped := powerShellEscape(suggestedPath)
+	script := `Add-Type -AssemblyName System.Windows.Forms
+$dlg = New-Object System.Windows.Forms.SaveFileDialog
+$dlg.FileName = "` + escaped + `"
+$dlg.InitialDirectory = [System.IO.Path]::GetDirectoryName("` + escaped + `")
+$dlg.OverwritePrompt = $true
+$dlg.Title = "` + powerShellEscape(lang.L("Export image")) + `"
+if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+	Write-Output $dlg.FileName
 }`
 
 	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", script)

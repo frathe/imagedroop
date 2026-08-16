@@ -72,16 +72,24 @@ func (v *viewer) saveRotation() {
 	// this file just costs one re-decode instead of a stale cache hit.
 	v.imgCache.Remove(u.String())
 
-	v.updateSaveMenuState()
+	v.updateFileMenuState()
 	v.ShowToast(lang.L("Saved"))
 }
 
-// updateSaveMenuState keeps the File menu's "Save Changes" item's Disabled
-// field in sync with canSaveRotation. Called wherever v.rotation,
-// v.displayFrames, v.loading, or the current file can change: rotateBy/
-// resetRotation (rotate.go), ShowImage/finishLoad (load.go),
-// clearToDropzone (viewer.go), and after a successful saveRotation above.
-func (v *viewer) updateSaveMenuState() {
+// updateFileMenuState keeps the File menu's three image-dependent items in
+// sync with what's currently loaded: "Save Changes" with canSaveRotation
+// above, and both "Export as…" items with canExport (export.go). Called
+// wherever v.rotation, v.displayFrames, v.loading, or the current file can
+// change: rotateBy/resetRotation (rotate.go), ShowImage/finishLoad
+// (load.go), clearToDropzone (viewer.go), and after a successful
+// saveRotation above. One function rather than one per item because every
+// one of those sites can move both conditions at once.
+func (v *viewer) updateFileMenuState() {
 	v.saveItem.Disabled = !v.canSaveRotation()
+
+	noExport := !v.canExport()
+	v.exportPNGItem.Disabled = noExport
+	v.exportJPEGItem.Disabled = noExport
+
 	v.win.MainMenu().Refresh()
 }
