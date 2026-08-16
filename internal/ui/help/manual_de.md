@@ -306,10 +306,24 @@ einzeln durchzublättern.
   **`Return`** öffnet die gerade hervorgehobene Miniaturansicht.
 - Drücken Sie **`G`** erneut, oder **`Esc`**, um das Raster ohne Auswahl zu
   verlassen.
+- Drücken Sie **`/`**, um nach Dateinamen zu suchen: Oben erscheint eine
+  Leiste, und Ihre Eingabe filtert das Raster fortlaufend auf die Namen,
+  die sie enthalten. Groß- und Kleinschreibung spielt dabei keine Rolle,
+  und die Leiste zeigt, wie viel der Auswahl übrig ist (`3 von 847`). Die
+  Rücktaste löscht ein Zeichen, Pfeiltasten und `Return` wirken auf die
+  Treffer genau wie sonst auf das ganze Raster, und **`Esc`** setzt die
+  Suche zurück, sodass wieder alle Bilder erscheinen — ein zweites `Esc`
+  verlässt dann wie gewohnt das Raster.
 - Solange das Raster geöffnet ist, wird jede andere Taste ignoriert — Zoom,
   `S`/`M`/`P`/`I`, `Shift+Delete` bewirken nichts, bis Sie entweder eine
   Miniaturansicht auswählen (Klick oder `Return`) oder mit `G`/`Esc`
-  zurückgehen.
+  zurückgehen. Solange eine Suche geöffnet ist, sind die Buchstabentasten
+  Zeichen Ihrer Eingabe — `G` schließt das Raster dann nicht mehr, `Esc`
+  schon.
+- Die Suche schränkt nur ein, was das Raster zeigt. An der Auswahl selbst
+  ändert sie nichts: Nach dem Öffnen eines Bildes blättern die Pfeiltasten
+  weiterhin durch alle abgelegten Dateien, und beim nächsten Öffnen
+  beginnt das Raster ungefiltert.
 - Miniaturansichten werden im Hintergrund erzeugt, sobald sie ins Blickfeld
   scrollen, jeweils einige auf einmal, sodass das Öffnen des Rasters bei
   einem Ordner mit Tausenden von Bildern das Fenster nicht blockiert,
@@ -422,6 +436,8 @@ ist, und die Datei bleibt in der Auswahl.
   **`[Zusammenführen]`** angezeigt
 - **`G`** — Rasteransicht ein-/ausschalten (siehe oben); Pfeiltasten bewegen
   die Hervorhebung, `Return` oder ein Klick öffnet sie, `G`/`Esc` bricht ab
+- **`/`** — (nur im Raster) das Raster nach Dateinamen durchsuchen; `Esc`
+  setzt die Suche zurück, ein zweites `Esc` verlässt das Raster
 - **`+`** / **`-`** — vergrößern / verkleinern
 - **`1`** — auf 100 % zoomen; **`0`** — zurück zur Fenstereinpassung (und
   setzt die Rotation zurück, siehe unten)
@@ -645,6 +661,9 @@ Dinge, die Image Drop absichtlich (noch) nicht tut:
 - **Rasteransicht** — `G` schaltet ein fensterfüllendes Miniaturraster
   ein/aus; Pfeiltasten bewegen die Hervorhebung, `Return` oder ein Klick
   öffnet, `G`/`Esc` bricht ohne Auswahl ab
+- **Suche nach Namen** — `/` im Raster filtert es auf die Dateinamen, die
+  Ihre Eingabe enthalten; `Esc` setzt den Filter zurück, ein zweites `Esc`
+  verlässt das Raster
 - **Zoom** — `+`/`-` vergrößern/verkleinern, `1` für 100 %, `0` für
   Fenstereinpassung, oder Scrollen zum Zoomen am Mauszeiger; ziehen, oder
   Shift+Scrollen, zum Verschieben nach dem Hineinzoomen

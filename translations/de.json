@@ -79,5 +79,8 @@
    "Capture date": "Aufnahmedatum",
    "Modified date": "Änderungsdatum",
    "File size": "Dateigröße",
-   "Drop order": "Ablagereihenfolge"
+   "Drop order": "Ablagereihenfolge",
+   "Search: %s": "Suche: %s",
+   "%d of %d": "%d von %d",
+   "No file names match": "Keine Dateinamen passen"
 }

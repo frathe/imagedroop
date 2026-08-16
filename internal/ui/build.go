@@ -426,6 +426,14 @@ func buildViewer(application fyne.App) (*viewer, fyne.Window) {
 		view.handleKeyEvent(ev)
 	})
 
+	// Typed characters, as opposed to key names: the grid's filename search
+	// is the one feature that needs the actual character - case included,
+	// and punctuation a fyne.KeyEvent has no name for. See
+	// viewer.handleTypedRune.
+	window.Canvas().SetOnTypedRune(func(r rune) {
+		view.handleTypedRune(r)
+	})
+
 	wireOpenShortcuts(window.Canvas(), view)
 	wireClipboardShortcuts(window.Canvas(), view)
 	wireDeleteShortcut(window.Canvas(), view)

@@ -9,12 +9,16 @@
 package grid
 
 import (
+	"fmt"
 	"image"
+	"strings"
 	"sync"
+	"sync/atomic"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/lang"
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
@@ -75,6 +79,15 @@ type Overview struct {
 	wrap    *widget.GridWrap
 	overlay *fyne.Container
 
+	// The search bar across the top of the overlay, hidden until '/' opens
+	// it: what was typed on the left, how much of the set still matches on
+	// the right. empty is the notice drawn over the grid in the one state
+	// that has no cells at all to explain itself.
+	searchBar   *fyne.Container
+	searchLabel *widget.Label
+	countLabel  *widget.Label
+	empty       *widget.Label
+
 	// maximized is true from the moment Toggle grows the window via
 	// winpos.Maximize until ConsumeMaximized is next called. Left true
 	// across a plain Close - see its own doc comment: closing the grid
@@ -89,6 +102,31 @@ type Overview struct {
 	// the host's current index every time the grid opens, so it starts on
 	// whichever image was already on screen.
 	highlight int
+
+	// searching is whether the search bar is up, opened by typing '/' and
+	// left by Escape. Distinct from "a filter is active" (matches != nil):
+	// an open search with nothing typed yet still shows every file.
+	searching bool
+
+	// query is the filter text typed so far, matched case-insensitively
+	// against each file's base name.
+	query string
+
+	// matches maps a display index - a cell's position in the grid - to
+	// the host's own file index, while a filter is active. nil means no
+	// filter, and is what every index below means "identity" by: the grid
+	// renumbers its cells from zero when filtered, but ShowImage,
+	// FileAt and CurrentIndex all speak the host's numbering, so
+	// everything crossing that boundary goes through fileIndex.
+	matches []int
+
+	// filterGen counts changes to matches, so a thumbnail decode already
+	// in flight can tell that the cell it was started for has been
+	// renumbered under it. The host's own generation can't see this: the
+	// file set is unchanged by a keystroke, and so is the cell's id - only
+	// what that id *means* moved. Atomic because applyFilter writes it on
+	// the UI goroutine while a decode worker reads it.
+	filterGen atomic.Uint64
 
 	// thumbs holds small, already-downsampled thumbnails keyed by URI
 	// string - a separate cache and byte budget from the app's full-size
@@ -144,7 +182,7 @@ func New(host Host, win fyne.Window) *Overview {
 	}
 
 	g.wrap = widget.NewGridWrap(
-		host.FileCount,
+		g.count,
 		func() fyne.CanvasObject {
 			img := canvas.NewImageFromImage(nil)
 			img.FillMode = canvas.ImageFillContain
@@ -190,9 +228,14 @@ func New(host Host, win fyne.Window) *Overview {
 	)
 
 	g.wrap.OnSelected = func(id widget.GridWrapItemID) {
+		// Resolved before Close, not after: closing clears the filter, and
+		// an id resolved past that point would map to itself rather than to
+		// the file this cell was actually showing.
+		i := g.fileIndex(id)
+
 		g.Close()
-		if id >= 0 && id < g.host.FileCount() {
-			g.host.ShowImage(id)
+		if i >= 0 {
+			g.host.ShowImage(i)
 		}
 		g.wrap.UnselectAll()
 	}
@@ -212,12 +255,21 @@ func New(host Host, win fyne.Window) *Overview {
 		g.wrap.RefreshItem(id)
 	}
 
+	g.searchLabel = widget.NewLabelWithStyle("", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
+	g.countLabel = widget.NewLabel("")
+	g.searchBar = container.NewBorder(nil, nil, nil, g.countLabel, g.searchLabel)
+	g.searchBar.Hide()
+
+	g.empty = widget.NewLabelWithStyle(lang.L("No file names match"), fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
+	g.empty.Hide()
+
 	// An opaque backdrop, not a translucent scrim like the delete
 	// confirmation's: the grid replaces the image view entirely rather
 	// than dimming it behind a centered card, so it needs to fully hide
 	// whatever's underneath.
 	backdrop := canvas.NewRectangle(theme.Color(theme.ColorNameBackground))
-	g.overlay = container.NewStack(backdrop, container.NewPadded(g.wrap))
+	body := container.NewStack(container.NewPadded(g.wrap), container.NewCenter(g.empty))
+	g.overlay = container.NewStack(backdrop, container.NewBorder(g.searchBar, nil, nil, nil, body))
 	g.overlay.Hide()
 
 	return g
@@ -304,6 +356,11 @@ func (g *Overview) Close() {
 	}
 
 	g.visible = false
+	// The filter is a way of looking at the grid, not a standing setting:
+	// each open starts on the whole set. This also covers the app's
+	// defensive Close on every drop, where a query left over from the
+	// previous file set would otherwise be applied to the new one.
+	g.clearSearch()
 	g.overlay.Hide()
 	g.host.Unfocus()
 	g.host.ForceRepaint()
@@ -312,7 +369,32 @@ func (g *Overview) Close() {
 // HandleKey handles a key press while the grid is up: Escape and G close
 // it, Return commits the highlighted cell, and the arrow keys move the
 // highlight. Every other key is deliberately swallowed by the caller.
+//
+// While a search is open the letter keys stop meaning anything here, since
+// each of them is also arriving at HandleRune as a query character - G
+// most visibly, which would otherwise close the grid on its way into the
+// query. Escape stages instead of closing: it clears the search first and
+// only closes once there is no search left to clear.
 func (g *Overview) HandleKey(ev *fyne.KeyEvent) {
+	if g.searching {
+		switch ev.Name {
+		case fyne.KeyEscape:
+			g.clearSearch()
+		case fyne.KeyBackspace:
+			g.backspace()
+		case fyne.KeyReturn, fyne.KeyEnter:
+			g.wrap.Select(g.highlight)
+		case fyne.KeyUp, fyne.KeyDown, fyne.KeyLeft, fyne.KeyRight,
+			fyne.KeyHome, fyne.KeyEnd, fyne.KeyPageUp, fyne.KeyPageDown:
+			// Listed rather than left to the default branch below: every
+			// other key is a character being typed, and must not reach
+			// GridWrap at all.
+			g.wrap.TypedKey(ev)
+		}
+
+		return
+	}
+
 	switch ev.Name {
 	case fyne.KeyEscape, fyne.KeyG:
 		g.Close()
@@ -323,6 +405,152 @@ func (g *Overview) HandleKey(ev *fyne.KeyEvent) {
 		// rows and columns, including the row arithmetic - forward the
 		// event rather than reimplementing it here.
 		g.wrap.TypedKey(ev)
+	}
+}
+
+// backspace drops the last character of the query. Rune-wise, not
+// byte-wise: the query holds whatever the user typed, and a German file
+// name's umlaut would otherwise be cut in half into invalid UTF-8.
+func (g *Overview) backspace() {
+	if g.query == "" {
+		return
+	}
+
+	r := []rune(g.query)
+	g.query = string(r[:len(r)-1])
+	g.applyFilter()
+}
+
+// clearSearch closes the search bar and restores the unfiltered grid.
+func (g *Overview) clearSearch() {
+	if !g.searching {
+		return
+	}
+
+	g.searching = false
+	g.query = ""
+	g.applyFilter()
+}
+
+// Searching reports whether the search bar is up.
+func (g *Overview) Searching() bool {
+	return g.searching
+}
+
+// Query is the filter text typed so far.
+func (g *Overview) Query() string {
+	return g.query
+}
+
+// HandleRune handles a character typed while the grid is up: '/' opens the
+// search bar, and every character after that extends the query.
+//
+// Runes rather than the key names HandleKey sees, because a fyne.KeyEvent
+// carries neither case nor the punctuation filenames are full of - there is
+// no key name for '_' at all. Taking the canvas's typed-rune callback also
+// keeps Fyne's widget focus out of it, so the arrow keys, Return and Escape
+// still reach HandleKey exactly as they do with no search open (an
+// approach a focused widget.Entry would have taken away).
+//
+// Search is opened from the rune rather than from HandleKey's KeySlash
+// because a key press delivers both callbacks: activating on the key event
+// would open the bar and then immediately type the '/' into it.
+func (g *Overview) HandleRune(r rune) {
+	if !g.searching {
+		if r == '/' {
+			g.searching = true
+			g.applyFilter()
+		}
+
+		return
+	}
+
+	g.query += string(r)
+	g.applyFilter()
+}
+
+// count is how many cells the grid shows - the filtered subset while a
+// search narrows it, the whole file set otherwise. This is GridWrap's own
+// length function.
+func (g *Overview) count() int {
+	if g.matches != nil {
+		return len(g.matches)
+	}
+
+	return g.host.FileCount()
+}
+
+// fileIndex maps a display index to the host's file index, or -1 when the
+// display index addresses no cell. The two numberings differ only while a
+// filter is active; the bounds check is the one OnSelected and
+// requestThumbnail did against FileCount before filtering existed.
+func (g *Overview) fileIndex(id int) int {
+	if id < 0 || id >= g.count() {
+		return -1
+	}
+	if g.matches == nil {
+		return id
+	}
+
+	return g.matches[id]
+}
+
+// applyFilter recomputes the visible subset from the current query and
+// redraws the grid around it. An empty query - which is what an
+// just-opened search bar has - matches everything, so opening search
+// changes nothing on screen until a character is typed.
+//
+// The whole set is rescanned per keystroke rather than narrowed from the
+// previous result: Backspace widens the match set again, and a
+// strings.Contains over a few thousand names is not worth a cache.
+func (g *Overview) applyFilter() {
+	g.matches = nil
+
+	if g.searching && g.query != "" {
+		needle := strings.ToLower(g.query)
+		g.matches = make([]int, 0, g.host.FileCount())
+
+		for i := range g.host.FileCount() {
+			if strings.Contains(strings.ToLower(g.host.FileAt(i).Name()), needle) {
+				g.matches = append(g.matches, i)
+			}
+		}
+	}
+
+	g.filterGen.Add(1)
+
+	// The highlight is a display index, so a filter that shortens the grid
+	// under it would leave it pointing past the last cell.
+	g.highlight = 0
+
+	g.wrap.Refresh()
+	if g.count() > 0 {
+		g.wrap.ScrollTo(0)
+	}
+
+	g.syncSearchBar()
+}
+
+// syncSearchBar redraws the bar from the current query and match count.
+func (g *Overview) syncSearchBar() {
+	if !g.searching {
+		g.searchBar.Hide()
+		g.empty.Hide()
+
+		return
+	}
+
+	g.searchLabel.SetText(fmt.Sprintf(lang.L("Search: %s"), g.query))
+	g.countLabel.SetText(fmt.Sprintf(lang.L("%d of %d"), g.count(), g.host.FileCount()))
+	g.searchBar.Show()
+
+	// Only when the query itself emptied the grid: with no files loaded at
+	// all there is no search to be in (Toggle refuses to open), so this
+	// can't misfire on an empty set.
+	if g.count() == 0 {
+		g.empty.Show()
+	} else {
+		g.empty.Hide()
 	}
 }
 
@@ -400,11 +628,18 @@ func setCellHighlighted(ring *canvas.Rectangle, highlighted bool) {
 // a finer grain - the file set can still be current while this particular
 // cell has scrolled on to show a different id in the meantime.
 func (g *Overview) requestThumbnail(key *fyne.Container, img *canvas.Image, id int, gen uint64) {
-	if id < 0 || id >= g.host.FileCount() {
+	i := g.fileIndex(id)
+	if i < 0 {
 		return
 	}
 
-	u := g.host.FileAt(id)
+	// Captured here, on the UI goroutine, for the same reason gen is
+	// passed in: it pins which query this request's id was resolved
+	// under, so the completion can tell whether that is still the query
+	// on screen.
+	fgen := g.filterGen.Load()
+
+	u := g.host.FileAt(i)
 	cacheKey := u.String()
 
 	if thumb, ok := g.thumbs.Get(cacheKey); ok {
@@ -445,7 +680,7 @@ func (g *Overview) requestThumbnail(key *fyne.Container, img *canvas.Image, id i
 		// speed - without it, the workers grind through a full decode per
 		// scrolled-past cell while the cells actually on screen sit blank
 		// at the back of the queue.
-		if !g.stillWanted(key, id, gen) {
+		if !g.stillWanted(key, id, gen, fgen) {
 			g.release(key, id)
 
 			// That check raced the UI goroutine's cell updates in one
@@ -455,7 +690,7 @@ func (g *Overview) requestThumbnail(key *fyne.Container, img *canvas.Image, id i
 			// serialized, and re-request rather than leave the cell blank
 			// until something else happens to refresh it.
 			fyne.Do(func() {
-				if g.stillWanted(key, id, gen) {
+				if g.stillWanted(key, id, gen, fgen) {
 					g.requestThumbnail(key, img, id, gen)
 				}
 			})
@@ -488,7 +723,7 @@ func (g *Overview) requestThumbnail(key *fyne.Container, img *canvas.Image, id i
 		g.release(key, id)
 
 		fyne.Do(func() {
-			if g.stillWanted(key, id, gen) {
+			if g.stillWanted(key, id, gen, fgen) {
 				img.Image = thumb
 				img.Refresh()
 			}
@@ -521,16 +756,19 @@ func (g *Overview) release(key *fyne.Container, id int) {
 }
 
 // stillWanted reports whether a decode for id (kicked off at generation
-// gen) is still worth anything to the cell identified by key - checked by
-// the worker before it decodes and by the completion before it paints, and
-// split out so the generation and cell-recycling logic can be driven
-// directly and synchronously from a test instead of racing a real decode
-// goroutine. Safe from any goroutine (cellIDs is a sync.Map, Generation an
-// atomic read). False whenever a newer drop superseded the file set gen
-// was captured against, or this cell has since been recycled to show a
-// different id.
-func (g *Overview) stillWanted(key *fyne.Container, id int, gen uint64) bool {
+// gen, under filter generation fgen) is still worth anything to the cell
+// identified by key - checked by the worker before it decodes and by the
+// completion before it paints, and split out so the generation and
+// cell-recycling logic can be driven directly and synchronously from a test
+// instead of racing a real decode goroutine. Safe from any goroutine
+// (cellIDs is a sync.Map, Generation and filterGen atomic reads).
+//
+// False whenever a newer drop superseded the file set gen was captured
+// against, this cell has since been recycled to show a different id, or a
+// keystroke has since renumbered the cells under it - the three ways the
+// file this decode is carrying can stop being the file this cell shows.
+func (g *Overview) stillWanted(key *fyne.Container, id int, gen, fgen uint64) bool {
 	current, ok := g.cellIDs.Load(key)
 
-	return ok && gen == g.host.Generation() && current == id
+	return ok && gen == g.host.Generation() && fgen == g.filterGen.Load() && current == id
 }

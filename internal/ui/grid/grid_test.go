@@ -1,6 +1,7 @@
 package grid
 
 import (
+	"fmt"
 	"image/color"
 	"os"
 	"testing"
@@ -8,6 +9,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/lang"
 	"fyne.io/fyne/v2/test"
 
 	"github.com/frathe/imagedrop/internal/imaging"
@@ -224,6 +226,295 @@ func TestHandleKey_ReturnOpensHighlightedAndCloses(t *testing.T) {
 	}
 }
 
+// --- search ----------------------------------------------------------------
+
+// openGrid builds an overview over the named files, warms every thumbnail
+// (so no cell spawns a background decode, see Warm) and opens it - the
+// starting state for every search test below.
+func openGrid(t *testing.T, names ...string) (*Overview, *fakeHost) {
+	t.Helper()
+
+	host := hostWith(t, names...)
+	g := newOverview(t, host)
+	if err := g.Warm(); err != nil {
+		t.Fatalf("Warm: %v", err)
+	}
+	g.Toggle()
+
+	return g, host
+}
+
+func TestHandleRune_SlashOpensSearch(t *testing.T) {
+	g, _ := openGrid(t, "a.jpg")
+
+	g.HandleRune('/')
+
+	if !g.Searching() {
+		t.Error("a typed / should open search mode")
+	}
+	if g.Query() != "" {
+		t.Errorf("Query() = %q, want empty - the activating / must not land in the query itself", g.Query())
+	}
+}
+
+// typeQuery opens search and types q into it, one rune at a time - the way
+// the canvas's typed-rune callback delivers them.
+func typeQuery(g *Overview, q string) {
+	g.HandleRune('/')
+	for _, r := range q {
+		g.HandleRune(r)
+	}
+}
+
+func TestHandleRune_QueryFiltersToMatchingNames(t *testing.T) {
+	g, _ := openGrid(t, "sunset.jpg", "moon.jpg", "sunrise.jpg")
+
+	typeQuery(g, "sun")
+
+	if g.Query() != "sun" {
+		t.Errorf("Query() = %q, want %q", g.Query(), "sun")
+	}
+	// Length is what GridWrap itself calls to size the grid, so this is the
+	// cell count the user actually sees.
+	if got := g.wrap.Length(); got != 2 {
+		t.Errorf("grid length = %d, want 2 - only sunset.jpg and sunrise.jpg match %q", got, "sun")
+	}
+}
+
+func TestHandleRune_MatchingIsCaseInsensitive(t *testing.T) {
+	g, _ := openGrid(t, "Sunset.JPG", "moon.jpg")
+
+	typeQuery(g, "sUnSeT")
+
+	if got := g.wrap.Length(); got != 1 {
+		t.Errorf("grid length = %d, want 1 - matching should ignore case on both sides", got)
+	}
+}
+
+// TestHandleKey_ReturnOpensHostIndexOfFilteredCell is the mapping this
+// whole feature turns on: a filtered grid renumbers its cells from zero,
+// but ShowImage takes the app's own file index, so opening the only match
+// for "sunr" must show file 2 and not cell 0.
+func TestHandleKey_ReturnOpensHostIndexOfFilteredCell(t *testing.T) {
+	g, host := openGrid(t, "sunset.jpg", "moon.jpg", "sunrise.jpg")
+
+	typeQuery(g, "sunr")
+	g.HandleKey(&fyne.KeyEvent{Name: fyne.KeyReturn})
+
+	if len(host.shown) != 1 || host.shown[0] != 2 {
+		t.Errorf("ShowImage calls = %v, want [2] - sunrise.jpg is display cell 0 but host file 2", host.shown)
+	}
+}
+
+// TestHandleRune_FilteringResetsHighlightToFirstMatch: the highlight is a
+// display index, so a filter that shortens the grid under it would leave it
+// pointing past the last cell.
+func TestHandleRune_FilteringResetsHighlightToFirstMatch(t *testing.T) {
+	host := hostWith(t, "a.jpg", "b.jpg", "moon.jpg")
+	host.index = 2
+	g := newOverview(t, host)
+	if err := g.Warm(); err != nil {
+		t.Fatalf("Warm: %v", err)
+	}
+	g.Toggle()
+
+	if g.Highlight() != 2 {
+		t.Fatalf("Highlight() = %d, want it to start on the current image (2)", g.Highlight())
+	}
+
+	typeQuery(g, "a")
+
+	if g.Highlight() != 0 {
+		t.Errorf("Highlight() = %d, want 0 - only one cell is left to highlight", g.Highlight())
+	}
+}
+
+// TestHandleKey_EscapeClearsSearchBeforeClosingTheGrid pins the staging the
+// user asked for: Escape means "undo the filter" while one is up, and only
+// falls back to its usual "leave the grid" once there is nothing to undo.
+func TestHandleKey_EscapeClearsSearchBeforeClosingTheGrid(t *testing.T) {
+	g, _ := openGrid(t, "sunset.jpg", "moon.jpg")
+	typeQuery(g, "sun")
+
+	g.HandleKey(&fyne.KeyEvent{Name: fyne.KeyEscape})
+
+	if !g.Visible() {
+		t.Error("the first Escape should clear the search, not close the grid")
+	}
+	if g.Searching() || g.Query() != "" {
+		t.Errorf("Searching() = %v, Query() = %q, want the search gone", g.Searching(), g.Query())
+	}
+	if got := g.wrap.Length(); got != 2 {
+		t.Errorf("grid length = %d, want all 2 files shown again", got)
+	}
+
+	g.HandleKey(&fyne.KeyEvent{Name: fyne.KeyEscape})
+
+	if g.Visible() {
+		t.Error("a second Escape, with no search left to clear, should close the grid")
+	}
+}
+
+func TestHandleKey_BackspaceShortensTheQuery(t *testing.T) {
+	g, _ := openGrid(t, "sunset.jpg", "sunrise.jpg", "moon.jpg")
+	typeQuery(g, "sunr")
+
+	if got := g.wrap.Length(); got != 1 {
+		t.Fatalf("grid length = %d, want 1 before the backspace", got)
+	}
+
+	g.HandleKey(&fyne.KeyEvent{Name: fyne.KeyBackspace})
+
+	if g.Query() != "sun" {
+		t.Errorf("Query() = %q, want %q", g.Query(), "sun")
+	}
+	if got := g.wrap.Length(); got != 2 {
+		t.Errorf("grid length = %d, want 2 - deleting a character widens the match set again", got)
+	}
+}
+
+// TestHandleKey_BackspaceDeletesAWholeRune: the app ships a German
+// translation and reads whatever files the user drops, so the query holds
+// multi-byte characters - and cutting one in half leaves invalid UTF-8 that
+// matches nothing.
+func TestHandleKey_BackspaceDeletesAWholeRune(t *testing.T) {
+	g, _ := openGrid(t, "Grüße.jpg", "moon.jpg")
+	typeQuery(g, "grüß")
+
+	g.HandleKey(&fyne.KeyEvent{Name: fyne.KeyBackspace})
+
+	if g.Query() != "grü" {
+		t.Errorf("Query() = %q, want %q - backspace must delete a rune, not a byte", g.Query(), "grü")
+	}
+	if got := g.wrap.Length(); got != 1 {
+		t.Errorf("grid length = %d, want 1 - %q should still match Grüße.jpg", got, g.Query())
+	}
+}
+
+func TestHandleKey_BackspaceOnEmptyQueryStaysInSearch(t *testing.T) {
+	g, _ := openGrid(t, "a.jpg")
+	g.HandleRune('/')
+
+	g.HandleKey(&fyne.KeyEvent{Name: fyne.KeyBackspace})
+
+	if !g.Searching() {
+		t.Error("backspacing an already-empty query should leave search open, not exit it")
+	}
+	if g.Query() != "" {
+		t.Errorf("Query() = %q, want it to stay empty", g.Query())
+	}
+}
+
+// TestHandleKey_GDoesNotCloseWhileSearching guards the collision the rune
+// input creates: a letter key delivers both a rune and a key event, and G
+// is the grid's own close shortcut. While searching it has to be a query
+// character in one path and nothing at all in the other.
+func TestHandleKey_GDoesNotCloseWhileSearching(t *testing.T) {
+	g, _ := openGrid(t, "gold.jpg", "moon.jpg")
+	typeQuery(g, "g")
+
+	g.HandleKey(&fyne.KeyEvent{Name: fyne.KeyG})
+
+	if !g.Visible() {
+		t.Error("G should be a query character while searching, not a close")
+	}
+	if g.Query() != "g" {
+		t.Errorf("Query() = %q, want %q - the key event must not also edit the query", g.Query(), "g")
+	}
+}
+
+func TestClose_ClearsTheSearch(t *testing.T) {
+	g, _ := openGrid(t, "sunset.jpg", "moon.jpg")
+	typeQuery(g, "sun")
+
+	g.Close()
+	g.Toggle()
+
+	if g.Searching() || g.Query() != "" {
+		t.Errorf("Searching() = %v, Query() = %q, want a reopened grid to start unfiltered", g.Searching(), g.Query())
+	}
+	if got := g.wrap.Length(); got != 2 {
+		t.Errorf("grid length = %d, want the whole set back", got)
+	}
+}
+
+func TestHandleRune_NoMatchesShowsAnEmptyGrid(t *testing.T) {
+	g, _ := openGrid(t, "a.jpg", "b.jpg")
+
+	typeQuery(g, "zzz")
+
+	if got := g.wrap.Length(); got != 0 {
+		t.Errorf("grid length = %d, want 0 - nothing matches %q", got, "zzz")
+	}
+}
+
+func TestHandleKey_ReturnWithNoMatchesOpensNothing(t *testing.T) {
+	g, host := openGrid(t, "a.jpg", "b.jpg")
+	typeQuery(g, "zzz")
+
+	g.HandleKey(&fyne.KeyEvent{Name: fyne.KeyReturn})
+
+	if len(host.shown) != 0 {
+		t.Errorf("ShowImage calls = %v, want none - there is no match to open", host.shown)
+	}
+	if !g.Visible() {
+		t.Error("a Return with nothing to open should leave the grid up")
+	}
+}
+
+func TestSearchBar_HiddenUntilSearchOpens(t *testing.T) {
+	g, _ := openGrid(t, "a.jpg")
+
+	if g.searchBar.Visible() {
+		t.Error("the search bar should stay hidden until / opens it")
+	}
+
+	g.HandleRune('/')
+	if !g.searchBar.Visible() {
+		t.Error("/ should show the search bar")
+	}
+
+	g.HandleKey(&fyne.KeyEvent{Name: fyne.KeyEscape})
+	if g.searchBar.Visible() {
+		t.Error("clearing the search should hide the bar again")
+	}
+}
+
+func TestSearchBar_ShowsQueryAndMatchCount(t *testing.T) {
+	g, _ := openGrid(t, "sunset.jpg", "moon.jpg", "sunrise.jpg")
+
+	typeQuery(g, "sun")
+
+	if want := fmt.Sprintf(lang.L("Search: %s"), "sun"); g.searchLabel.Text != want {
+		t.Errorf("search label = %q, want %q", g.searchLabel.Text, want)
+	}
+	if want := fmt.Sprintf(lang.L("%d of %d"), 2, 3); g.countLabel.Text != want {
+		t.Errorf("count label = %q, want %q", g.countLabel.Text, want)
+	}
+}
+
+// TestSearchBar_EmptyNoticeOnlyWhenNothingMatches: an empty grid with no
+// explanation reads as a bug, so the one state that draws no cells at all
+// says why.
+func TestSearchBar_EmptyNoticeOnlyWhenNothingMatches(t *testing.T) {
+	g, _ := openGrid(t, "a.jpg", "b.jpg")
+
+	typeQuery(g, "a")
+	if g.empty.Visible() {
+		t.Error("the empty notice should stay hidden while something still matches")
+	}
+
+	g.HandleRune('z')
+	if !g.empty.Visible() {
+		t.Error("the empty notice should appear once nothing matches")
+	}
+
+	g.HandleKey(&fyne.KeyEvent{Name: fyne.KeyBackspace})
+	if g.empty.Visible() {
+		t.Error("the empty notice should go away again once a match comes back")
+	}
+}
+
 // --- thumbnails ------------------------------------------------------------
 
 // newCell returns a cell of the shape the grid's own CreateItem builds -
@@ -389,6 +680,39 @@ func TestRequestThumbnail_RecycledBeforeDecodeBailsAndReleases(t *testing.T) {
 	}
 }
 
+// TestRequestThumbnail_QueryChangeDiscardsInFlightDecode covers the
+// staleness filtering adds on top of the two guards already here: the file
+// set and the cell's own id can both still be current while the query
+// underneath has renumbered the cells, so display cell 0 means a different
+// file than the one this decode was started for. Same parking technique as
+// the recycling test above - fill sem so the change deterministically
+// beats the decode.
+func TestRequestThumbnail_QueryChangeDiscardsInFlightDecode(t *testing.T) {
+	host := hostWith(t, "a.jpg", "b.jpg")
+	g := newOverview(t, host)
+
+	cell, img := newCell()
+	g.cellIDs.Store(cell, 0)
+
+	for range thumbConcurrency {
+		g.sem <- struct{}{}
+	}
+
+	g.requestThumbnail(cell, img, 0, host.gen)
+
+	// Display cell 0 now means b.jpg; the decode in flight is for a.jpg.
+	typeQuery(g, "b")
+
+	for range thumbConcurrency {
+		<-g.sem
+	}
+	g.Settle()
+
+	if img.Image != nil {
+		t.Error("a decode started under a different query must not paint a.jpg into a cell now showing b.jpg")
+	}
+}
+
 func TestStillWanted(t *testing.T) {
 	host := hostWith(t, "a.jpg")
 	host.gen = 7
@@ -397,18 +721,23 @@ func TestStillWanted(t *testing.T) {
 	cell, _ := newCell()
 	g.cellIDs.Store(cell, 3)
 
-	if !g.stillWanted(cell, 3, 7) {
+	fgen := g.filterGen.Load()
+
+	if !g.stillWanted(cell, 3, 7, fgen) {
 		t.Error("a decode for the cell's current id at the current generation is still wanted")
 	}
-	if g.stillWanted(cell, 4, 7) {
+	if g.stillWanted(cell, 4, 7, fgen) {
 		t.Error("a decode for an id this cell has since been recycled away from is stale")
 	}
-	if g.stillWanted(cell, 3, 6) {
+	if g.stillWanted(cell, 3, 6, fgen) {
 		t.Error("a decode from a superseded generation is stale")
+	}
+	if g.stillWanted(cell, 3, 7, fgen+1) {
+		t.Error("a decode resolved under a superseded query is stale")
 	}
 
 	other, _ := newCell()
-	if g.stillWanted(other, 3, 7) {
+	if g.stillWanted(other, 3, 7, fgen) {
 		t.Error("a cell the grid has never tracked is stale")
 	}
 }

@@ -27,6 +27,30 @@ func defaultKeyModifiers() fyne.KeyModifier {
 	return 0
 }
 
+// handleTypedRune dispatches a single typed character. The grid's filename
+// search (see internal/ui/grid) is the only thing in the app that reads
+// characters rather than key names, so outside the grid there is nothing to
+// deliver them to and they are dropped - typing in the normal image view
+// must not quietly build up a query that appears the next time the grid
+// opens.
+//
+// Wired to the window's canvas via SetOnTypedRune in buildViewer
+// (build.go), the twin of handleKeyEvent's SetOnTypedKey. Fyne only calls
+// it while nothing holds widget focus, which is this app's permanent state:
+// every key binding is dispatched from here rather than from a focused
+// widget (see grid.Close on the one place that has to actively restore it).
+func (v *viewer) handleTypedRune(r rune) {
+	// The delete confirmation owns the keyboard whole while it's up, for
+	// the same reasons it does in handleKeyEvent below.
+	if v.deletion.Visible() {
+		return
+	}
+
+	if v.grid.Visible() {
+		v.grid.HandleRune(r)
+	}
+}
+
 // handleKeyEvent dispatches a single key press: F1 opens the manual,
 // Escape cancels a scan in progress, resets back to the initial state, or
 // closes the window once there's nothing left to reset/cancel, the

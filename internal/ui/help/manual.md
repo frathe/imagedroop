@@ -272,9 +272,22 @@ instead of arrowing through them one at a time.
   **`Return`** opens whichever thumbnail is currently highlighted.
 - Press **`G`** again, or **`Esc`**, to leave the grid without picking
   anything.
+- Press **`/`** to search by file name: a bar appears across the top, and
+  what you type filters the grid down to the names containing it as you go.
+  Matching ignores upper and lower case, and the bar keeps a count of how
+  much of the set is left (`3 of 847`). Backspace deletes a character, the
+  arrow keys and `Return` work on the matches exactly as they do on the
+  full grid, and **`Esc`** clears the search so every image is shown
+  again — a second `Esc` then leaves the grid as usual.
 - While the grid is up, every other key is ignored - zoom, `S`/`M`/`P`/`I`,
   `Shift+Delete` all do nothing until you either pick a thumbnail (click or
-  `Return`) or back out with `G`/`Esc`.
+  `Return`) or back out with `G`/`Esc`. While a search is open, the letter
+  keys are characters you are typing, so `G` no longer closes the grid -
+  `Esc` does.
+- The search only narrows what the grid shows. It changes nothing about the
+  set itself: pick an image and the arrow keys still walk through every
+  file you dropped, and the next time you open the grid it starts
+  unfiltered.
 - Thumbnails are generated in the background as they scroll into view, a
   few at a time, so opening the grid on a folder with thousands of images
   doesn't stall the window waiting for all of them to decode up front.
@@ -372,6 +385,8 @@ stays in the set.
   replacing it); shown in the title bar as a **`[merge]`** prefix
 - **`G`** — toggle the grid overview (see above); arrow keys move the
   highlight, `Return` or a click opens it, `G`/`Esc` backs out
+- **`/`** — (grid only) search the grid by file name; `Esc` clears the
+  search, a second `Esc` leaves the grid
 - **`+`** / **`-`** — zoom in / out
 - **`1`** — zoom to 100%; **`0`** — back to fit-to-window (and un-rotates, see
   below)
@@ -561,6 +576,9 @@ Things Image Drop deliberately does not do (yet):
 - **Grid overview** — `G` toggles a full-window thumbnail grid; arrow keys
   move the highlight, `Return` or a click opens it, `G`/`Esc` backs out
   without picking one
+- **Search by name** — `/` inside the grid filters it to the file names
+  containing what you type; `Esc` clears the filter, a second `Esc` leaves
+  the grid
 - **Zoom** — `+`/`-` zoom in/out, `1` for 100%, `0` for fit-to-window, or
   scroll to zoom at the cursor; drag, or Shift+scroll, to pan once zoomed in
 - **Rotate** — `R`/`Shift+R` rotate 90° clockwise/counter-clockwise,

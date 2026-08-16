@@ -2,6 +2,23 @@
 
 ## Done
 
+- **Filename search in the grid** — `/` opens a search bar in the grid
+   overview (`internal/ui/grid`) and what follows filters the cells to the
+   file names containing it, case-insensitively; `Esc` clears the filter,
+   a second `Esc` leaves the grid as before. The filter is grid-local: it
+   renumbers only the cells drawn, so `matches`/`fileIndex` map a display
+   index back to the host's file index and `Host` needed no new method —
+   navigation outside the grid still walks the whole set. Input arrives via
+   a new `Canvas.SetOnTypedRune` dispatch (`keys.go`'s `handleTypedRune`)
+   rather than key names, since a `fyne.KeyEvent` carries neither case nor
+   `_`; that also keeps Fyne's widget focus out of it, so arrows/Return/Esc
+   still reach the grid as they always did. `G` had to become inert while
+   searching — a letter key delivers both a rune and a key event, so the
+   close shortcut would otherwise fire on its way into the query. A new
+   `filterGen` guard discards a thumbnail decode whose cell was renumbered
+   under it: the file set and the cell's id are both still current after a
+   keystroke, so neither existing guard could see it.
+
 - **Save As / convert image format** — File > "Export as PNG…"/"Export as
    JPEG…" (`internal/ui/export.go`) writes the frame on screen to a new file
    in a format chosen by the menu item rather than by the source, via
@@ -60,10 +77,6 @@
    never machine-dependent.
 
 ## TODO
-
-- **Filename search / jump-to-file** — a type-ahead search (e.g. bound to
-   `/`) that filters or jumps to a file by name within the current file
-   set, most useful from `internal/ui/grid`.
 
 - **Multi-select + batch ops in grid view** — Shift/Cmd-click to select
    multiple thumbnails in `internal/ui/grid`, then batch-delete (through

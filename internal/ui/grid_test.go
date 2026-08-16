@@ -39,6 +39,56 @@ func TestHandleKeyEvent_GTogglesGrid(t *testing.T) {
 	}
 }
 
+// TestHandleTypedRune_OnlyReachesTheGridWhileItIsUp is the other half of
+// the search wiring: typed characters are a grid-only language, so outside
+// it they must be dropped rather than quietly accumulating into a query
+// that appears the next time the grid opens.
+func TestHandleTypedRune_OnlyReachesTheGridWhileItIsUp(t *testing.T) {
+	v := newTestViewer(t)
+
+	a := uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White)
+	b := uitest.TempJPEGURI(t, "b.jpg", 4, 4, color.White)
+	dropAndWait(t, v, a, b)
+	warmThumbs(t, v)
+
+	v.handleTypedRune('/')
+	if v.grid.Searching() {
+		t.Fatal("a / typed in the normal image view must not open the grid's search")
+	}
+
+	v.grid.Toggle()
+	v.handleTypedRune('/')
+	v.handleTypedRune('a')
+
+	if !v.grid.Searching() {
+		t.Error("a / typed while the grid is up should open its search")
+	}
+	if v.grid.Query() != "a" {
+		t.Errorf("Query() = %q, want %q", v.grid.Query(), "a")
+	}
+}
+
+// TestHandleTypedRune_GridVisible_SwallowedByDeleteConfirmation: the delete
+// card owns the keyboard whole while it is up, the same as in
+// handleKeyEvent - a typed character must not edit a search behind it.
+func TestHandleTypedRune_GridVisible_SwallowedByDeleteConfirmation(t *testing.T) {
+	v := newTestViewer(t)
+
+	a := uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White)
+	dropAndWait(t, v, a)
+	warmThumbs(t, v)
+
+	v.grid.Toggle()
+	v.handleTypedRune('/')
+	v.deletion.Request()
+
+	v.handleTypedRune('a')
+
+	if v.grid.Query() != "" {
+		t.Errorf("Query() = %q, want it untouched while the delete confirmation is up", v.grid.Query())
+	}
+}
+
 // TestHandleKeyEvent_GridVisible_SwallowsNavigation is the dispatcher's
 // half of the contract: while the grid is up, ordinary navigation must not
 // slip through and change what's on screen behind it.

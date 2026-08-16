@@ -79,5 +79,8 @@
    "Capture date": "Capture date",
    "Modified date": "Modified date",
    "File size": "File size",
-   "Drop order": "Drop order"
+   "Drop order": "Drop order",
+   "Search: %s": "Search: %s",
+   "%d of %d": "%d of %d",
+   "No file names match": "No file names match"
 }
