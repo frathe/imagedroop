@@ -5,8 +5,7 @@
 //
 // It exists because Go can't share unexported test helpers across packages,
 // and the previous answer to that - copying `writeTempFile`/`encodeJPEG`
-// into each package that needed them (see
-// legacy/2026-08-13_refactoring.md) - doesn't scale to the per-feature
+// into each package that needed them - doesn't scale to the per-feature
 // package split this module is working through. Everything here is
 // deliberately viewer-free: fixtures build bytes, files, and URIs, and know
 // nothing about the app's own types.

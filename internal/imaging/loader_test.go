@@ -117,8 +117,8 @@ func encodeJPEG(t *testing.T, w, h int, c color.Color) []byte {
 	t.Helper()
 
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
+	for y := range h {
+		for x := range w {
 			img.Set(x, y, c)
 		}
 	}
@@ -135,8 +135,8 @@ func encodePNG(t *testing.T, w, h int, c color.Color) []byte {
 	t.Helper()
 
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
+	for y := range h {
+		for x := range w {
 			img.Set(x, y, c)
 		}
 	}
@@ -154,8 +154,8 @@ func encodeGIF(t *testing.T, w, h int, c color.Color) []byte {
 
 	palette := color.Palette{color.White, c}
 	img := image.NewPaletted(image.Rect(0, 0, w, h), palette)
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
+	for y := range h {
+		for x := range w {
 			img.Set(x, y, c)
 		}
 	}
@@ -172,8 +172,8 @@ func encodeBMP(t *testing.T, w, h int, c color.Color) []byte {
 	t.Helper()
 
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
+	for y := range h {
+		for x := range w {
 			img.Set(x, y, c)
 		}
 	}
@@ -190,8 +190,8 @@ func encodeTIFF(t *testing.T, w, h int, c color.Color) []byte {
 	t.Helper()
 
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
+	for y := range h {
+		for x := range w {
 			img.Set(x, y, c)
 		}
 	}
@@ -208,8 +208,8 @@ func encodeICO(t *testing.T, w, h int, c color.Color) []byte {
 	t.Helper()
 
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
+	for y := range h {
+		for x := range w {
 			img.Set(x, y, c)
 		}
 	}
@@ -236,7 +236,7 @@ func encodeXPM(t *testing.T, w, h int, c color.Color) []byte {
 	buf.WriteString("static char * img_xpm[] = {\n")
 	fmt.Fprintf(&buf, "\"%d %d 1 1\",\n", w, h)
 	fmt.Fprintf(&buf, "\"X c #%02x%02x%02x\",\n", r>>8, g>>8, b>>8)
-	for y := 0; y < h; y++ {
+	for y := range h {
 		buf.WriteString("\"")
 		buf.WriteString(strings.Repeat("X", w))
 		buf.WriteString("\"")
@@ -254,8 +254,8 @@ func encodeAVIF(t *testing.T, w, h int, c color.Color) []byte {
 	t.Helper()
 
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
+	for y := range h {
+		for x := range w {
 			img.Set(x, y, c)
 		}
 	}
@@ -279,8 +279,8 @@ func encodeAnimatedGIF(t *testing.T, w, h int, colors []color.Color, delays []in
 	for i, c := range colors {
 		palette := color.Palette{color.White, c}
 		frame := image.NewPaletted(image.Rect(0, 0, w, h), palette)
-		for y := 0; y < h; y++ {
-			for x := 0; x < w; x++ {
+		for y := range h {
+			for x := range w {
 				frame.Set(x, y, c)
 			}
 		}
@@ -574,8 +574,8 @@ func halfRedHalfBlueJPEG(t *testing.T, w, h int, orientation uint16) []byte {
 	t.Helper()
 
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
+	for y := range h {
+		for x := range w {
 			if x < w/2 {
 				img.Set(x, y, color.RGBA{R: 255, A: 255})
 			} else {
@@ -746,8 +746,8 @@ func TestCtxReader_StopsMidStreamOnceContextIsCancelled(t *testing.T) {
 func jpegWithDateTimeOriginal(t *testing.T, raw string) []byte {
 	t.Helper()
 
-	tiff := buildFullExifTIFF(t, fullExifFields{dateTimeOriginal: raw})
-	seg := wrapAsAPP1(append([]byte("Exif\x00\x00"), tiff...))
+	fullExifTIFF := buildFullExifTIFF(t, fullExifFields{dateTimeOriginal: raw})
+	seg := wrapAsAPP1(append([]byte("Exif\x00\x00"), fullExifTIFF...))
 
 	data := encodeJPEG(t, 4, 4, color.White)
 	out := append([]byte{}, data[:2]...)

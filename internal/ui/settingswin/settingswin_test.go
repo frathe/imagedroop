@@ -180,14 +180,15 @@ func TestIntervalEntry_ValidChangeCallsSetSlideInterval(t *testing.T) {
 
 // TestIntervalEntry_InvalidTextIsIgnored checks that neither an empty field
 // (the natural mid-edit state while retyping a value) nor outright garbage
-// reaches the host - only strconv.Atoi-parseable positive integers should.
+// reaches the host. Values too large to fit in time.Duration are rejected
+// too, rather than overflowing to a negative duration.
 func TestIntervalEntry_InvalidTextIsIgnored(t *testing.T) {
 	host := &fakeHost{}
 	w := New(testApp, host)
 	w.Show()
 	t.Cleanup(func() { w.win.Window().Close() })
 
-	for _, text := range []string{"", "abc", "-5", "0"} {
+	for _, text := range []string{"", "abc", "-5", "0", "9223372037", "999999999999999999999999"} {
 		w.intervalEntry.SetText(text)
 	}
 

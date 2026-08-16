@@ -422,9 +422,7 @@ func (g *Overview) requestThumbnail(key *fyne.Container, img *canvas.Image, id i
 	// Done fires only after the completion fyne.Do below has returned, so
 	// a Wait that comes back guarantees no decode goroutine will touch a
 	// widget afterwards.
-	g.pending.Add(1)
-	go func() {
-		defer g.pending.Done()
+	g.pending.Go(func() {
 
 		g.sem <- struct{}{}
 		defer func() { <-g.sem }()
@@ -486,7 +484,7 @@ func (g *Overview) requestThumbnail(key *fyne.Container, img *canvas.Image, id i
 				img.Refresh()
 			}
 		})
-	}()
+	})
 }
 
 // claim records that a decode goroutine is being spawned to fill the cell

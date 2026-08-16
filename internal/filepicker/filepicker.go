@@ -93,6 +93,7 @@ if ($dlg.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
 // PowerShell string literal.
 func powerShellEscape(s string) string {
 	s = strings.ReplaceAll(s, "`", "``")
+	s = strings.ReplaceAll(s, "$", "`$")
 	return strings.ReplaceAll(s, `"`, "`\"")
 }
 

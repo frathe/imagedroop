@@ -151,11 +151,9 @@ func (c *Controller) enter() {
 	kick := make(chan struct{}, 1)
 	c.kick = kick
 
-	c.running.Add(1)
-	go func() {
-		defer c.running.Done()
+	c.running.Go(func() {
 		c.run(gen, kick)
-	}()
+	})
 }
 
 // Exit leaves full-screen and stops the auto-advance goroutine by bumping
@@ -200,10 +198,7 @@ func (c *Controller) SetInterval(d time.Duration) {
 // the new pace applies to the countdown already in progress instead of
 // waiting for it to finish first.
 func (c *Controller) AdjustInterval(delta time.Duration) {
-	next := c.Interval() + delta
-	if next < MinInterval {
-		next = MinInterval
-	}
+	next := max(c.Interval()+delta, MinInterval)
 	c.SetInterval(next)
 	c.Kick()
 }

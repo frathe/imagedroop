@@ -27,6 +27,11 @@ import (
 const (
 	windowW = 460.0
 	windowH = 340.0
+
+	// time.Duration is an int64 nanosecond count. Reject a larger number of
+	// seconds instead of letting the multiplication in build wrap negative
+	// and get mistaken for the one-second minimum by the host.
+	maxDurationSeconds = int64(1<<63-1) / int64(time.Second)
 )
 
 // Host is what the settings window needs from the app: read/write access to
@@ -127,7 +132,7 @@ func (w *Window) build() fyne.CanvasObject {
 	w.intervalEntry.Validator = positiveInt
 	w.intervalEntry.Text = strconv.Itoa(int(w.host.SlideInterval().Seconds()))
 	w.intervalEntry.OnChanged = func(s string) {
-		if n, err := strconv.Atoi(s); err == nil && n > 0 {
+		if n, err := strconv.ParseInt(s, 10, 64); err == nil && n > 0 && n <= maxDurationSeconds {
 			w.host.SetSlideInterval(time.Duration(n) * time.Second)
 		}
 	}

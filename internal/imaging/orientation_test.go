@@ -12,8 +12,8 @@ import (
 func markedImage(w, h int) *image.RGBA {
 	img := image.NewRGBA(image.Rect(0, 0, w, h))
 
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
+	for y := range h {
+		for x := range w {
 			img.Set(x, y, color.RGBA{R: uint8(x), G: uint8(y), B: 0, A: 255})
 		}
 	}
@@ -58,8 +58,8 @@ func TestApplyOrientation(t *testing.T) {
 				t.Fatalf("bounds = %dx%d, want %dx%d", b.Dx(), b.Dy(), c.wantW, c.wantH)
 			}
 
-			for y := 0; y < h; y++ {
-				for x := 0; x < w; x++ {
+			for y := range h {
+				for x := range w {
 					wantX, wantY := c.check(x, y)
 					gotX, gotY := at(t, out, wantX, wantY)
 					if gotX != x || gotY != y {
@@ -83,8 +83,8 @@ func TestApplyOrientation(t *testing.T) {
 			t.Fatalf("bounds = %v, want %v", got.Bounds(), want.Bounds())
 		}
 
-		for y := 0; y < h; y++ {
-			for x := 0; x < w; x++ {
+		for y := range h {
+			for x := range w {
 				gx, gy := at(t, got, x, y)
 				wx, wy := at(t, want, x, y)
 				if gx != wx || gy != wy {
@@ -103,8 +103,8 @@ func TestApplyOrientation(t *testing.T) {
 			t.Fatalf("bounds = %v, want %v", got.Bounds(), want.Bounds())
 		}
 
-		for y := 0; y < h; y++ {
-			for x := 0; x < w; x++ {
+		for y := range h {
+			for x := range w {
 				gx, gy := at(t, got, x, y)
 				wx, wy := at(t, want, x, y)
 				if gx != wx || gy != wy {
@@ -144,8 +144,8 @@ func TestRotateSteps(t *testing.T) {
 				t.Fatalf("bounds = %dx%d, want %dx%d", b.Dx(), b.Dy(), c.wantW, c.wantH)
 			}
 
-			for y := 0; y < h; y++ {
-				for x := 0; x < w; x++ {
+			for y := range h {
+				for x := range w {
 					wantX, wantY := c.check(x, y)
 					gotX, gotY := at(t, out, wantX, wantY)
 					if gotX != x || gotY != y {

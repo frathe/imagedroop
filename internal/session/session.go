@@ -31,7 +31,11 @@ func Save(app fyne.App, files []fyne.URI) {
 	cache := app.Cache()
 
 	if len(files) == 0 {
-		_ = cache.Remove(cacheKey)
+		if cache.Exists(cacheKey) {
+			if err := cache.Remove(cacheKey); err != nil {
+				fyne.LogError("failed to clear session", err)
+			}
+		}
 		return
 	}
 
@@ -45,10 +49,13 @@ func Save(app fyne.App, files []fyne.URI) {
 		fyne.LogError("failed to save session", err)
 		return
 	}
-	defer w.Close()
-
 	if err := json.NewEncoder(w).Encode(state{Files: uris}); err != nil {
+		_ = w.Close()
 		fyne.LogError("failed to save session", err)
+		return
+	}
+	if err := w.Close(); err != nil {
+		fyne.LogError("failed to finish saving session", err)
 	}
 }
 

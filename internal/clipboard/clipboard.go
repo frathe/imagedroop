@@ -38,10 +38,20 @@ func writeTempPNG(data []byte) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer f.Close()
 
 	if _, err := f.Write(data); err != nil {
-		os.Remove(f.Name())
+		_ = f.Close()
+		err := os.Remove(f.Name())
+		if err != nil {
+			return "", err
+		}
+		return "", err
+	}
+	if err := f.Close(); err != nil {
+		err := os.Remove(f.Name())
+		if err != nil {
+			return "", err
+		}
 		return "", err
 	}
 	return f.Name(), nil
@@ -122,10 +132,14 @@ func copyImageWindows(data []byte) error {
 	}
 	defer os.Remove(path)
 
+	// Pass the path through the environment instead of interpolating it into
+	// PowerShell source. A Windows temp directory may legally contain `$` or
+	// a backtick, both of which have meaning inside a double-quoted script.
+	const pathEnv = "IMAGEDROP_CLIPBOARD_PNG"
 	script := `Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 try {
-	$img = [System.Drawing.Image]::FromFile("` + path + `")
+	$img = [System.Drawing.Image]::FromFile($env:` + pathEnv + `)
 	[System.Windows.Forms.Clipboard]::SetDataObject($img, $true, 10, 100)
 	$img.Dispose()
 } catch {
@@ -134,6 +148,7 @@ try {
 }`
 
 	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-STA", "-Command", script)
+	cmd.Env = append(os.Environ(), pathEnv+"="+path)
 	hideConsoleWindow(cmd)
 	_, err = runClipboardCommand(cmd)
 	return err

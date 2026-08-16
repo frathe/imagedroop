@@ -27,6 +27,11 @@ import (
 //go:embed translations/*.json
 var translationsFS embed.FS
 
+// appID is the stable key Fyne uses for application-scoped preferences and
+// cache data. Keep it in sync with FyneApp.toml; changing it would make an
+// existing installation appear to lose its saved settings and session.
+const appID = "image_drop"
+
 // argsToURIs converts command-line paths (os.Args[1:]) into file URIs
 // handleDrop can ingest, so launching the binary with paths - the way a
 // macOS file association or "Open With" launches it - works the same as a
@@ -39,6 +44,12 @@ var translationsFS embed.FS
 func argsToURIs(args []string) []fyne.URI {
 	uris := make([]fyne.URI, 0, len(args))
 	for _, a := range args {
+		// filepath.Abs("") resolves to the working directory. An explicitly
+		// empty command-line argument should not unexpectedly scan that entire
+		// directory as though the user had opened it.
+		if a == "" {
+			continue
+		}
 		abs, err := filepath.Abs(a)
 		if err != nil {
 			continue
@@ -49,7 +60,7 @@ func argsToURIs(args []string) []fyne.URI {
 }
 
 func main() {
-	application := app.NewWithID("image_drop")
+	application := app.NewWithID(appID)
 
 	if err := lang.AddTranslationsFS(translationsFS, "translations"); err != nil {
 		fyne.LogError("failed to load translations", err)

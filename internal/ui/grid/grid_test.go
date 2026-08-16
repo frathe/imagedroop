@@ -329,14 +329,14 @@ func TestRequestThumbnail_RecycledBeforeDecodeBailsAndReleases(t *testing.T) {
 	cell, img := newCell()
 	g.cellIDs.Store(cell, 0)
 
-	for i := 0; i < thumbConcurrency; i++ {
+	for range thumbConcurrency {
 		g.sem <- struct{}{}
 	}
 
 	g.requestThumbnail(cell, img, 0, host.gen)
 	g.cellIDs.Store(cell, 1) // the cell scrolls on before a worker picks this up
 
-	for i := 0; i < thumbConcurrency; i++ {
+	for range thumbConcurrency {
 		<-g.sem
 	}
 	g.Settle()

@@ -126,10 +126,14 @@ func TestCopyImageWindows_BuildsExpectedScript(t *testing.T) {
 		"[System.Windows.Forms.Clipboard]::SetDataObject",
 		"catch",
 		"exit 1",
+		"$env:IMAGEDROP_CLIPBOARD_PNG",
 	} {
 		if !strings.Contains(gotScript, want) {
 			t.Errorf("script does not contain %q:\n%s", want, gotScript)
 		}
+	}
+	if strings.Contains(gotScript, os.TempDir()) {
+		t.Errorf("script embeds the temporary path instead of reading it from the environment:\n%s", gotScript)
 	}
 }
 

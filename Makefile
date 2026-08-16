@@ -1,5 +1,5 @@
 APP_NAME := Image Drop
-APP_ID   := com.frathe.image_drop
+PACKAGE_ID := com.frathe.image_drop
 BIN_NAME := image_drop
 ICON     := assets/appIcon.png
 BIN_DIR  := bin
@@ -63,33 +63,33 @@ clean: ## Remove all build artifacts
 	rm -rf $(BIN_DIR) fyne-cross "$(APP_NAME).app" "$(BIN_NAME).zip"
 
 package-mac: ## Package a macOS .app bundle (native, no Docker) into bin/
-	fyne package -os darwin -icon $(ICON) -name "$(APP_NAME)" -appID $(APP_ID) -release
+	fyne package -os darwin -icon $(ICON) -name "$(APP_NAME)" -appID $(PACKAGE_ID) -release
 	python3 scripts/patch_macos_document_types.py "$(APP_NAME).app/Contents/Info.plist"
 	mkdir -p $(BIN_DIR)
 	rm -rf "$(BIN_DIR)/$(APP_NAME).app"
 	mv "$(APP_NAME).app" "$(BIN_DIR)/"
 
 package-windows: ## Cross-compile a Windows .exe via fyne-cross (needs Docker) into bin/ (stripped by default)
-	fyne-cross windows -arch=$(WIN_ARCH) -icon $(ICON) -name $(BIN_NAME) -app-id $(APP_ID) -env GOTOOLCHAIN=auto
+	fyne-cross windows -arch=$(WIN_ARCH) -icon $(ICON) -name $(BIN_NAME) -app-id $(PACKAGE_ID) -env GOTOOLCHAIN=auto
 	mkdir -p $(BIN_DIR)
 	cp fyne-cross/bin/windows-$(WIN_ARCH)/$(BIN_NAME).exe $(BIN_DIR)/
 
 package-windows-debug: ## Cross-compile a console-subsystem, unstripped Windows .exe for diagnosing startup failures
-	fyne-cross windows -arch=$(WIN_ARCH) -icon $(ICON) -name $(BIN_NAME)-debug -app-id $(APP_ID) -env GOTOOLCHAIN=auto -console -no-strip-debug
+	fyne-cross windows -arch=$(WIN_ARCH) -icon $(ICON) -name $(BIN_NAME)-debug -app-id $(PACKAGE_ID) -env GOTOOLCHAIN=auto -console -no-strip-debug
 	mkdir -p $(BIN_DIR)
 	cp fyne-cross/bin/windows-$(WIN_ARCH)/$(BIN_NAME)-debug.exe $(BIN_DIR)/
 
 package-linux: ## Cross-compile Linux binaries via fyne-cross (needs Docker) into bin/, one per arch in LINUX_ARCHES (stripped by default)
 	mkdir -p $(BIN_DIR)
 	for arch in $(LINUX_ARCHES); do \
-		fyne-cross linux -arch=$$arch -icon $(ICON) -name $(BIN_NAME) -app-id $(APP_ID) -env GOTOOLCHAIN=auto || exit 1; \
+		fyne-cross linux -arch=$$arch -icon $(ICON) -name $(BIN_NAME) -app-id $(PACKAGE_ID) -env GOTOOLCHAIN=auto || exit 1; \
 		cp fyne-cross/bin/linux-$$arch/* $(BIN_DIR)/$(BIN_NAME)-linux-$$arch; \
 	done
 
 package-linux-debug: ## Cross-compile unstripped Linux binaries for diagnosing startup failures, one per arch in LINUX_ARCHES
 	mkdir -p $(BIN_DIR)
 	for arch in $(LINUX_ARCHES); do \
-		fyne-cross linux -arch=$$arch -icon $(ICON) -name $(BIN_NAME)-debug -app-id $(APP_ID) -env GOTOOLCHAIN=auto -no-strip-debug || exit 1; \
+		fyne-cross linux -arch=$$arch -icon $(ICON) -name $(BIN_NAME)-debug -app-id $(PACKAGE_ID) -env GOTOOLCHAIN=auto -no-strip-debug || exit 1; \
 		cp fyne-cross/bin/linux-$$arch/* $(BIN_DIR)/$(BIN_NAME)-debug-linux-$$arch; \
 	done
 

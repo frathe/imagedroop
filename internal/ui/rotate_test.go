@@ -80,7 +80,7 @@ func TestRotateBy_FourStepsReturnsToStart(t *testing.T) {
 	a := uitest.TempJPEGURI(t, "a.jpg", 400, 200, color.White)
 	dropAndWait(t, v, a)
 
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		v.handleKeyEvent(&fyne.KeyEvent{Name: fyne.KeyR})
 	}
 

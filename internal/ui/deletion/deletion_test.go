@@ -265,7 +265,7 @@ func TestPerformDelete_OSFailureKeepsTheFileAndToastsAnError(t *testing.T) {
 		t.Errorf("the file should survive a failed delete: %v", err)
 	}
 	if len(host.removed) != 0 {
-		t.Error("a failed os.Remove must not drop the file from the app's set")
+		t.Error("a failed trash move must not drop the file from the app's set")
 	}
 	if len(host.toasts) != 1 || !strings.Contains(host.toasts[0], "could not move") {
 		t.Errorf("toasts = %v, want one reporting the failure", host.toasts)

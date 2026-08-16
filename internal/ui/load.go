@@ -325,9 +325,7 @@ func (v *viewer) preloadOne(ctx context.Context, u fyne.URI, gen uint64) {
 		return
 	}
 
-	v.preloadPending.Add(1)
-	go func() {
-		defer v.preloadPending.Done()
+	v.preloadPending.Go(func() {
 		defer v.preloading.Delete(key)
 
 		// Bounded the same way the grid's thumbnail decodes are:
@@ -362,7 +360,7 @@ func (v *viewer) preloadOne(ctx context.Context, u fyne.URI, gen uint64) {
 		}
 
 		v.imgCache.Add(key, loaded)
-	}()
+	})
 }
 
 // stopAnimation wakes the current animate goroutine, if any, out of its

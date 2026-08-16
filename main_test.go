@@ -21,11 +21,30 @@ func TestArgsToURIs_ResolvesRelativeToAbsolute(t *testing.T) {
 	if uris[0].Path() != wantOne {
 		t.Errorf("uris[0].Path() = %q, want %q", uris[0].Path(), wantOne)
 	}
+
+	wantTwo, err := filepath.Abs(filepath.Join("sub", "two.png"))
+	if err != nil {
+		t.Fatalf("filepath.Abs: %v", err)
+	}
+	if uris[1].Path() != wantTwo {
+		t.Errorf("uris[1].Path() = %q, want %q", uris[1].Path(), wantTwo)
+	}
 }
 
 func TestArgsToURIs_EmptyArgsReturnsEmpty(t *testing.T) {
 	if uris := argsToURIs(nil); len(uris) != 0 {
 		t.Errorf("len(uris) = %d, want 0", len(uris))
+	}
+}
+
+func TestArgsToURIs_SkipsEmptyPath(t *testing.T) {
+	uris := argsToURIs([]string{"", "photo.jpg"})
+
+	if len(uris) != 1 {
+		t.Fatalf("len(uris) = %d, want 1", len(uris))
+	}
+	if uris[0].Name() != "photo.jpg" {
+		t.Errorf("uris[0].Name() = %q, want %q", uris[0].Name(), "photo.jpg")
 	}
 }
 
@@ -70,12 +89,24 @@ func loadBundle(t *testing.T, name string) map[string]string {
 // nowhere else, and nothing complains until a German user sees an English
 // word in the middle of their UI. English is the source locale, so it
 // defines the key set every other bundle has to cover exactly - a key only
-// de.json has is just as broken, since it means an English string was
+// another locale has is just as broken, since it means an English string was
 // renamed and its translation left stranded.
 func TestTranslations_EveryLocaleCoversEnglish(t *testing.T) {
 	en := loadBundle(t, "en.json")
 
-	for _, locale := range []string{"de.json"} {
+	locales, err := fs.Glob(translationsFS, "translations/*.json")
+	if err != nil {
+		t.Fatalf("listing embedded translations: %v", err)
+	}
+	if len(locales) < 2 {
+		t.Fatalf("found %d translation bundle(s), want English and at least one translated locale", len(locales))
+	}
+
+	for _, path := range locales {
+		locale := filepath.Base(path)
+		if locale == "en.json" {
+			continue
+		}
 		other := loadBundle(t, locale)
 
 		for key := range en {

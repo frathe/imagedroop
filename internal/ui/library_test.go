@@ -637,7 +637,7 @@ func TestHandleDrop_RecursesIntoNestedDirectories(t *testing.T) {
 	v := newTestViewer(t)
 
 	root := t.TempDir()
-	for i := 0; i < 3; i++ {
+	for i := range 3 {
 		dir := filepath.Join(root, fmt.Sprintf("sub%d", i))
 		if err := os.MkdirAll(dir, 0o755); err != nil {
 			t.Fatal(err)
@@ -696,7 +696,7 @@ func TestHandleDrop_CapsFileCountForLargeTrees(t *testing.T) {
 	v.maxScan = 3
 
 	root := t.TempDir()
-	for i := 0; i < 5; i++ {
+	for i := range 5 {
 		name := filepath.Join(root, fmt.Sprintf("photo%d.jpg", i))
 		if err := os.WriteFile(name, uitest.EncodeJPEG(t, 4, 4, color.White), 0o644); err != nil {
 			t.Fatal(err)
@@ -908,7 +908,7 @@ func TestHandleDrop_SupersededScanGoroutineExits(t *testing.T) {
 	v := newTestViewer(t)
 
 	rootA := t.TempDir()
-	for i := 0; i < 20; i++ {
+	for i := range 20 {
 		sub := filepath.Join(rootA, fmt.Sprintf("d%d", i))
 		if err := os.MkdirAll(sub, 0o755); err != nil {
 			t.Fatal(err)
@@ -1474,7 +1474,7 @@ func TestSetSortMode_SnapshotDoesNotAliasUnsortedFiles(t *testing.T) {
 	)
 
 	unsorted := make([]fyne.URI, 0, files)
-	for i := 0; i < files; i++ {
+	for i := range files {
 		unsorted = append(unsorted, uitest.FakeURI{FileName: fmt.Sprintf("img_%05d.jpg", i), Ext: ".jpg"})
 	}
 
@@ -1483,7 +1483,7 @@ func TestSetSortMode_SnapshotDoesNotAliasUnsortedFiles(t *testing.T) {
 
 	v.SetSortMode(filesort.ByModTime)
 
-	for i := 0; i < removals; i++ {
+	for range removals {
 		v.RemoveFile(0)
 	}
 

@@ -51,6 +51,8 @@ func TestPowerShellEscape(t *testing.T) {
 		{"Open images", "Open images"},
 		{`say "hi"`, "say `\"hi`\""},
 		{"back`tick", "back``tick"},
+		{"costs $5", "costs `$5"},
+		{"$HOME`, really", "`$HOME``, really"},
 	}
 	for _, tt := range tests {
 		if got := powerShellEscape(tt.in); got != tt.want {

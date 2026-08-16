@@ -51,8 +51,8 @@ func flipH(src image.Image) image.Image {
 	w, h := b.Dx(), b.Dy()
 	out := image.NewRGBA(image.Rect(0, 0, w, h))
 
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
+	for y := range h {
+		for x := range w {
 			out.Set(w-1-x, y, src.At(b.Min.X+x, b.Min.Y+y))
 		}
 	}
@@ -65,8 +65,8 @@ func flipV(src image.Image) image.Image {
 	w, h := b.Dx(), b.Dy()
 	out := image.NewRGBA(image.Rect(0, 0, w, h))
 
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
+	for y := range h {
+		for x := range w {
 			out.Set(x, h-1-y, src.At(b.Min.X+x, b.Min.Y+y))
 		}
 	}
@@ -79,8 +79,8 @@ func rotate180(src image.Image) image.Image {
 	w, h := b.Dx(), b.Dy()
 	out := image.NewRGBA(image.Rect(0, 0, w, h))
 
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
+	for y := range h {
+		for x := range w {
 			out.Set(w-1-x, h-1-y, src.At(b.Min.X+x, b.Min.Y+y))
 		}
 	}
@@ -95,8 +95,8 @@ func rotate90CW(src image.Image) image.Image {
 	w, h := b.Dx(), b.Dy()
 	out := image.NewRGBA(image.Rect(0, 0, h, w))
 
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
+	for y := range h {
+		for x := range w {
 			out.Set(h-1-y, x, src.At(b.Min.X+x, b.Min.Y+y))
 		}
 	}
@@ -111,8 +111,8 @@ func rotate270CW(src image.Image) image.Image {
 	w, h := b.Dx(), b.Dy()
 	out := image.NewRGBA(image.Rect(0, 0, h, w))
 
-	for y := 0; y < h; y++ {
-		for x := 0; x < w; x++ {
+	for y := range h {
+		for x := range w {
 			out.Set(y, w-1-x, src.At(b.Min.X+x, b.Min.Y+y))
 		}
 	}

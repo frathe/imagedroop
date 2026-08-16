@@ -105,7 +105,7 @@ isn't actually corrupted — to open it anyway:
 
 ## Requirements
 
-- Go 1.26.5 or newer (see the `go` directive in [go.mod](go.mod))
+- Go 1.26.6 or newer (see the `go` directive in [go.mod](go.mod))
 - A C toolchain for cgo (Fyne's OpenGL bindings require it) — Xcode Command
   Line Tools on macOS, `gcc` + `libgl1-mesa-dev`/`xorg-dev` on Linux
 - [Docker](https://www.docker.com/) — only needed to cross-compile the

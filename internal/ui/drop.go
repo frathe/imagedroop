@@ -52,11 +52,11 @@ func (v *viewer) cancelScan() {
 // filesystem race between the scan and something else touching the same
 // path) so callers always have something to key a visited-set on.
 func realPathOf(u fyne.URI) string {
-	real, err := filepath.EvalSymlinks(u.Path())
+	symlinkPath, err := filepath.EvalSymlinks(u.Path())
 	if err != nil {
 		return u.Path()
 	}
-	return real
+	return symlinkPath
 }
 
 // defaultMaxScannedFiles caps how many images a single recursive folder
@@ -150,11 +150,11 @@ func (v *viewer) handleDrop(uris []fyne.URI) {
 			if !imaging.IsSupportedImage(u) {
 				continue
 			}
-			real := realPathOf(u)
-			if seen[real] {
+			pathOf := realPathOf(u)
+			if seen[pathOf] {
 				continue
 			}
-			seen[real] = true
+			seen[pathOf] = true
 			images = append(images, u)
 		}
 		fyne.Do(func() {
@@ -179,11 +179,11 @@ func (v *viewer) handleDrop(uris []fyne.URI) {
 		// directory.
 		visitedDirs := make(map[string]bool)
 		visitDir := func(u fyne.URI) bool {
-			real := realPathOf(u)
-			if visitedDirs[real] {
+			pathOf := realPathOf(u)
+			if visitedDirs[pathOf] {
 				return false
 			}
-			visitedDirs[real] = true
+			visitedDirs[pathOf] = true
 			return true
 		}
 
@@ -214,11 +214,11 @@ func (v *viewer) handleDrop(uris []fyne.URI) {
 			}
 
 			if imaging.IsSupportedImage(u) {
-				real := realPathOf(u)
-				if seenFiles[real] {
+				pathOf := realPathOf(u)
+				if seenFiles[pathOf] {
 					return
 				}
-				seenFiles[real] = true
+				seenFiles[pathOf] = true
 
 				images = append(images, u)
 				count++

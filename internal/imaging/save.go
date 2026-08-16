@@ -53,31 +53,45 @@ func encodeJPEGForSave(w io.Writer, img image.Image) error {
 // caller (internal/ui's canSaveRotation) can decide whether to offer saving
 // at all instead of finding out only after attempting it.
 func CanEncode(u fyne.URI) bool {
-	_, ok := encoders[strings.ToLower(u.Extension())]
+	ext := u.Extension()
+	if path, err := filepath.EvalSymlinks(u.Path()); err == nil {
+		ext = filepath.Ext(path)
+	}
+	_, ok := encoders[strings.ToLower(ext)]
 	return ok
 }
 
 // SaveRotated writes img - a caller's already-rotated, already-oriented
 // frame, typically internal/ui's v.img.Image - back to u, re-encoded in the
-// format u's extension implies, replacing the file's previous contents.
+// target file's format, replacing the file's previous contents.
 // Encoding a fresh raster this way (rather than patching the original
 // bytes) does not preserve any Exif metadata the original file carried -
 // SaveRotated is a plain pixel round-trip, not a metadata-preserving edit.
 //
-// It writes to a temp file in the same directory first and renames it over
-// u's path only once the encode has fully succeeded, so a failed or
+// It resolves a symlink before writing, so saving an image opened through a
+// link updates the target instead of replacing the link itself. It writes to
+// a temp file in the target's directory first and renames it over the target
+// only once the encode has fully succeeded, so a failed or
 // interrupted encode can never leave the original file truncated or
-// corrupted; an unsupported format is rejected before any temp file is even
-// created.
+// corrupted. The replacement keeps the original file's permission bits.
 func SaveRotated(u fyne.URI, img image.Image) error {
-	encode, ok := encoders[strings.ToLower(u.Extension())]
-	if !ok {
-		return &UnsupportedSaveFormatError{ext: u.Extension()}
+	path, err := filepath.EvalSymlinks(u.Path())
+	if err != nil {
+		return err
 	}
 
-	path := u.Path()
+	ext := filepath.Ext(path)
+	encode, ok := encoders[strings.ToLower(ext)]
+	if !ok {
+		return &UnsupportedSaveFormatError{ext: ext}
+	}
 
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".imagedrop-save-*"+filepath.Ext(path))
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".imagedrop-save-*"+ext)
 	if err != nil {
 		return err
 	}
@@ -87,8 +101,16 @@ func SaveRotated(u fyne.URI, img image.Image) error {
 	// on an error return above.
 	defer os.Remove(tmpPath)
 
+	if err := tmp.Chmod(info.Mode().Perm()); err != nil {
+		_ = tmp.Close()
+		return err
+	}
 	if err := encode(tmp, img); err != nil {
-		tmp.Close()
+		_ = tmp.Close()
+		return err
+	}
+	if err := tmp.Sync(); err != nil {
+		_ = tmp.Close()
 		return err
 	}
 	if err := tmp.Close(); err != nil {

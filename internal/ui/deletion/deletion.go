@@ -66,7 +66,7 @@ type Confirmer struct {
 	visible bool
 
 	// dangerSelected tracks which button Left/Right has selected: false
-	// (Cancel, the default) or true (the red "permanently delete"
+	// (Cancel, the default) or true (the red "Move to Trash"
 	// button) - reset to false every time Request opens the card, never
 	// carried over from a previous prompt.
 	dangerSelected bool
@@ -87,7 +87,7 @@ type Confirmer struct {
 // New builds the confirmation card (hidden) around host.
 //
 // The card is a dimmed scrim behind a centered box, with Cancel first/left
-// (selected by default) and the red "permanently delete" button
+// (selected by default) and the red "Move to Trash" button
 // second/right, so the Right arrow key - which moves selection there, see
 // HandleKey - points toward where it actually sits. Left/Right/Return/
 // Escape are handled by HandleKey while it's up, not Fyne's own
@@ -203,7 +203,7 @@ func (c *Confirmer) HandleKey(ev *fyne.KeyEvent) {
 }
 
 // setSelection moves the card's Left/Right selection between Cancel
-// (false) and the red "permanently delete" button (true), redrawing
+// (false) and the red "Move to Trash" button (true), redrawing
 // whichever ring highlights the currently selected one.
 func (c *Confirmer) setSelection(dangerSelected bool) {
 	c.dangerSelected = dangerSelected
@@ -273,9 +273,7 @@ func (c *Confirmer) performDelete() {
 	path := target.Path()
 	gen := c.host.Generation()
 
-	c.pending.Add(1)
-	go func() {
-		defer c.pending.Done()
+	c.pending.Go(func() {
 
 		err := trash.Move(path)
 
@@ -299,7 +297,7 @@ func (c *Confirmer) performDelete() {
 			c.host.ShowToast(fmt.Sprintf(lang.L("moved %q to the Trash"), name))
 			c.host.ShowImage(i)
 		})
-	}()
+	})
 }
 
 // Settle waits for any in-flight trash-move goroutine performDelete started
