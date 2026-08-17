@@ -26,6 +26,7 @@
   --note-bg:  #fdf6e7;
   --note-br:  #e0c583;
   --shadow:   0 1px 2px rgb(27 23 38 / 6%), 0 8px 24px rgb(27 23 38 / 8%);
+  --overlay:  rgb(246 245 250 / 60%);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -40,6 +41,7 @@
     --note-bg:  #241d33;
     --note-br:  #6b5730;
     --shadow:   0 1px 2px rgb(0 0 0 / 30%), 0 8px 24px rgb(0 0 0 / 35%);
+    --overlay:  rgb(29 24 48 / 60%);
   }
 }
 
@@ -135,6 +137,69 @@ img { max-width: 100%; height: auto; display: block; }
 .card h3 { margin: 0 0 .4rem; font-size: 1rem; }
 .card p  { margin: 0; color: var(--fg-muted); font-size: .94rem; }
 
+/* --- screenshots ------------------------------------------------------ */
+
+.screens { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+
+.shot {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--bg-soft);
+  box-shadow: var(--shadow);
+}
+.shot img { width: 100%; cursor: pointer; }
+.shot p { margin: 0; padding: .65rem .9rem; color: var(--fg-muted); font-size: .88rem; }
+
+/* --- lightbox ----------------------------------------------------------- */
+
+.lightbox {
+  display: none;
+  position: fixed;
+  inset: 0;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1.5rem;
+  background: var(--overlay);
+  z-index: 100;
+}
+.lightbox.open { display: flex; }
+
+.lightbox-frame {
+  position: relative;
+  max-width: min(90vw, 960px);
+  max-height: 90vh;
+}
+
+.lightbox-frame img {
+  display: block;
+  max-width: 100%;
+  max-height: 90vh;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  box-shadow: var(--shadow);
+}
+
+.lightbox-close {
+  position: absolute;
+  top: -.85rem;
+  right: -.85rem;
+  width: 2.25rem;
+  height: 2.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--bg-soft);
+  color: var(--fg);
+  font-size: 1.2rem;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: var(--shadow);
+}
+.lightbox-close:hover { border-color: var(--accent); }
+
 kbd {
   font: 600 .8em/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
   background: var(--bg);
@@ -216,6 +281,28 @@ footer { margin-top: 3.5rem; border-top: 1px solid var(--border); padding-top: 1
          alt="Screen recording: images are dropped onto the PicFetch window, then browsed with the arrow keys, the thumbnail grid, and zoom"
          loading="lazy">
   </div>
+
+  <h2>Screenshots</h2>
+  <ul class="grid screens">
+    <li class="shot">
+      <img src="https://raw.githubusercontent.com/frathe/picfetch/main/assets/screens/main_screen.png"
+           alt="PicFetch's main window showing the 'Drop images here' prompt before any images are loaded"
+           loading="lazy">
+      <p>Drop images onto the window to get started</p>
+    </li>
+    <li class="shot">
+      <img src="https://raw.githubusercontent.com/frathe/picfetch/main/assets/screens/picture_galery.png"
+           alt="Thumbnail grid view showing dozens of photos at once, with the current image highlighted"
+           loading="lazy">
+      <p>The thumbnail grid for finding an image by sight</p>
+    </li>
+    <li class="shot">
+      <img src="https://raw.githubusercontent.com/frathe/picfetch/main/assets/screens/viewer.png"
+           alt="A zoomed-in photo with the file info overlay and the EXIF data window open, showing camera, aperture, focal length and capture date"
+           loading="lazy">
+      <p>Zoomed in, with file info and EXIF data on show</p>
+    </li>
+  </ul>
 
   <h2>Features</h2>
   <ul class="grid">
@@ -333,5 +420,34 @@ footer { margin-top: 3.5rem; border-top: 1px solid var(--border); padding-top: 1
 </footer>
 
 </div>
+
+<div class="lightbox" id="lightbox">
+  <div class="lightbox-frame">
+    <button class="lightbox-close" id="lightboxClose" aria-label="Close">&times;</button>
+    <img id="lightboxImg" src="" alt="">
+  </div>
+</div>
+
+<script>
+(() => {
+  const lightbox = document.getElementById('lightbox');
+  const lightboxImg = document.getElementById('lightboxImg');
+
+  document.querySelectorAll('.shot img').forEach((img) => {
+    img.addEventListener('click', () => {
+      lightboxImg.src = img.src;
+      lightboxImg.alt = img.alt;
+      lightbox.classList.add('open');
+    });
+  });
+
+  const closeLightbox = () => lightbox.classList.remove('open');
+
+  document.getElementById('lightboxClose').addEventListener('click', closeLightbox);
+  lightbox.addEventListener('click', (e) => {
+    if (e.target === lightbox) closeLightbox();
+  });
+})();
+</script>
 </body>
 </html>
