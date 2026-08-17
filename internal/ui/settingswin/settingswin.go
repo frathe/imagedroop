@@ -122,6 +122,28 @@ func (w *Window) Open() bool {
 	return w.win.Open()
 }
 
+// RestoreGeometry makes the window remember where and how large it was,
+// seeded with what the last run left it at. Called once at construction
+// (internal/ui's buildViewer); the app reads the current values back out of
+// Geometry at shutdown. Without it the window opens at windowW x windowH
+// wherever the OS puts it, which is what it always did.
+func (w *Window) RestoreGeometry(g widgets.Geometry) {
+	w.win.Remember(g)
+}
+
+// Geometry is where the window currently is and how large - or where it was
+// last, since it outlives the window being closed. What internal/ui hands
+// preferences.Save at shutdown.
+func (w *Window) Geometry() widgets.Geometry {
+	return w.win.Geometry()
+}
+
+// StopTracking stops following the window's position, for a shutdown that
+// finds it still open - see widgets.Singleton.StopTracking.
+func (w *Window) StopTracking() {
+	w.win.StopTracking()
+}
+
 // build lays out every control, each one seeded from the host's current
 // value and wired to push a change straight back through it. Initial
 // seeding sets the widgets' fields directly rather than through their own

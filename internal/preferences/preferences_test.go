@@ -49,6 +49,12 @@ func TestLoadPreferences_NothingSavedReturnsDefaults(t *testing.T) {
 	if got.WindowPositionSet {
 		t.Error("WindowPositionSet = true, want false")
 	}
+	if got.SettingsWindow != (WindowGeometry{}) {
+		t.Errorf("SettingsWindow = %+v, want zero value", got.SettingsWindow)
+	}
+	if got.ExifWindow != (WindowGeometry{}) {
+		t.Errorf("ExifWindow = %+v, want zero value", got.ExifWindow)
+	}
 }
 
 func TestSavePreferences_RoundTrip(t *testing.T) {
@@ -69,6 +75,12 @@ func TestSavePreferences_RoundTrip(t *testing.T) {
 		WindowPosX:        120,
 		WindowPosY:        340,
 		WindowPositionSet: true,
+		SettingsWindow: WindowGeometry{
+			X: 200, Y: 210, PositionSet: true, Size: fyne.NewSize(470, 440),
+		},
+		ExifWindow: WindowGeometry{
+			X: 300, Y: 310, PositionSet: true, Size: fyne.NewSize(430, 370),
+		},
 	}
 	Save(app, want)
 
@@ -87,6 +99,32 @@ func TestSavePreferences_RoundTripAtOrigin(t *testing.T) {
 	got := Load(app)
 	if got.WindowPosX != 0 || got.WindowPosY != 0 || !got.WindowPositionSet {
 		t.Errorf("Load() position = (%d, %d, set=%v), want (0, 0, set=true)", got.WindowPosX, got.WindowPosY, got.WindowPositionSet)
+	}
+}
+
+func TestSavePreferences_UnsetSecondaryWindowGeometryDoesNotOverwritePreviouslySaved(t *testing.T) {
+	app := test.NewApp()
+
+	saved := WindowGeometry{X: 70, Y: 80, PositionSet: true, Size: fyne.NewSize(500, 400)}
+	Save(app, State{SettingsWindow: saved, ExifWindow: saved})
+	Save(app, State{})
+
+	got := Load(app)
+	if got.SettingsWindow != saved {
+		t.Errorf("SettingsWindow after an unset Save = %+v, want %+v to survive", got.SettingsWindow, saved)
+	}
+	if got.ExifWindow != saved {
+		t.Errorf("ExifWindow after an unset Save = %+v, want %+v to survive", got.ExifWindow, saved)
+	}
+}
+
+func TestSavePreferences_SecondaryWindowGeometryRoundTripsAtOrigin(t *testing.T) {
+	app := test.NewApp()
+
+	Save(app, State{ExifWindow: WindowGeometry{X: 0, Y: 0, PositionSet: true}})
+
+	if got := Load(app).ExifWindow; got.X != 0 || got.Y != 0 || !got.PositionSet {
+		t.Errorf("ExifWindow position = (%d, %d, set=%v), want (0, 0, set=true)", got.X, got.Y, got.PositionSet)
 	}
 }
 

@@ -27,9 +27,19 @@ func (v *viewer) toggleInfoOverlay() {
 // to be shown for if the preference was already on). Refreshes the card's
 // text before showing it so a toggle-on never briefly displays whatever the
 // text last held.
+//
+// The "Show EXIF data" link is settled here too, rather than in
+// updateInfoOverlay: this is the one path that runs when the file on screen
+// changes, while updateInfoOverlay also runs on every zoom change - and a
+// zoom can't add or remove a file's metadata.
 func (v *viewer) syncInfoOverlayVisibility() {
 	if v.infoVisible && len(v.files) > 0 && v.img.Image != nil {
 		v.updateInfoOverlay()
+		if v.currentHasEXIF {
+			v.exifLink.Show()
+		} else {
+			v.exifLink.Hide()
+		}
 		v.infoCard.Show()
 	} else {
 		v.infoCard.Hide()

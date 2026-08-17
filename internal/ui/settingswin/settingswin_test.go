@@ -10,6 +10,7 @@ import (
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/frathe/picfetch/internal/filesort"
+	"github.com/frathe/picfetch/internal/ui/widgets"
 )
 
 // testApp is shared across every test below, mirroring internal/ui's own
@@ -411,5 +412,57 @@ func TestOpen_ReflectsWindowLifecycle(t *testing.T) {
 	}
 	if w.sortSelect != nil {
 		t.Error("expected the widget fields to be cleared once the window closes")
+	}
+}
+
+// The saved size is deliberately larger than the form's own MinSize in both
+// directions: Fyne never lays a window out smaller than its content needs,
+// so a saved size below that floor would be clamped and tell us nothing
+// about whether it was applied at all.
+func TestRestoreGeometry_OpensAtTheSavedGeometry(t *testing.T) {
+	w := New(testApp, &fakeHost{})
+	w.RestoreGeometry(widgets.Geometry{X: 210, Y: 220, PositionSet: true, Size: fyne.NewSize(700, 700)})
+
+	w.Show()
+	t.Cleanup(func() { w.win.Window().Close() })
+
+	if got, want := w.win.Window().Canvas().Size(), fyne.NewSize(700, 700); got != want {
+		t.Errorf("window size = %v, want the saved %v", got, want)
+	}
+
+	got := w.Geometry()
+	if !got.PositionSet || got.X != 210 || got.Y != 220 {
+		t.Errorf("Geometry() position = (%d, %d, set=%v), want the saved (210, 220, set=true)", got.X, got.Y, got.PositionSet)
+	}
+}
+
+func TestGeometry_TracksAResizeAndOutlivesTheWindow(t *testing.T) {
+	w := New(testApp, &fakeHost{})
+	w.RestoreGeometry(widgets.Geometry{})
+
+	w.Show()
+	w.win.Window().Resize(fyne.NewSize(700, 700))
+	w.win.Window().Close()
+
+	if got, want := w.Geometry().Size, fyne.NewSize(700, 700); got != want {
+		t.Errorf("Geometry().Size after closing = %v, want the last tracked %v", got, want)
+	}
+}
+
+func TestStopTracking_IsSafeWithNoWindowOpen(t *testing.T) {
+	New(testApp, &fakeHost{}).StopTracking()
+}
+
+// Width only: windowH is below the laid-out form's own MinSize, so Fyne
+// grows the window past it - which is exactly what the window has always
+// done, and what makes the height a poor thing to assert on here.
+func TestShow_WithoutRestoreGeometryUsesTheBuiltInSize(t *testing.T) {
+	w := New(testApp, &fakeHost{})
+
+	w.Show()
+	t.Cleanup(func() { w.win.Window().Close() })
+
+	if got, want := w.win.Window().Canvas().Size().Width, float32(windowW); got != want {
+		t.Errorf("window width = %v, want the built-in %v", got, want)
 	}
 }

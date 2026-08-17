@@ -150,6 +150,7 @@ func (v *viewer) attemptLoad(ctx context.Context, i int, gen uint64, done chan s
 			loaded, err = imaging.DecodeLoaded(ctx, data, v.imgCache.Budget())
 			if err == nil {
 				loaded.FileSize = int64(len(data))
+				loaded.HasEXIF = !imaging.ReadMetadata(data).Empty()
 			}
 		}
 
@@ -230,6 +231,7 @@ func (v *viewer) finishLoad(ctx context.Context, _ int, u fyne.URI, loaded *imag
 	v.emptyStateArt.Hide()
 
 	v.currentFileSize = loaded.FileSize
+	v.currentHasEXIF = loaded.HasEXIF
 	v.syncInfoOverlayVisibility()
 	v.exif.Refresh()
 
@@ -395,6 +397,7 @@ func (v *viewer) preloadOne(ctx context.Context, u fyne.URI, gen uint64) {
 			return
 		}
 		loaded.FileSize = int64(len(data))
+		loaded.HasEXIF = !imaging.ReadMetadata(data).Empty()
 
 		b := loaded.Frames[0].Bounds()
 		if b.Dx() == 0 || b.Dy() == 0 {

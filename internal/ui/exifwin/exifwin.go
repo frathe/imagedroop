@@ -109,6 +109,28 @@ func (w *Window) Open() bool {
 	return w.win.Open()
 }
 
+// RestoreGeometry makes the panel remember where and how large it was,
+// seeded with what the last run left it at. Called once at construction
+// (internal/ui's buildViewer); the app reads the current values back out of
+// Geometry at shutdown. Without it the panel opens at exifW x exifH
+// wherever the OS puts it, which is what it always did.
+func (w *Window) RestoreGeometry(g widgets.Geometry) {
+	w.win.Remember(g)
+}
+
+// Geometry is where the panel currently is and how large - or where it was
+// last, since it outlives the window being closed. What internal/ui hands
+// preferences.Save at shutdown.
+func (w *Window) Geometry() widgets.Geometry {
+	return w.win.Geometry()
+}
+
+// StopTracking stops following the panel's position, for a shutdown that
+// finds it still open - see widgets.Singleton.StopTracking.
+func (w *Window) StopTracking() {
+	w.win.StopTracking()
+}
+
 // Window returns the open window, or nil when it's closed - the identity
 // callers and tests use to tell "raised the same window" from "opened a
 // second one".

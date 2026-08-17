@@ -32,6 +32,21 @@ const (
 	keyWindowPosSet    = "windowPosSet"
 )
 
+// geometryKeys names the five preference keys one secondary window's
+// geometry occupies. The main window's own keys above are spelled out as
+// plain constants instead: there is exactly one of it, while every
+// widgets.Singleton window that remembers where it was needs the same five,
+// and naming them per window is what keeps Save/Load from growing a
+// copy of the same five statements per window.
+type geometryKeys struct {
+	posX, posY, posSet, width, height string
+}
+
+var (
+	settingsWinKeys = geometryKeys{"settingsWinPosX", "settingsWinPosY", "settingsWinPosSet", "settingsWinWidth", "settingsWinHeight"}
+	exifWinKeys     = geometryKeys{"exifWinPosX", "exifWinPosY", "exifWinPosSet", "exifWinWidth", "exifWinHeight"}
+)
+
 // Valid values for State.SortMode, persisted under keySortMode. Defined as
 // strings here - rather than reusing the root package's own sortMode enum,
 // which this package can't import without an import cycle - so the on-disk
@@ -90,6 +105,26 @@ type State struct {
 	// size.
 	WindowPosX, WindowPosY int
 	WindowPositionSet      bool
+
+	// SettingsWindow/ExifWindow are where those two secondary windows
+	// (internal/ui/settingswin, internal/ui/exifwin) were last left. Grouped
+	// into a struct where the main window's own geometry above is flat,
+	// because there are two of them and every further widgets.Singleton
+	// window that wants to be remembered adds another - see WindowGeometry.
+	SettingsWindow WindowGeometry
+	ExifWindow     WindowGeometry
+}
+
+// WindowGeometry is one secondary window's remembered position and size -
+// what widgets.Singleton hands over at shutdown and is seeded back with at
+// the next launch. Size's zero value means "nothing saved yet" (the window
+// then opens at its own built-in size), and PositionSet distinguishes
+// "saved at (0,0)" from "never saved", both for the reasons State's
+// WindowSize and WindowPositionSet spell out above.
+type WindowGeometry struct {
+	X, Y        int
+	PositionSet bool
+	Size        fyne.Size
 }
 
 // Save persists s via app.Preferences(). SlideInterval and WindowSize are
@@ -134,6 +169,38 @@ func Save(app fyne.App, s State) {
 		p.SetInt(keyWindowPosY, s.WindowPosY)
 		p.SetBool(keyWindowPosSet, true)
 	}
+
+	saveGeometry(p, settingsWinKeys, s.SettingsWindow)
+	saveGeometry(p, exifWinKeys, s.ExifWindow)
+}
+
+// saveGeometry writes one secondary window's geometry under k, position and
+// size each guarded by their own "only when set" check - a window the user
+// never opened this run reports a zero geometry, which must not clobber
+// where they left it last time.
+func saveGeometry(p fyne.Preferences, k geometryKeys, g WindowGeometry) {
+	if g.PositionSet {
+		p.SetInt(k.posX, g.X)
+		p.SetInt(k.posY, g.Y)
+		p.SetBool(k.posSet, true)
+	}
+	if g.Size.Width > 0 && g.Size.Height > 0 {
+		p.SetFloat(k.width, float64(g.Size.Width))
+		p.SetFloat(k.height, float64(g.Size.Height))
+	}
+}
+
+// loadGeometry reads back what saveGeometry wrote under k.
+func loadGeometry(p fyne.Preferences, k geometryKeys) WindowGeometry {
+	return WindowGeometry{
+		X:           p.Int(k.posX),
+		Y:           p.Int(k.posY),
+		PositionSet: p.Bool(k.posSet),
+		Size: fyne.NewSize(
+			float32(p.Float(k.width)),
+			float32(p.Float(k.height)),
+		),
+	}
 }
 
 // Load returns the previously saved State. SortMode defaults to
@@ -165,5 +232,7 @@ func Load(app fyne.App) State {
 		WindowPosX:        p.Int(keyWindowPosX),
 		WindowPosY:        p.Int(keyWindowPosY),
 		WindowPositionSet: p.Bool(keyWindowPosSet),
+		SettingsWindow:    loadGeometry(p, settingsWinKeys),
+		ExifWindow:        loadGeometry(p, exifWinKeys),
 	}
 }

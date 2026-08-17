@@ -58,6 +58,13 @@ type LoadedImage struct {
 	Delays   []time.Duration // parallel to Frames; unused when len(Frames) == 1
 	FileSize int64           // raw byte count read by ReadAndProbe, for the info overlay
 
+	// HasEXIF reports whether ReadMetadata found anything in the raw bytes
+	// this was decoded from - what the info overlay uses to decide whether
+	// offering its "Show EXIF data" link means anything. Filled in by the
+	// caller alongside FileSize rather than by DecodeLoaded itself, since
+	// the thumbnail path decodes through here too and has no use for it.
+	HasEXIF bool
+
 	// AnimationTruncated reports that this was a multi-frame GIF whose
 	// composited frames would have exceeded the animation budget, so only
 	// its first frame was decoded. The image still displays - it just

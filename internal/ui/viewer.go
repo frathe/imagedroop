@@ -322,10 +322,14 @@ type viewer struct {
 	// exifLink is the "Show EXIF data" link inside infoCard - see build.go's
 	// wiring. Kept as its own field only so tests can trigger it directly
 	// (OnTapped) the same way e2e_test.go does for restoreLink, without a
-	// real click through the widget tree.
+	// real click through the widget tree. It is only shown for a file that
+	// actually has metadata to show (currentHasEXIF, carried the same way
+	// currentFileSize is): the link is a promise, and offering it for a file
+	// with no Exif at all can only ever open a panel saying so.
 	exifLink        *widget.Hyperlink
 	infoCard        *fyne.Container
 	currentFileSize int64
+	currentHasEXIF  bool
 
 	// deletion is the Shift+Delete confirmation flow - see
 	// internal/ui/deletion, which owns its own widgets and selection state

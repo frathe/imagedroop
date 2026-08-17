@@ -83,6 +83,59 @@ func TestBuildViewer_LoadsSavedPreferences(t *testing.T) {
 	}
 }
 
+func TestBuildViewer_LoadsSavedSecondaryWindowGeometry(t *testing.T) {
+	application := test.NewApp()
+	preferences.Save(application, preferences.State{
+		SettingsWindow: preferences.WindowGeometry{
+			X: 210, Y: 220, PositionSet: true, Size: fyne.NewSize(600, 520),
+		},
+		ExifWindow: preferences.WindowGeometry{
+			X: 310, Y: 320, PositionSet: true, Size: fyne.NewSize(430, 370),
+		},
+	})
+
+	v, win := buildViewer(application)
+	defer win.Close()
+	t.Cleanup(func() { imaging.SetMaxEncodedBytes(0) }) // process-wide - see memlimits.go
+
+	settings := v.settings.Geometry()
+	if !settings.PositionSet || settings.X != 210 || settings.Y != 220 {
+		t.Errorf("settings position = (%d, %d, set=%v), want the saved (210, 220, set=true)", settings.X, settings.Y, settings.PositionSet)
+	}
+	if got, want := settings.Size, fyne.NewSize(600, 520); got != want {
+		t.Errorf("settings size = %v, want the saved %v", got, want)
+	}
+
+	exif := v.exif.Geometry()
+	if !exif.PositionSet || exif.X != 310 || exif.Y != 320 {
+		t.Errorf("exif position = (%d, %d, set=%v), want the saved (310, 320, set=true)", exif.X, exif.Y, exif.PositionSet)
+	}
+	if got, want := exif.Size, fyne.NewSize(430, 370); got != want {
+		t.Errorf("exif size = %v, want the saved %v", got, want)
+	}
+}
+
+// The shutdown save (Run's SetOnStopped) is what has to carry both windows'
+// geometry back out again - a round trip that is only worth anything if
+// what buildViewer seeded above survives to the State that gets written.
+func TestCurrentPreferences_CarriesSecondaryWindowGeometry(t *testing.T) {
+	application := test.NewApp()
+	saved := preferences.WindowGeometry{X: 70, Y: 80, PositionSet: true, Size: fyne.NewSize(500, 400)}
+	preferences.Save(application, preferences.State{SettingsWindow: saved, ExifWindow: saved})
+
+	v, win := buildViewer(application)
+	defer win.Close()
+	t.Cleanup(func() { imaging.SetMaxEncodedBytes(0) }) // process-wide - see memlimits.go
+
+	got := v.currentPreferences()
+	if got.SettingsWindow != saved {
+		t.Errorf("SettingsWindow = %+v, want %+v", got.SettingsWindow, saved)
+	}
+	if got.ExifWindow != saved {
+		t.Errorf("ExifWindow = %+v, want %+v", got.ExifWindow, saved)
+	}
+}
+
 func TestBuildViewer_NoSavedPreferencesUsesShippedDefaults(t *testing.T) {
 	application := test.NewApp()
 

@@ -366,6 +366,14 @@ func buildViewer(application fyne.App) (*viewer, fyne.Window) {
 	// once view exists.
 	view.settings = settingswin.New(application, view)
 
+	// Both secondary windows remember where the user last put them and how
+	// large they left them, the same way the main window does below - see
+	// widgets.Singleton, which owns the mechanism, and windowtrack.go for
+	// the translation. Seeded before either can be opened; Run's
+	// SetOnStopped reads the current values back out at shutdown.
+	view.settings.RestoreGeometry(widgetGeometry(prefs.SettingsWindow))
+	view.exif.RestoreGeometry(widgetGeometry(prefs.ExifWindow))
+
 	// The bar lives in its own overlay layer on top of the stack, pinned to
 	// the top edge by the VBox layout, so showing/hiding it never resizes
 	// or shifts the image underneath. VBoxLayout sizes each child to its
@@ -394,7 +402,7 @@ func buildViewer(application fyne.App) (*viewer, fyne.Window) {
 	// appear *over* an open grid: the batch delete confirmation (whose own
 	// scrim is translucent, so the grid dims through it) and the toast that
 	// reports what the batch did.
-	window.SetContent(container.New(windowSizeTracker{v: view},
+	window.SetContent(container.New(windowSizeTracker(view, window),
 		view.zoom.Widget(), dz.root, scanContainer, sortContainer, overlay, infoOverlay,
 		view.grid.Overlay(), view.deletion.Overlay(), toastOverlay))
 	window.SetMainMenu(buildMainMenu(view))

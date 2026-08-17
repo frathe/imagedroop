@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/storage"
 
 	"github.com/frathe/picfetch/internal/uitest"
 )
@@ -120,5 +121,68 @@ func TestExifLink_OpensExifWindow(t *testing.T) {
 
 	if !v.exif.Open() {
 		t.Error("the info overlay's EXIF link should open the EXIF window")
+	}
+}
+
+// TestExifLink_HiddenWhenTheImageHasNoExifData covers the other half of the
+// link's job: offering "Show EXIF data" for a file that has none is a
+// promise the panel can only answer with "No EXIF metadata found in this
+// file." uitest.EncodeJPEG embeds no metadata at all, so a plain test JPEG
+// is exactly that case.
+func TestExifLink_HiddenWhenTheImageHasNoExifData(t *testing.T) {
+	v, _, _ := newTestUI(t)
+
+	a := uitest.TempJPEGURI(t, "a.jpg", 40, 20, color.White)
+	dropAndWait(t, v, a)
+
+	v.toggleInfoOverlay()
+
+	if !v.infoCard.Visible() {
+		t.Fatal("the info card itself should be showing")
+	}
+	if v.exifLink.Visible() {
+		t.Error("the EXIF link should be hidden for a file with no EXIF metadata")
+	}
+}
+
+func TestExifLink_ShownWhenTheImageHasExifData(t *testing.T) {
+	v, _, _ := newTestUI(t)
+
+	withExif := uitest.WriteTempFile(t, "dated.jpg", uitest.CaptureDateJPEG(t, 40, 20, "2024:08:12 14:33:02"))
+	dropAndWait(t, v, storage.NewFileURI(withExif))
+
+	v.toggleInfoOverlay()
+
+	if !v.exifLink.Visible() {
+		t.Error("the EXIF link should be shown for a file that has EXIF metadata")
+	}
+}
+
+// The link has to follow the file on screen, not just whatever was loaded
+// when the overlay was switched on.
+func TestExifLink_VisibilityFollowsNavigation(t *testing.T) {
+	v, _, _ := newTestUI(t)
+
+	withExif := uitest.WriteTempFile(t, "dated.jpg", uitest.CaptureDateJPEG(t, 40, 20, "2024:08:12 14:33:02"))
+	plain := uitest.TempJPEGURI(t, "plain.jpg", 40, 20, color.White)
+	dropAndWait(t, v, storage.NewFileURI(withExif), plain)
+
+	v.toggleInfoOverlay()
+	if !v.exifLink.Visible() {
+		t.Fatal("the EXIF link should be shown for the first file, which has EXIF metadata")
+	}
+
+	v.ShowImage(v.index + 1)
+	waitUntilLoaded(t, v)
+
+	if v.exifLink.Visible() {
+		t.Error("the EXIF link should hide again after navigating to a file with no EXIF metadata")
+	}
+
+	v.ShowImage(v.index - 1)
+	waitUntilLoaded(t, v)
+
+	if !v.exifLink.Visible() {
+		t.Error("the EXIF link should come back when navigating to the file that does have EXIF metadata")
 	}
 }
