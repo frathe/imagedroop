@@ -12,9 +12,9 @@ import (
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/test"
 
-	"github.com/frathe/imagedrop/internal/filepicker"
-	"github.com/frathe/imagedrop/internal/ui/widgets"
-	"github.com/frathe/imagedrop/internal/uitest"
+	"github.com/frathe/picfetch/internal/filepicker"
+	"github.com/frathe/picfetch/internal/ui/widgets"
+	"github.com/frathe/picfetch/internal/uitest"
 )
 
 // Per-OS dispatch (zenity/PowerShell/AppKit, parseFileList, powerShellEscape)

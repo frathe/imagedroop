@@ -1,14 +1,14 @@
-# Image Drop
+# PicFetch
 
-[![CI](https://github.com/frathe/imagedrop/actions/workflows/ci.yml/badge.svg)](https://github.com/frathe/imagedrop/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/frathe/imagedrop?label=release)](https://github.com/frathe/imagedrop/releases/latest)
-[![Go version](https://img.shields.io/github/go-mod/go-version/frathe/imagedrop)](go.mod)
-[![Last commit](https://img.shields.io/github/last-commit/frathe/imagedrop)](https://github.com/frathe/imagedrop/commits/main)
-[![Downloads](https://img.shields.io/github/downloads/frathe/imagedrop/total)](https://github.com/frathe/imagedrop/releases)
+[![CI](https://github.com/frathe/picfetch/actions/workflows/ci.yml/badge.svg)](https://github.com/frathe/picfetch/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/frathe/picfetch?label=release)](https://github.com/frathe/picfetch/releases/latest)
+[![Go version](https://img.shields.io/github/go-mod/go-version/frathe/picfetch)](go.mod)
+[![Last commit](https://img.shields.io/github/last-commit/frathe/picfetch)](https://github.com/frathe/picfetch/commits/main)
+[![Downloads](https://img.shields.io/github/downloads/frathe/picfetch/total)](https://github.com/frathe/picfetch/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-donate-yellow.svg?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/gcobnk0grj)
 
-![Header](assets/header.png)
+![Header](assets/header.jpg)
 
 A small [Fyne](https://fyne.io/) desktop app for quickly viewing images.
 Drop one or more images onto the window to view them, and step through the
@@ -16,7 +16,7 @@ set with the keyboard.
 
 ## usage demo
 
-<img src="assets/imagedrop_functionality.gif" alt="Demo" width="100%">
+<img src="assets/picfetch_functionality.gif" alt="Demo" width="100%">
 
 ## Features
 
@@ -84,23 +84,24 @@ set with the keyboard.
 ## Download
 
 Pre-built binaries for Linux, Windows, and macOS are published on the
-[Releases page](https://github.com/frathe/imagedrop/releases) — no Go
+[Releases page](https://github.com/frathe/picfetch/releases) — no Go
 toolchain required. macOS builds are published for both Apple Silicon
-(`image_drop-macos-arm64.zip`) and Intel (`image_drop-macos-x86_64.zip`); grab
-the one matching your Mac. See [Building](#building) below to build from
-source instead.
+(`picfetch-macos-arm64.zip`) and Intel (`picfetch-macos-x86_64.zip`), and
+Windows builds for both x64 (`picfetch-windows-amd64.zip`) and ARM64
+(`picfetch-windows-arm64.zip`); grab the one matching your machine. See
+[Building](#building) below to build from source instead.
 
 ### macOS: "app is damaged" warning
 
-![macOS dialog reading "Image Drop.app" is damaged and can't be opened. You should move it to the Bin.](assets/gatekeeper-warning.png)
+![macOS dialog reading "PicFetch.app" is damaged and can't be opened. You should move it to the Bin.](assets/gatekeeper-warning.png)
 
 The release build isn't signed with an Apple Developer ID or notarized, so
 Gatekeeper quarantines it after download and shows this message. The app
 isn't actually corrupted — to open it anyway:
 
-- Right-click (Control-click) `Image Drop.app` → **Open** → confirm in the
+- Right-click (Control-click) `PicFetch.app` → **Open** → confirm in the
   dialog that appears, or
-- Run `xattr -cr "/path/to/Image Drop.app"` in Terminal to clear the
+- Run `xattr -cr "/path/to/PicFetch.app"` in Terminal to clear the
   quarantine flag, then open it normally.
 
 ## Requirements
@@ -130,24 +131,26 @@ go run .
 All build tasks are defined in the [Makefile](Makefile). Run `make help` to
 list them.
 
-| Command                | Description                                                                                    |
-|------------------------|------------------------------------------------------------------------------------------------|
-| `make build`           | Native binary for the current OS/arch, output to `bin/image_drop`                              |
-| `make package-mac`     | macOS `.app` bundle, output to `bin/Image Drop.app` (no Docker required)                       |
-| `make package-windows` | Windows `.exe`, cross-compiled via `fyne-cross`/Docker, to `bin/image_drop.exe`                |
-| `make package-linux`   | Linux binaries, cross-compiled via `fyne-cross`/Docker, to `bin/image_drop-linux-<arch>`       |
-| `make build-all`       | Runs `package-mac`, `package-windows`, and `package-linux`                                     |
-| `make install-tools`   | Installs the `fyne`, `fyne-cross`, and `govulncheck` CLIs used by the package/security targets |
+| Command                | Description                                                                                        |
+|------------------------|----------------------------------------------------------------------------------------------------|
+| `make build`           | Native binary for the current OS/arch, output to `bin/picfetch`                                    |
+| `make package-mac`     | macOS `.app` bundle, output to `bin/PicFetch.app` (no Docker required)                             |
+| `make package-windows` | Windows `.exe` files, cross-compiled via `fyne-cross`/Docker, to `bin/picfetch-windows-<arch>.exe` |
+| `make package-linux`   | Linux binaries, cross-compiled via `fyne-cross`/Docker, to `bin/picfetch-linux-<arch>`             |
+| `make build-all`       | Runs `package-mac`, `package-windows`, and `package-linux`                                         |
+| `make install-tools`   | Installs the `fyne`, `fyne-cross`, and `govulncheck` CLIs used by the package/security targets     |
 
 Packaging is done with the [`fyne`](https://pkg.go.dev/fyne.io/fyne/v2/cmd/fyne)
 CLI (native OS builds) and [`fyne-cross`](https://github.com/fyne-io/fyne-cross)
 (Windows and Linux, via Docker containers with the appropriate cross toolchain
-— cgo can't be cross-compiled from macOS without it). Windows defaults to
-`amd64` (`WIN_ARCH` in the [Makefile](Makefile)). `package-linux` builds one
-binary per architecture listed in `LINUX_ARCHES` (default: `amd64 arm64`),
-named `bin/image_drop-linux-<arch>` so they don't collide; override on the
-command line for a single arch, e.g. `make package-linux LINUX_ARCHES=arm64`.
-`fyne-cross linux` also supports `386` and `arm`.
+— cgo can't be cross-compiled from macOS without it). `package-windows` and
+`package-linux` each build one binary per architecture listed in `WIN_ARCHES`
+and `LINUX_ARCHES` respectively (both default to `amd64 arm64`), named
+`bin/picfetch-windows-<arch>.exe` and `bin/picfetch-linux-<arch>` so they
+don't collide; override on the command line for a single arch, e.g. `make
+package-linux LINUX_ARCHES=arm64` or `make package-windows WIN_ARCHES=amd64`.
+`fyne-cross windows` also supports `386`, and `fyne-cross linux` also supports
+`386` and `arm`.
 
 > **Note:** running an `amd64` Linux binary under an x86 emulator (e.g.
 > Box64) on ARM hardware is unreliable for OpenGL apps like this one — build

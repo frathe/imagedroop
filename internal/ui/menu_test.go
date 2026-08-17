@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/frathe/imagedrop/internal/filepicker"
-	"github.com/frathe/imagedrop/internal/uitest"
+	"github.com/frathe/picfetch/internal/filepicker"
+	"github.com/frathe/picfetch/internal/uitest"
 )
 
 // TestBuildMainMenu_Structure checks the bar's shape: File (Open Files…,

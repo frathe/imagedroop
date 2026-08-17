@@ -22,10 +22,10 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
-	"github.com/frathe/imagedrop/internal/imaging"
-	"github.com/frathe/imagedrop/internal/selection"
-	"github.com/frathe/imagedrop/internal/ui/widgets"
-	"github.com/frathe/imagedrop/internal/winpos"
+	"github.com/frathe/picfetch/internal/imaging"
+	"github.com/frathe/picfetch/internal/selection"
+	"github.com/frathe/picfetch/internal/ui/widgets"
+	"github.com/frathe/picfetch/internal/winpos"
 )
 
 // thumbConcurrency bounds how many thumbnail decodes run at once - a small

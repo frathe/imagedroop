@@ -10,7 +10,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/lang"
 
-	"github.com/frathe/imagedrop/internal/filepicker"
+	"github.com/frathe/picfetch/internal/filepicker"
 )
 
 // openFileDialog opens the current OS's own file browser so users who never

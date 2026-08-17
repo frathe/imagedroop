@@ -1,9 +1,9 @@
-APP_NAME := Image Drop
-PACKAGE_ID := com.frathe.image_drop
-BIN_NAME := image_drop
+APP_NAME := PicFetch
+PACKAGE_ID := io.github.frathe.picfetch
+BIN_NAME := picfetch
 ICON     := assets/appIcon.png
 BIN_DIR  := bin
-WIN_ARCH := amd64
+WIN_ARCHES := amd64 arm64
 LINUX_ARCHES := amd64 arm64
 
 .PHONY: all build build-linux-all run fmt vet test golden tidy clean package-mac package-windows package-windows-debug package-linux package-linux-debug build-all install-tools install-linux-tools security security-govulncheck security-github bump-version help
@@ -69,15 +69,19 @@ package-mac: ## Package a macOS .app bundle (native, no Docker) into bin/
 	rm -rf "$(BIN_DIR)/$(APP_NAME).app"
 	mv "$(APP_NAME).app" "$(BIN_DIR)/"
 
-package-windows: ## Cross-compile a Windows .exe via fyne-cross (needs Docker) into bin/ (stripped by default)
-	fyne-cross windows -arch=$(WIN_ARCH) -icon $(ICON) -name $(BIN_NAME) -app-id $(PACKAGE_ID) -env GOTOOLCHAIN=auto
+package-windows: ## Cross-compile Windows .exe files via fyne-cross (needs Docker) into bin/, one per arch in WIN_ARCHES (stripped by default)
 	mkdir -p $(BIN_DIR)
-	cp fyne-cross/bin/windows-$(WIN_ARCH)/$(BIN_NAME).exe $(BIN_DIR)/
+	for arch in $(WIN_ARCHES); do \
+		fyne-cross windows -arch=$$arch -icon $(ICON) -name $(BIN_NAME) -app-id $(PACKAGE_ID) -env GOTOOLCHAIN=auto || exit 1; \
+		cp fyne-cross/bin/windows-$$arch/$(BIN_NAME).exe $(BIN_DIR)/$(BIN_NAME)-windows-$$arch.exe; \
+	done
 
-package-windows-debug: ## Cross-compile a console-subsystem, unstripped Windows .exe for diagnosing startup failures
-	fyne-cross windows -arch=$(WIN_ARCH) -icon $(ICON) -name $(BIN_NAME)-debug -app-id $(PACKAGE_ID) -env GOTOOLCHAIN=auto -console -no-strip-debug
+package-windows-debug: ## Cross-compile console-subsystem, unstripped Windows .exe files for diagnosing startup failures, one per arch in WIN_ARCHES
 	mkdir -p $(BIN_DIR)
-	cp fyne-cross/bin/windows-$(WIN_ARCH)/$(BIN_NAME)-debug.exe $(BIN_DIR)/
+	for arch in $(WIN_ARCHES); do \
+		fyne-cross windows -arch=$$arch -icon $(ICON) -name $(BIN_NAME)-debug -app-id $(PACKAGE_ID) -env GOTOOLCHAIN=auto -console -no-strip-debug || exit 1; \
+		cp fyne-cross/bin/windows-$$arch/$(BIN_NAME)-debug.exe $(BIN_DIR)/$(BIN_NAME)-debug-windows-$$arch.exe; \
+	done
 
 package-linux: ## Cross-compile Linux binaries via fyne-cross (needs Docker) into bin/, one per arch in LINUX_ARCHES (stripped by default)
 	mkdir -p $(BIN_DIR)

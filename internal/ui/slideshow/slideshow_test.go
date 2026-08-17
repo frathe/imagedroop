@@ -7,7 +7,7 @@ import (
 
 	"fyne.io/fyne/v2/test"
 
-	"github.com/frathe/imagedrop/internal/winpos"
+	"github.com/frathe/picfetch/internal/winpos"
 )
 
 func TestMain(m *testing.M) {

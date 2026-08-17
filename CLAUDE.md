@@ -1,4 +1,4 @@
-# Image Drop — notes for Claude
+# PicFetch — notes for Claude
 
 - **Start with `ARCHITECTURE.md`** — accurate package map and "where to look for X" index.
   Update it in the same change whenever the package structure changes (its own rule).

@@ -18,8 +18,8 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/lang"
 
-	"github.com/frathe/imagedrop/internal/clipboard"
-	"github.com/frathe/imagedrop/internal/ui/deletion"
+	"github.com/frathe/picfetch/internal/clipboard"
+	"github.com/frathe/picfetch/internal/ui/deletion"
 )
 
 // requestDelete is what Shift+Delete runs (see wireDeleteShortcut). It routes

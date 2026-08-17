@@ -3,7 +3,7 @@ package ui
 import (
 	"time"
 
-	"github.com/frathe/imagedrop/internal/ui/slideshow"
+	"github.com/frathe/picfetch/internal/ui/slideshow"
 )
 
 // togglePictureFrameMode flips picture-frame mode - the slideshow - on or

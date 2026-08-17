@@ -13,7 +13,7 @@ import (
 // the test theme's limited font-combination coverage, and can be exercised
 // directly.
 func TestShowAbout_OpensAndRaisesSameWindow(t *testing.T) {
-	h := New(test.NewApp(), "Image Drop", nil)
+	h := New(test.NewApp(), "PicFetch", nil)
 
 	h.ShowAbout()
 

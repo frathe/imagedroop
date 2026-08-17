@@ -26,7 +26,7 @@ import (
 
 	"fyne.io/fyne/v2"
 
-	"github.com/frathe/imagedrop/internal/winpos"
+	"github.com/frathe/picfetch/internal/winpos"
 )
 
 const (

@@ -10,7 +10,7 @@ import (
 	"fyne.io/fyne/v2/lang"
 	"fyne.io/fyne/v2/storage"
 
-	"github.com/frathe/imagedrop/internal/imaging"
+	"github.com/frathe/picfetch/internal/imaging"
 )
 
 // cancelScan aborts a scan in progress (Escape while v.scanning is true).

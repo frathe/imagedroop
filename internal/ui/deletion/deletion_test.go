@@ -11,7 +11,7 @@ import (
 	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/test"
 
-	"github.com/frathe/imagedrop/internal/trash"
+	"github.com/frathe/picfetch/internal/trash"
 )
 
 func TestMain(m *testing.M) {

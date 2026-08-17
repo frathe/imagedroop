@@ -9,7 +9,7 @@ import (
 	"fyne.io/fyne/v2/test"
 	"fyne.io/fyne/v2/widget"
 
-	"github.com/frathe/imagedrop/internal/filesort"
+	"github.com/frathe/picfetch/internal/filesort"
 )
 
 // testApp is shared across every test below, mirroring internal/ui's own

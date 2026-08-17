@@ -9,7 +9,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/lang"
 
-	"github.com/frathe/imagedrop/internal/clipboard"
+	"github.com/frathe/picfetch/internal/clipboard"
 )
 
 // copyPathToClipboard puts the current file's absolute path on the system

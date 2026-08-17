@@ -6,12 +6,12 @@ package ui
 import (
 	"fyne.io/fyne/v2"
 
-	"github.com/frathe/imagedrop/internal/preferences"
-	"github.com/frathe/imagedrop/internal/session"
+	"github.com/frathe/picfetch/internal/preferences"
+	"github.com/frathe/picfetch/internal/session"
 )
 
 const (
-	appTitle = "Image Drop"
+	appTitle = "PicFetch"
 
 	// size of the empty drop zone
 	startW = 520.0

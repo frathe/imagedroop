@@ -1,6 +1,6 @@
 # Third-Party Notices
 
-Image Drop is licensed under the MIT License (see `LICENSE`). It links
+PicFetch is licensed under the MIT License (see `LICENSE`). It links
 against the third-party Go modules listed below, each under its own license.
 This file was generated from `go.mod`/`go.sum` with
 [`go-licenses`](https://github.com/google/go-licenses) and reproduces the

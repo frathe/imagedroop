@@ -1,7 +1,7 @@
 package ui
 
 import (
-	"github.com/frathe/imagedrop/internal/imaging"
+	"github.com/frathe/picfetch/internal/imaging"
 )
 
 // The three limits that bound how much memory images are allowed to occupy,

@@ -13,7 +13,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/driver/desktop"
 
-	"github.com/frathe/imagedrop/internal/uitest"
+	"github.com/frathe/picfetch/internal/uitest"
 )
 
 // Per-platform shell-out behavior (osascript/xclip/wl-copy/PowerShell

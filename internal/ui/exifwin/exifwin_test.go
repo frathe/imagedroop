@@ -3,7 +3,7 @@ package exifwin
 import (
 	"testing"
 
-	"github.com/frathe/imagedrop/internal/imaging"
+	"github.com/frathe/picfetch/internal/imaging"
 )
 
 func TestFormatExifMetadata(t *testing.T) {

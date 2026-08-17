@@ -9,7 +9,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
-	"github.com/frathe/imagedrop/internal/ui/widgets"
+	"github.com/frathe/picfetch/internal/ui/widgets"
 )
 
 // toastDuration is how long a toast stays on screen before auto-dismissing.

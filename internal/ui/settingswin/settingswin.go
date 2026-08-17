@@ -21,8 +21,8 @@ import (
 	"fyne.io/fyne/v2/lang"
 	"fyne.io/fyne/v2/widget"
 
-	"github.com/frathe/imagedrop/internal/filesort"
-	"github.com/frathe/imagedrop/internal/ui/widgets"
+	"github.com/frathe/picfetch/internal/filesort"
+	"github.com/frathe/picfetch/internal/ui/widgets"
 )
 
 const (

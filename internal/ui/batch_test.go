@@ -9,7 +9,7 @@ import (
 
 	"fyne.io/fyne/v2"
 
-	"github.com/frathe/imagedrop/internal/uitest"
+	"github.com/frathe/picfetch/internal/uitest"
 )
 
 // These drive the app's own composition of the grid's selection with the

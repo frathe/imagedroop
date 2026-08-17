@@ -3,10 +3,10 @@ package uitest
 import (
 	"testing"
 
-	"github.com/frathe/imagedrop/internal/clipboard"
-	"github.com/frathe/imagedrop/internal/filepicker"
-	"github.com/frathe/imagedrop/internal/trash"
-	"github.com/frathe/imagedrop/internal/wallpaper"
+	"github.com/frathe/picfetch/internal/clipboard"
+	"github.com/frathe/picfetch/internal/filepicker"
+	"github.com/frathe/picfetch/internal/trash"
+	"github.com/frathe/picfetch/internal/wallpaper"
 )
 
 // The stubs below swap the exported dispatcher vars that stand in front of

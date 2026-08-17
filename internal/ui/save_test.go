@@ -14,8 +14,8 @@ import (
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/storage"
 
-	"github.com/frathe/imagedrop/internal/imaging"
-	"github.com/frathe/imagedrop/internal/uitest"
+	"github.com/frathe/picfetch/internal/imaging"
+	"github.com/frathe/picfetch/internal/uitest"
 )
 
 // --- canSaveRotation ---------------------------------------------------

@@ -1,4 +1,4 @@
-// Command imagedrop is a desktop image viewer: drop files or folders onto
+// Command picfetch is a desktop image viewer: drop files or folders onto
 // it (or open them from the file dialog) and page through them.
 //
 // This file is the whole of package main - app setup, translations, and
@@ -16,7 +16,7 @@ import (
 	"fyne.io/fyne/v2/lang"
 	"fyne.io/fyne/v2/storage"
 
-	"github.com/frathe/imagedrop/internal/ui"
+	"github.com/frathe/picfetch/internal/ui"
 )
 
 // translationsFS stays here rather than moving into internal/ui with the
@@ -28,9 +28,12 @@ import (
 var translationsFS embed.FS
 
 // appID is the stable key Fyne uses for application-scoped preferences and
-// cache data. Keep it in sync with FyneApp.toml; changing it would make an
-// existing installation appear to lose its saved settings and session.
-const appID = "image_drop"
+// cache data. Keep it in sync with FyneApp.toml's ID and the Makefile's
+// PACKAGE_ID (the bundle identifier packaging stamps in); changing it would
+// make an existing installation appear to lose its saved settings and
+// session. It is reverse-DNS because it doubles as the macOS
+// CFBundleIdentifier, which allows only alphanumerics, hyphens, and dots.
+const appID = "io.github.frathe.picfetch"
 
 // argsToURIs converts command-line paths (os.Args[1:]) into file URIs
 // handleDrop can ingest, so launching the binary with paths - the way a

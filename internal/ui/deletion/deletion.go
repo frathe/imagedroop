@@ -21,8 +21,8 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
-	"github.com/frathe/imagedrop/internal/trash"
-	"github.com/frathe/imagedrop/internal/ui/widgets"
+	"github.com/frathe/picfetch/internal/trash"
+	"github.com/frathe/picfetch/internal/ui/widgets"
 )
 
 // Host is what the confirmation flow needs from the application: which file

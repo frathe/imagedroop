@@ -9,8 +9,8 @@ import (
 	"fyne.io/fyne/v2/storage"
 	"fyne.io/fyne/v2/test"
 
-	"github.com/frathe/imagedrop/internal/session"
-	"github.com/frathe/imagedrop/internal/uitest"
+	"github.com/frathe/picfetch/internal/session"
+	"github.com/frathe/picfetch/internal/uitest"
 )
 
 // Save/Load round-trip behavior (empty-clears, corrupt-cache-entry, etc.) is

@@ -32,7 +32,7 @@ body:
   - type: input
     id: version
     attributes:
-      label: Image Drop version
+      label: PicFetch version
       description: See the release you downloaded, or `FyneApp.toml`'s Build field if built from source.
     validations:
       required: true

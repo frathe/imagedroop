@@ -34,7 +34,7 @@ var CopyImage = func(data []byte) error {
 // a real path - osascript's "read ... as «class PNGf»" and PowerShell's
 // Image.FromFile both require one, neither accepts piped bytes.
 func writeTempPNG(data []byte) (string, error) {
-	f, err := os.CreateTemp("", "image_drop_clip_*.png")
+	f, err := os.CreateTemp("", "picfetch_clip_*.png")
 	if err != nil {
 		return "", err
 	}
@@ -135,7 +135,7 @@ func copyImageWindows(data []byte) error {
 	// Pass the path through the environment instead of interpolating it into
 	// PowerShell source. A Windows temp directory may legally contain `$` or
 	// a backtick, both of which have meaning inside a double-quoted script.
-	const pathEnv = "IMAGEDROP_CLIPBOARD_PNG"
+	const pathEnv = "PICFETCH_CLIPBOARD_PNG"
 	script := `Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 try {

@@ -9,7 +9,7 @@ import (
 
 	"fyne.io/fyne/v2"
 
-	"github.com/frathe/imagedrop/internal/trash"
+	"github.com/frathe/picfetch/internal/trash"
 )
 
 // targetsFor turns a host's whole file set into the target list the grid

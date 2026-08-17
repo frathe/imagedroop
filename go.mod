@@ -1,4 +1,4 @@
-module github.com/frathe/imagedrop
+module github.com/frathe/picfetch
 
 go 1.26.6
 

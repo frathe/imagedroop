@@ -1,6 +1,6 @@
 package ui
 
-import "github.com/frathe/imagedrop/internal/imaging"
+import "github.com/frathe/picfetch/internal/imaging"
 
 // rotateBy is the R key (clockwise, steps=1) / Shift+R (counter-clockwise,
 // steps=-1): rotates the displayed image by one 90-degree step, view-only -

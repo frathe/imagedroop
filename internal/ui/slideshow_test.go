@@ -15,8 +15,8 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/storage"
 
-	"github.com/frathe/imagedrop/internal/ui/slideshow"
-	"github.com/frathe/imagedrop/internal/uitest"
+	"github.com/frathe/picfetch/internal/ui/slideshow"
+	"github.com/frathe/picfetch/internal/uitest"
 )
 
 // --- toggling --------------------------------------------------------------

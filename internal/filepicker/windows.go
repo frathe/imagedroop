@@ -12,7 +12,7 @@ import (
 const createNoWindow = 0x08000000
 
 // hideConsoleWindow keeps the powershell child from opening a console
-// window of its own: image_drop is a GUI-subsystem binary with no console
+// window of its own: picfetch is a GUI-subsystem binary with no console
 // to inherit, so a console-subsystem child gets a fresh visible console
 // unless CREATE_NO_WINDOW says otherwise. Deliberately not SysProcAttr's
 // HideWindow: that sets STARTUPINFO's wShowWindow to SW_HIDE, a hint the

@@ -1,6 +1,6 @@
 ---
 name: refactor-planner
-description: Staged-refactoring planner and executor for this repo. Use for planning multi-stage structural refactorings (package splits, god-object decomposition, test-suite migrations) and for executing individual stages of an approved plan — currently image_drop/refactoring.md (the Phase-2 feature-package split). Invoke with a single stage as the task, e.g. "execute Stage 3 of image_drop/refactoring.md".
+description: Staged-refactoring planner and executor for this repo. Use for planning multi-stage structural refactorings (package splits, god-object decomposition, test-suite migrations) and for executing individual stages of an approved plan — currently picfetch/refactoring.md (the Phase-2 feature-package split). Invoke with a single stage as the task, e.g. "execute Stage 3 of picfetch/refactoring.md".
 tools: Read, Edit, Write, Grep, Glob, Bash
 model: sonnet
 ---
@@ -13,18 +13,16 @@ improvising.
 
 ## The plan of record
 
-`image_drop/refactoring.md` is the active plan (Phase 2: splitting the
-`viewer` god object into feature packages under `internal/ui/`). Read it in
-full before doing anything, plus `image_drop/ARCHITECTURE.md` for the
-current package map. `image_drop/legacy/2026-08-13_refactoring.md` records
-Phase 1 and the reasoning style this project expects.
+`picfetch/refactoring.md` is the active plan. Read it in
+full before doing anything, plus `picfetch/ARCHITECTURE.md` for the
+current package map.
 
 ## Stage discipline
 
 - Execute exactly one stage per invocation, in order. Do not start the next
   stage, and do not pull later-stage work forward "while you're in there".
 - A stage is done only when its gate passes: `go build ./...` plus the
-  stage's test gate from `image_drop/` (plain `go test ./...` through Stage
+  stage's test gate from `picfetch/` (plain `go test ./...` through Stage
   1's bar; `go test -race ./...` from Stage 2 onward; `-count=5` where the
   plan says so). Capture real exit codes — **never pipe `go test` into
   `tail`/`grep` and read the pipe's exit status**; check the test command's

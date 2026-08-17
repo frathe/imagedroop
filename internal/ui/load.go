@@ -13,7 +13,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/lang"
 
-	"github.com/frathe/imagedrop/internal/imaging"
+	"github.com/frathe/picfetch/internal/imaging"
 )
 
 // ShowImage loads and displays the file at index i, wrapping around at

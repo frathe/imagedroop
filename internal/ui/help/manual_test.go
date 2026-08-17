@@ -21,7 +21,7 @@ func TestManualIsEmbedded(t *testing.T) {
 			continue
 		}
 
-		if !strings.HasPrefix(md, "# Image Drop") {
+		if !strings.HasPrefix(md, "# PicFetch") {
 			t.Errorf("%s does not start with the expected heading, got %q", name, firstLine(md))
 		}
 	}
@@ -80,7 +80,7 @@ func TestCurrentManual_OtherLocaleFallsBackToEnglish(t *testing.T) {
 }
 
 func TestHelpMenu(t *testing.T) {
-	help := New(nil, "Image Drop", nil).Menu()
+	help := New(nil, "PicFetch", nil).Menu()
 
 	if help.Label != "Help" {
 		t.Errorf("expected menu label %q, got %q", "Help", help.Label)

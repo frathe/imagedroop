@@ -116,12 +116,12 @@ func setWindows(path string) error {
 	script := `Add-Type @"
 using System;
 using System.Runtime.InteropServices;
-public class ImageDropWallpaper {
+public class PicFetchWallpaper {
 	[DllImport("user32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
 	public static extern int SystemParametersInfo(int uAction, int uParam, string lpvParam, int fuWinIni);
 }
 "@
-if ([ImageDropWallpaper]::SystemParametersInfo(20, 0, "` + escapePowerShellPath(path) + `", 3) -eq 0) {
+if ([PicFetchWallpaper]::SystemParametersInfo(20, 0, "` + escapePowerShellPath(path) + `", 3) -eq 0) {
 	[Console]::Error.WriteLine("SystemParametersInfo could not set the wallpaper")
 	exit 1
 }`

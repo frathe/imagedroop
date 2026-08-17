@@ -13,7 +13,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 
-	"github.com/frathe/imagedrop/internal/selection"
+	"github.com/frathe/picfetch/internal/selection"
 )
 
 // Selection is the file indices currently picked, ascending. Empty when

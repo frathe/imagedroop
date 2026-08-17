@@ -1,4 +1,4 @@
-# Contributing to Image Drop
+# Contributing to PicFetch
 
 Thanks for taking the time to contribute! This document covers everything
 you need to get set up and send a useful pull request.
@@ -17,8 +17,8 @@ participating, you're expected to uphold it.
   the optional tools needed for cross-compiling and security checks
 
 ```sh
-git clone https://github.com/frathe/imagedrop.git
-cd imagedrop
+git clone https://github.com/frathe/picfetch.git
+cd picfetch
 make run
 ```
 

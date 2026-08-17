@@ -13,9 +13,9 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
 
-	"github.com/frathe/imagedrop/internal/filesort"
-	"github.com/frathe/imagedrop/internal/imaging"
-	"github.com/frathe/imagedrop/internal/preferences"
+	"github.com/frathe/picfetch/internal/filesort"
+	"github.com/frathe/picfetch/internal/imaging"
+	"github.com/frathe/picfetch/internal/preferences"
 )
 
 func TestBuildViewer_LoadsSavedPreferences(t *testing.T) {

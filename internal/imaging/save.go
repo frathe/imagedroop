@@ -145,7 +145,7 @@ func Export(u fyne.URI, img image.Image) error {
 // copy elsewhere), which differ only in how they arrive at path, perm, and
 // encode.
 func writeEncoded(path string, perm os.FileMode, encode func(io.Writer, image.Image) error, img image.Image) error {
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".imagedrop-save-*"+filepath.Ext(path))
+	tmp, err := os.CreateTemp(filepath.Dir(path), ".picfetch-save-*"+filepath.Ext(path))
 	if err != nil {
 		return err
 	}

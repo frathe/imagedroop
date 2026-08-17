@@ -14,8 +14,8 @@ import (
 	"fyne.io/fyne/v2/lang"
 	"fyne.io/fyne/v2/storage"
 
-	"github.com/frathe/imagedrop/internal/imaging"
-	"github.com/frathe/imagedrop/internal/wallpaper"
+	"github.com/frathe/picfetch/internal/imaging"
+	"github.com/frathe/picfetch/internal/wallpaper"
 )
 
 // wallpaperPrefix names the PNGs this writes into wallpaperDir, and is what
@@ -161,5 +161,5 @@ func defaultWallpaperDir() string {
 		base = os.TempDir()
 	}
 
-	return filepath.Join(base, "image_drop", "wallpapers")
+	return filepath.Join(base, "picfetch", "wallpapers")
 }

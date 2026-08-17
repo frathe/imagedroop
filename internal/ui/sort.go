@@ -6,7 +6,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/lang"
 
-	"github.com/frathe/imagedrop/internal/filesort"
+	"github.com/frathe/picfetch/internal/filesort"
 )
 
 // toggleSort is the S key: it cycles v.sortMode to the next mode - see

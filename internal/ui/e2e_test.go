@@ -29,9 +29,9 @@ import (
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/test"
 
-	"github.com/frathe/imagedrop/internal/filepicker"
-	"github.com/frathe/imagedrop/internal/session"
-	"github.com/frathe/imagedrop/internal/uitest"
+	"github.com/frathe/picfetch/internal/filepicker"
+	"github.com/frathe/picfetch/internal/session"
+	"github.com/frathe/picfetch/internal/uitest"
 )
 
 func TestE2E_InitialLaunchShowsWelcome(t *testing.T) {

@@ -1,8 +1,8 @@
-# Image Drop — Benutzerhandbuch
+# PicFetch — Benutzerhandbuch
 
 Version 0.1.3
 
-Image Drop ist ein kleiner, schneller Bildbetrachter für macOS, Windows und
+PicFetch ist ein kleiner, schneller Bildbetrachter für macOS, Windows und
 Linux. Es gibt keine Werkzeugleiste und keinen eingebauten Datei-Browser: Sie
 ziehen Bilder auf das Fenster und sehen sie sich an. Das ist die ganze Idee —
 wenn Sie aber nicht per Drag & Drop arbeiten möchten, öffnet ein Klick auf das
@@ -13,7 +13,7 @@ Fenster oder `Cmd`/`Strg+O` stattdessen den Dateiauswahldialog Ihres Systems
 
 ## 1. Erste Schritte
 
-1. Starten Sie **Image Drop**. Ein kleines, leeres Fenster (etwa 520 × 340)
+1. Starten Sie **PicFetch**. Ein kleines, leeres Fenster (etwa 520 × 340)
    erscheint mit einem abgerundeten Rahmen und dem Text **„Bilder hier
    ablegen“**.
 2. Ziehen Sie ein oder mehrere Bilddateien aus Ihrem Dateimanager (Finder,
@@ -116,7 +116,7 @@ Die Titelzeile zeigt, was Sie gerade betrachten, zum Beispiel:
 ### Fotorotation
 
 Fotos, die im Hoch- oder Querformat mit einem Handy oder einer Kamera
-aufgenommen wurden, tragen ein EXIF-Orientierungs-Tag. Image Drop liest
+aufgenommen wurden, tragen ein EXIF-Orientierungs-Tag. PicFetch liest
 dieses Tag und dreht oder spiegelt das Foto automatisch, sodass
 Hochformataufnahmen aufrecht statt seitlich liegend erscheinen. Alle acht
 EXIF-Orientierungen werden unterstützt, und die Abmessungen in der Titelzeile
@@ -361,7 +361,7 @@ einzeln durchzublättern.
 ## 9. Diaschau-Modus
 
 Drücken Sie **`P`**, um die aktuelle Bildauswahl in eine Vollbild-Diaschau zu
-verwandeln — praktisch, um Image Drop einfach dastehen und durch einen
+verwandeln — praktisch, um PicFetch einfach dastehen und durch einen
 Ordner voller Fotos wie einen digitalen Bilderrahmen laufen zu lassen.
 
 - Das Fenster wechselt in den **Vollbildmodus**. Das Bild wird
@@ -396,7 +396,7 @@ Ordner voller Fotos wie einen digitalen Bilderrahmen laufen zu lassen.
   ihn mittendrin abzubrechen.
 - Ihr gewähltes Intervall und die Einstellung der Zufälligen Wiedergabe
   werden beim nächsten Einschalten des Diaschau-Modus gemerkt — und bleiben
-  auch beim nächsten Start von Image Drop erhalten.
+  auch beim nächsten Start von PicFetch erhalten.
 - Drücken Sie **`P`** erneut, oder **`Esc`**, um den Diaschau-Modus zu
   verlassen und zum normalen Fenster zurückzukehren. `Esc` verlässt hier nur
   den Diaschau-Modus — es leert nicht auch die geladenen Bilder; drücken Sie
@@ -535,7 +535,7 @@ benötigen in beiden Fällen nichts Zusätzliches.
 - **Datei -> Änderungen speichern** (`Cmd/Strg+S`) — schreibt eine mit
   `R`/`Shift+R` vorgenommene Drehung in die Ursprungsdatei zurück, in deren
   eigenem Format. Ausgegraut, solange es keine Drehung zu speichern gibt;
-  nicht verfügbar für Animationen und für Formate, die Image Drop lesen,
+  nicht verfügbar für Animationen und für Formate, die PicFetch lesen,
   aber nicht schreiben kann (WebP, HEIC, ICO, XPM). Die Originaldatei wird
   dabei ersetzt und neu kodiert statt bearbeitet, EXIF-Metadaten bleiben
   also nicht erhalten
@@ -545,7 +545,7 @@ benötigen in beiden Fällen nichts Zusätzliches.
   für jedes anzeigbare Bild, auch für WebP- und HEIC-Dateien und für ein
   einzelnes Bild eines animierten GIFs, und die Originaldatei bleibt
   unangetastet. Endet der von Ihnen eingegebene Name bereits auf ein Format,
-  das Image Drop schreiben kann, hat dieses Vorrang vor dem gewählten
+  das PicFetch schreiben kann, hat dieses Vorrang vor dem gewählten
   Menüeintrag
 - **Datei -> Als Hintergrundbild festlegen** — macht das angezeigte Bild zum
   Hintergrundbild des Schreibtischs, genau so, wie es gerade aussieht. Image
@@ -582,7 +582,7 @@ Dateien reaktionsfähig bleibt.
   sind, wird das Ergebnis verworfen — Sie sehen immer das zuletzt ausgewählte
   Bild.
 
-**Ordner einlesen.** Enthält Ihr Ablegen Ordner, durchsucht Image Drop diese
+**Ordner einlesen.** Enthält Ihr Ablegen Ordner, durchsucht PicFetch diese
 zuerst (und jeden Unterordner), um unterstützte Bilder zu sammeln, bevor
 irgendetwas angezeigt wird:
 
@@ -603,7 +603,7 @@ irgendetwas angezeigt wird:
 
 ## 14. Meldungen und Fehlerbehandlung
 
-Image Drop zeigt in folgenden Fällen ein Dialogfenster an. Schließen Sie es
+PicFetch zeigt in folgenden Fällen ein Dialogfenster an. Schließen Sie es
 mit der Schaltfläche **OK**.
 
 - **Eine nicht unterstützte Datei abgelegt** — *„…“ ist keine unterstützte
@@ -643,7 +643,7 @@ durchsucht wird.
 ## 15. Sprache
 
 Der Oberflächentext (der Ablege-Hinweis, „Wird geladen…“, das Menü) kann
-übersetzt werden. Image Drop wird mit Englisch ausgeliefert und folgt Ihrer
+übersetzt werden. PicFetch wird mit Englisch ausgeliefert und folgt Ihrer
 Systemsprache, sofern eine passende Übersetzung verfügbar ist; andernfalls
 greift es auf Englisch zurück. Dieses Handbuch folgt derselben Regel: Bei
 deutscher Systemsprache öffnet sich diese deutsche Fassung, sonst die
@@ -667,7 +667,7 @@ Rotation und das zuletzt betrachtete Bild werden zurückgesetzt.
 
 ## 17. Aktuelle Einschränkungen
 
-Dinge, die Image Drop absichtlich (noch) nicht tut:
+Dinge, die PicFetch absichtlich (noch) nicht tut:
 
 - Keine Navigation per Mausrad oder Trackpad-Scroll; das Durchblättern der
   Bilder funktioniert nur über die Tastatur (Pfeiltasten, `Home`/`End`,

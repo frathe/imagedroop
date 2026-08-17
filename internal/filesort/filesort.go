@@ -23,8 +23,8 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/lang"
 
-	"github.com/frathe/imagedrop/internal/imaging"
-	"github.com/frathe/imagedrop/internal/preferences"
+	"github.com/frathe/picfetch/internal/imaging"
+	"github.com/frathe/picfetch/internal/preferences"
 )
 
 // Mode selects how a file set is ordered relative to the raw scan/drop

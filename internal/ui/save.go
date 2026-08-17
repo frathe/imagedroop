@@ -8,7 +8,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/lang"
 
-	"github.com/frathe/imagedrop/internal/imaging"
+	"github.com/frathe/picfetch/internal/imaging"
 )
 
 // canSaveRotation reports whether the File > Save Changes item (also

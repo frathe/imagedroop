@@ -53,7 +53,7 @@ func currentManual() string {
 // while the window is still open just raises it instead of opening a
 // duplicate (see widgets.Singleton).
 func (h *Help) ShowManual() {
-	h.manualWin.Show(h.app, lang.L("Image Drop Manual"), fyne.NewSize(manualW, manualH), func() fyne.CanvasObject {
+	h.manualWin.Show(h.app, lang.L("PicFetch Manual"), fyne.NewSize(manualW, manualH), func() fyne.CanvasObject {
 		text := widget.NewRichTextFromMarkdown(currentManual())
 		text.Wrapping = fyne.TextWrapWord
 

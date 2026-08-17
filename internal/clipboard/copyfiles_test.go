@@ -136,7 +136,7 @@ func TestCopyFilesWindows_ReadsThePathListFromAFile(t *testing.T) {
 			}
 		}
 		for _, e := range cmd.Env {
-			if name, value, _ := strings.Cut(e, "="); name == "IMAGEDROP_CLIPBOARD_LIST" {
+			if name, value, _ := strings.Cut(e, "="); name == "PICFETCH_CLIPBOARD_LIST" {
 				gotListPath = value
 			}
 		}
@@ -153,7 +153,7 @@ func TestCopyFilesWindows_ReadsThePathListFromAFile(t *testing.T) {
 		t.Fatalf("copyFilesWindows() error = %v", err)
 	}
 
-	for _, want := range []string{"Set-Clipboard", "-LiteralPath", "$env:IMAGEDROP_CLIPBOARD_LIST", "catch", "exit 1"} {
+	for _, want := range []string{"Set-Clipboard", "-LiteralPath", "$env:PICFETCH_CLIPBOARD_LIST", "catch", "exit 1"} {
 		if !strings.Contains(gotScript, want) {
 			t.Errorf("script does not contain %q:\n%s", want, gotScript)
 		}
@@ -178,7 +178,7 @@ func TestCopyFilesWindows_RemovesTheListFile(t *testing.T) {
 	var listPath string
 	runClipboardCommand = func(cmd *exec.Cmd) ([]byte, error) {
 		for _, e := range cmd.Env {
-			if name, value, _ := strings.Cut(e, "="); name == "IMAGEDROP_CLIPBOARD_LIST" {
+			if name, value, _ := strings.Cut(e, "="); name == "PICFETCH_CLIPBOARD_LIST" {
 				listPath = value
 			}
 		}
@@ -190,7 +190,7 @@ func TestCopyFilesWindows_RemovesTheListFile(t *testing.T) {
 	}
 
 	if listPath == "" {
-		t.Fatal("no IMAGEDROP_CLIPBOARD_LIST in the command environment")
+		t.Fatal("no PICFETCH_CLIPBOARD_LIST in the command environment")
 	}
 	if _, err := os.Stat(listPath); !os.IsNotExist(err) {
 		t.Errorf("os.Stat(%q) err = %v, want the list file to have been removed", listPath, err)

@@ -12,17 +12,17 @@ import (
 	"fyne.io/fyne/v2/lang"
 	"fyne.io/fyne/v2/widget"
 
-	"github.com/frathe/imagedrop/internal/filesort"
-	"github.com/frathe/imagedrop/internal/imaging"
-	"github.com/frathe/imagedrop/internal/ui/deletion"
-	"github.com/frathe/imagedrop/internal/ui/exifwin"
-	"github.com/frathe/imagedrop/internal/ui/grid"
-	"github.com/frathe/imagedrop/internal/ui/help"
-	"github.com/frathe/imagedrop/internal/ui/settingswin"
-	"github.com/frathe/imagedrop/internal/ui/slideshow"
-	"github.com/frathe/imagedrop/internal/ui/widgets"
-	"github.com/frathe/imagedrop/internal/ui/zoom"
-	"github.com/frathe/imagedrop/internal/winpos"
+	"github.com/frathe/picfetch/internal/filesort"
+	"github.com/frathe/picfetch/internal/imaging"
+	"github.com/frathe/picfetch/internal/ui/deletion"
+	"github.com/frathe/picfetch/internal/ui/exifwin"
+	"github.com/frathe/picfetch/internal/ui/grid"
+	"github.com/frathe/picfetch/internal/ui/help"
+	"github.com/frathe/picfetch/internal/ui/settingswin"
+	"github.com/frathe/picfetch/internal/ui/slideshow"
+	"github.com/frathe/picfetch/internal/ui/widgets"
+	"github.com/frathe/picfetch/internal/ui/zoom"
+	"github.com/frathe/picfetch/internal/winpos"
 )
 
 // viewer bundles the UI elements and the navigation state so the drop

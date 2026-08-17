@@ -37,13 +37,13 @@ jobs:
       - name: Archive macOS app bundle
         run: |
           cd bin
-          zip -r -y "image_drop-macos-$(uname -m).zip" "Image Drop.app"
+          zip -r -y "picfetch-macos-$(uname -m).zip" "PicFetch.app"
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v7
         with:
-          name: image_drop-macos-${{ matrix.arch }}
-          path: bin/image_drop-macos-*.zip
+          name: picfetch-macos-${{ matrix.arch }}
+          path: bin/picfetch-macos-*.zip
           if-no-files-found: error
 
   build-cross:
@@ -70,19 +70,27 @@ jobs:
       - name: Archive artifacts
         run: |
           cd bin
-          zip "image_drop-windows-amd64.zip" "image_drop.exe"
+          # The .exe inside each zip stays plain "picfetch.exe" - the archive
+          # name already carries the arch, and that is what users unpacked
+          # before Windows gained a second architecture.
           for arch in amd64 arm64; do
-            tar -czf "image_drop-linux-$arch.tar.gz" "image_drop-linux-$arch"
+            cp "picfetch-windows-$arch.exe" "picfetch.exe"
+            zip "picfetch-windows-$arch.zip" "picfetch.exe"
+            rm "picfetch.exe"
+          done
+          for arch in amd64 arm64; do
+            tar -czf "picfetch-linux-$arch.tar.gz" "picfetch-linux-$arch"
           done
 
       - name: Upload Windows/Linux artifacts
         uses: actions/upload-artifact@v7
         with:
-          name: image_drop-cross
+          name: picfetch-cross
           path: |
-            bin/image_drop-windows-amd64.zip
-            bin/image_drop-linux-amd64.tar.gz
-            bin/image_drop-linux-arm64.tar.gz
+            bin/picfetch-windows-amd64.zip
+            bin/picfetch-windows-arm64.zip
+            bin/picfetch-linux-amd64.tar.gz
+            bin/picfetch-linux-arm64.tar.gz
           if-no-files-found: error
 
   release:

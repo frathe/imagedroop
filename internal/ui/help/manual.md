@@ -1,8 +1,8 @@
-# Image Drop — User Manual
+# PicFetch — User Manual
 
 Version 0.1.3
 
-Image Drop is a small, fast image viewer for macOS, Windows, and Linux. There
+PicFetch is a small, fast image viewer for macOS, Windows, and Linux. There
 is no toolbar and no built-in file browser: you drop images onto the window
 and look at them. That's the whole idea — though if you'd rather not
 drag-and-drop, clicking the window or pressing `Cmd`/`Ctrl+O` brings up your
@@ -12,7 +12,7 @@ system's own file picker instead (see below).
 
 ## 1. Getting started
 
-1. Start **Image Drop**. A small empty window (about 520 × 340) appears with a
+1. Start **PicFetch**. A small empty window (about 520 × 340) appears with a
    rounded border and the text **"Drop images here"**.
 2. Drag one or more image files from your file manager (Finder, Explorer,
    Nautilus, …) onto the window and release.
@@ -104,7 +104,7 @@ The title bar tells you what you are looking at, for example:
 ### Photo rotation
 
 Photos taken with a phone or camera held sideways carry an EXIF orientation
-tag. Image Drop reads that tag and rotates or flips the photo automatically,
+tag. PicFetch reads that tag and rotates or flips the photo automatically,
 so portrait shots appear upright instead of lying on their side. All eight
 EXIF orientations are handled, and the dimensions in the title reflect the
 corrected image.
@@ -321,7 +321,7 @@ instead of arrowing through them one at a time.
 ## 9. Picture-frame mode
 
 Press **`P`** to turn the current image set into a full-screen slideshow —
-handy for letting Image Drop just sit there and cycle through a folder of
+handy for letting PicFetch just sit there and cycle through a folder of
 photos like a digital picture frame.
 
 - The window goes **full-screen**. The image is scaled to fit the screen,
@@ -350,7 +350,7 @@ photos like a digital picture frame.
   at least once before moving on, rather than cutting it off partway.
 - Your chosen interval and shuffle setting are remembered the next time you
   turn picture-frame mode on — and carry over the next time you launch
-  Image Drop, too.
+  PicFetch, too.
 - Press **`P`** again, or **`Esc`**, to leave picture-frame mode and return to
   the normal window. `Esc` only leaves picture-frame mode here — it doesn't
   also clear the loaded images; press it again afterwards for that.
@@ -473,17 +473,17 @@ needed. macOS and Windows need nothing extra either way.
 - **File -> Save Changes** (`Cmd/Ctrl+S`) — writes a rotation you made with
   `R`/`Shift+R` back into the file it came from, in that file's own format.
   Greyed out unless there is a rotation to save; unavailable for animations
-  and for formats Image Drop can read but not write (WebP, HEIC, ICO, XPM).
+  and for formats PicFetch can read but not write (WebP, HEIC, ICO, XPM).
   This replaces the original file, and re-encodes rather than patching it,
   so EXIF metadata is not carried over
 - **File -> Export as PNG… / Export as JPEG…** — saves the image as it
   currently appears, rotation included, to a new file you name. Unlike Save
   Changes it works for every image the app can display, including WebP and
   HEIC files and a single frame of an animated GIF, and it never touches the
-  original. If the name you type already ends in a format Image Drop can
+  original. If the name you type already ends in a format PicFetch can
   write, that format wins over the menu item you picked
 - **File -> Set as Wallpaper** — makes the image on screen your desktop
-  wallpaper, exactly as it currently appears. Image Drop writes its own copy
+  wallpaper, exactly as it currently appears. PicFetch writes its own copy
   into its cache folder and points the desktop at that, so the wallpaper
   keeps working after you move, rename or trash the original. On Linux this
   needs `gsettings` (GNOME, Cinnamon, Budgie, Unity) or
@@ -512,7 +512,7 @@ very large files.
 - If a slow image finishes decoding after you have already moved on, its
   result is discarded — you always see the image you selected last.
 
-**Scanning folders.** If your drop includes any folders, Image Drop first
+**Scanning folders.** If your drop includes any folders, PicFetch first
 walks them (and every subfolder) to collect supported images before showing
 anything:
 
@@ -531,7 +531,7 @@ anything:
 
 ## 14. Messages and error handling
 
-Image Drop shows a dialog box in these cases. Dismiss it with its **OK**
+PicFetch shows a dialog box in these cases. Dismiss it with its **OK**
 button.
 
 - **One unsupported file dropped** — *"…" is not a supported image file*
@@ -563,7 +563,7 @@ while a folder is being scanned.
 ## 15. Language
 
 The interface text (the drop hint, "Loading…", the menu) can be translated.
-Image Drop ships with English and follows your system language when a matching
+PicFetch ships with English and follows your system language when a matching
 translation is available; otherwise it falls back to English. This manual
 follows the same rule: a German system locale opens the German edition, every
 other locale opens this English one.
@@ -585,7 +585,7 @@ reset.
 
 ## 17. Current limitations
 
-Things Image Drop deliberately does not do (yet):
+Things PicFetch deliberately does not do (yet):
 
 - No mouse-wheel or trackpad-scroll navigation; browsing between images is
   keyboard-only (arrow keys, `Home`/`End`, see above)

@@ -81,7 +81,7 @@ func copyFilesLinux(paths []string) error {
 // writeTempList writes paths one per line to a temp file, for
 // copyFilesWindows to read back - the file-list twin of writeTempPNG.
 func writeTempList(paths []string) (string, error) {
-	f, err := os.CreateTemp("", "image_drop_clip_*.txt")
+	f, err := os.CreateTemp("", "picfetch_clip_*.txt")
 	if err != nil {
 		return "", err
 	}
@@ -127,7 +127,7 @@ func copyFilesWindows(paths []string) error {
 	}
 	defer func() { _ = os.Remove(list) }()
 
-	const listEnv = "IMAGEDROP_CLIPBOARD_LIST"
+	const listEnv = "PICFETCH_CLIPBOARD_LIST"
 	script := `try {
 	$paths = Get-Content -LiteralPath $env:` + listEnv + `
 	Set-Clipboard -LiteralPath $paths

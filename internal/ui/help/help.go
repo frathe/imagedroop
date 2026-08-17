@@ -14,7 +14,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/lang"
 
-	"github.com/frathe/imagedrop/internal/ui/widgets"
+	"github.com/frathe/picfetch/internal/ui/widgets"
 )
 
 // Help owns the two documentation windows. Each is a widgets.Singleton, so

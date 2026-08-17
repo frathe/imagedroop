@@ -1,5 +1,5 @@
 // Package imaging reads, decodes, EXIF-orients, and caches the image files
-// Image Drop displays: JPEG, PNG, GIF (including animated), WebP, BMP,
+// PicFetch displays: JPEG, PNG, GIF (including animated), WebP, BMP,
 // TIFF, ICO, XPM, HEIC, and AVIF.
 package imaging
 

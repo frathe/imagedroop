@@ -3,3 +3,5 @@ bin/
 fyne-cross/
 internal/ui/testdata/failed/
 .idea
+.vscode
+.claude/memory
