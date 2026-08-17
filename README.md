@@ -262,6 +262,7 @@ internal/imaging/     Read - decode - EXIF-orient - cache pipeline
 internal/uitest/      Shared test fixtures and OS-seam stubs
 translations/         JSON translation bundles, embedded at build time
 assets/               Icon and README artwork (packaging, not embedded)
+docs/                 Landing page, published at frathe.github.io/picfetch
 FyneApp.toml          Fyne app metadata (name, ID, version, build number)
 Makefile              Build, package, and dev-workflow tasks
 ARCHITECTURE.md       Package map - start here to find anything

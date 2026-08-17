@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PicFetch — a small, fast image viewer for macOS, Windows and Linux</title>
+<meta name="description" content="PicFetch is a small multi-platform desktop app for quickly viewing and browsing images. Drop one or more images onto the window and step through them with the keyboard.">
+<link rel="icon" href="https://raw.githubusercontent.com/frathe/picfetch/main/assets/appIcon.png">
+
+<meta property="og:type" content="website">
+<meta property="og:title" content="PicFetch — a small, fast image viewer">
+<meta property="og:description" content="Drop one or more images onto the window and step through them with the keyboard. Free and open source, for macOS, Windows and Linux.">
+<meta property="og:image" content="https://raw.githubusercontent.com/frathe/picfetch/main/assets/social_logo.jpg">
+<meta name="twitter:card" content="summary_large_image">
+
+<style>
+/* Palette picked from the header artwork: deep indigo, warm tan accent. */
+:root {
+  --bg:       #ffffff;
+  --bg-soft:  #f6f5fa;
+  --fg:       #1b1726;
+  --fg-muted: #5c5470;
+  --border:   #e3e0ec;
+  --accent:   #55309e;
+  --accent-fg:#ffffff;
+  --note-bg:  #fdf6e7;
+  --note-br:  #e0c583;
+  --shadow:   0 1px 2px rgb(27 23 38 / 6%), 0 8px 24px rgb(27 23 38 / 8%);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg:       #14101f;
+    --bg-soft:  #1d1830;
+    --fg:       #ece9f5;
+    --fg-muted: #a49dbd;
+    --border:   #2f2846;
+    --accent:   #a98bf0;
+    --accent-fg:#14101f;
+    --note-bg:  #241d33;
+    --note-br:  #6b5730;
+    --shadow:   0 1px 2px rgb(0 0 0 / 30%), 0 8px 24px rgb(0 0 0 / 35%);
+  }
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  padding: 0 1.25rem 4rem;
+  background: var(--bg);
+  color: var(--fg);
+  font: 16px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  -webkit-text-size-adjust: 100%;
+}
+
+.wrap { max-width: 960px; margin: 0 auto; }
+
+a { color: var(--accent); }
+a:hover { text-decoration: none; }
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+h1, h2, h3 { line-height: 1.25; }
+
+h2 {
+  margin: 3.5rem 0 1.25rem;
+  font-size: 1.5rem;
+  padding-bottom: .5rem;
+  border-bottom: 1px solid var(--border);
+}
+
+img { max-width: 100%; height: auto; display: block; }
+
+/* --- hero ------------------------------------------------------------ */
+
+.banner {
+  margin: 2rem 0 0;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.banner img { width: 100%; }
+
+.tagline {
+  margin: 1.75rem 0 0;
+  font-size: 1.3rem;
+  color: var(--fg-muted);
+  max-width: 46ch;
+}
+
+.cta { display: flex; flex-wrap: wrap; gap: .75rem; margin: 1.75rem 0 0; }
+
+.btn {
+  display: inline-block;
+  padding: .7rem 1.35rem;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--fg);
+  background: var(--bg-soft);
+}
+.btn:hover { border-color: var(--accent); }
+
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-fg);
+}
+.btn-primary:hover { filter: brightness(1.1); }
+
+/* --- generic cards --------------------------------------------------- */
+
+.grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(255px, 1fr));
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.card {
+  background: var(--bg-soft);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 1.1rem 1.25rem;
+}
+.card h3 { margin: 0 0 .4rem; font-size: 1rem; }
+.card p  { margin: 0; color: var(--fg-muted); font-size: .94rem; }
+
+kbd {
+  font: 600 .8em/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 4px;
+  padding: .18em .42em;
+  white-space: nowrap;
+  color: var(--fg);
+}
+
+/* --- download -------------------------------------------------------- */
+
+.dl h3 { display: flex; align-items: baseline; gap: .5rem; }
+.dl ul { list-style: none; margin: .6rem 0 0; padding: 0; }
+.dl li { margin: .35rem 0; }
+.dl a  { font-size: .94rem; }
+
+.note {
+  background: var(--note-bg);
+  border: 1px solid var(--note-br);
+  border-radius: 10px;
+  padding: 1rem 1.25rem;
+  margin: 1.5rem 0 0;
+}
+.note h3 { margin: 0 0 .5rem; font-size: 1rem; }
+.note p  { margin: .5rem 0 0; font-size: .94rem; }
+.note code {
+  font: .88em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: .1em .4em;
+}
+
+/* --- footer ---------------------------------------------------------- */
+
+footer { margin-top: 3.5rem; border-top: 1px solid var(--border); padding-top: 1.5rem; }
+
+.links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .5rem 1.5rem;
+  padding: 0;
+  margin: 0 0 1.5rem;
+  list-style: none;
+  font-weight: 500;
+}
+
+.colophon { color: var(--fg-muted); font-size: .9rem; margin: 0; }
+</style>
+</head>
+
+<body>
+<div class="wrap">
+
+<header>
+  <div class="banner">
+    <img src="https://raw.githubusercontent.com/frathe/picfetch/main/assets/header.jpg"
+         alt="PicFetch — the app window showing a 'Drop images here' prompt beside the mascot artwork">
+  </div>
+
+  <p class="tagline">
+    A small desktop app for quickly viewing and browsing images. Drop one or
+    more onto the window, and step through the set with the keyboard.
+  </p>
+
+  <div class="cta">
+    <a class="btn btn-primary" href="#downloads">Download</a>
+    <a class="btn" href="https://github.com/frathe/picfetch">View on GitHub</a>
+  </div>
+</header>
+
+<main>
+
+  <h2>See it in action</h2>
+  <div class="banner">
+    <img src="https://raw.githubusercontent.com/frathe/picfetch/main/assets/picfetch_functionality.gif"
+         alt="Screen recording: images are dropped onto the PicFetch window, then browsed with the arrow keys, the thumbnail grid, and zoom"
+         loading="lazy">
+  </div>
+
+  <h2>Features</h2>
+  <ul class="grid">
+    <li class="card">
+      <h3>Drop almost anything</h3>
+      <p>JPEG, PNG, GIF, WebP, BMP, TIFF, ICO, XPM, HEIC and AVIF. HEIC and
+      AVIF decode through embedded WASM, so they need no system libraries.</p>
+    </li>
+    <li class="card">
+      <h3>Keyboard browsing</h3>
+      <p>Step through a set with the arrow keys (wrapping at both ends), or
+      jump straight to the ends with <kbd>Home</kbd> and <kbd>End</kbd>.</p>
+    </li>
+    <li class="card">
+      <h3>Thumbnail grid</h3>
+      <p><kbd>G</kbd> opens a full-window grid for finding an image by sight.
+      Thumbnails load lazily, so a folder of several thousand files stays
+      responsive.</p>
+    </li>
+    <li class="card">
+      <h3>Zoom and pan</h3>
+      <p><kbd>+</kbd> <kbd>−</kbd> <kbd>1</kbd> <kbd>0</kbd>, or scroll to zoom
+      at the cursor. Click-drag or <kbd>Shift</kbd>+scroll to pan once zoomed
+      in.</p>
+    </li>
+    <li class="card">
+      <h3>Animated GIFs</h3>
+      <p>Played back frame by frame at their encoded speed, composited
+      correctly per frame so partial updates never leave stale pixels.</p>
+    </li>
+    <li class="card">
+      <h3>EXIF aware</h3>
+      <p>JPEGs auto-rotate to their orientation tag, and <kbd>E</kbd> shows
+      camera, lens, exposure, aperture, ISO and capture date. GPS location is
+      deliberately never read or shown.</p>
+    </li>
+    <li class="card">
+      <h3>Sorting that makes sense</h3>
+      <p>Natural name order by default, so <code>IMG_2</code> comes before
+      <code>IMG_10</code>. <kbd>S</kbd> cycles through capture date, modified
+      time, size and raw drop order.</p>
+    </li>
+    <li class="card">
+      <h3>Folders and merging</h3>
+      <p>Drop folders to scan them recursively, with a live counter for large
+      trees. <kbd>M</kbd> makes further drops add to the set instead of
+      replacing it.</p>
+    </li>
+    <li class="card">
+      <h3>Stays out of the way</h3>
+      <p>Decoding happens off the UI thread so big files never freeze the
+      window, which auto-resizes to fit the image. English and German, with a
+      built-in manual on <kbd>F1</kbd>.</p>
+    </li>
+  </ul>
+
+  <h2 id="downloads">Download</h2>
+  <p>
+    Pre-built binaries, no Go toolchain required — the links below always
+    fetch the newest release. Prefer to build from source? The
+    <a href="https://github.com/frathe/picfetch#building">build instructions</a>
+    are in the repository.
+  </p>
+
+  <ul class="grid dl">
+    <li class="card">
+      <h3>macOS</h3>
+      <ul>
+        <li><a href="https://github.com/frathe/picfetch/releases/latest/download/picfetch-macos-arm64.zip">Apple Silicon (arm64)</a></li>
+        <li><a href="https://github.com/frathe/picfetch/releases/latest/download/picfetch-macos-x86_64.zip">Intel (x86_64)</a></li>
+      </ul>
+    </li>
+    <li class="card">
+      <h3>Windows</h3>
+      <ul>
+        <li><a href="https://github.com/frathe/picfetch/releases/latest/download/picfetch-windows-amd64.zip">x64 (amd64)</a></li>
+        <li><a href="https://github.com/frathe/picfetch/releases/latest/download/picfetch-windows-arm64.zip">ARM64</a></li>
+      </ul>
+    </li>
+    <li class="card">
+      <h3>Linux</h3>
+      <ul>
+        <li><a href="https://github.com/frathe/picfetch/releases/latest/download/picfetch-linux-amd64.tar.gz">x64 (amd64)</a></li>
+        <li><a href="https://github.com/frathe/picfetch/releases/latest/download/picfetch-linux-arm64.tar.gz">ARM64</a></li>
+      </ul>
+    </li>
+  </ul>
+
+  <div class="note">
+    <h3>macOS: “app is damaged” warning</h3>
+    <p>
+      The release build isn’t signed with an Apple Developer ID or notarized,
+      so Gatekeeper quarantines it after download and claims it’s damaged. It
+      isn’t — to open it anyway, either right-click (Control-click)
+      <code>PicFetch.app</code> and choose <strong>Open</strong>, confirming
+      the dialog that appears, or run
+      <code>xattr -cr "/path/to/PicFetch.app"</code> in Terminal to clear the
+      quarantine flag and then open it normally.
+    </p>
+  </div>
+
+</main>
+
+<footer>
+  <ul class="links">
+    <li><a href="https://github.com/frathe/picfetch">Source code</a></li>
+    <li><a href="https://github.com/frathe/picfetch/releases">Releases</a></li>
+    <li><a href="https://github.com/frathe/picfetch/issues">Issues</a></li>
+    <li><a href="https://github.com/frathe/picfetch/blob/main/internal/ui/help/manual.md">Manual</a></li>
+    <li><a href="https://github.com/frathe/picfetch/blob/main/.github/CONTRIBUTING.md">Contributing</a></li>
+    <li><a href="https://github.com/frathe/picfetch/blob/main/.github/SECURITY.md">Security</a></li>
+    <li><a href="https://github.com/frathe/picfetch/blob/main/LICENSE">License</a></li>
+    <li><a href="https://buymeacoffee.com/gcobnk0grj">Buy me a coffee</a></li>
+  </ul>
+
+  <p class="colophon">
+    PicFetch is free and open source under the
+    <a href="https://github.com/frathe/picfetch/blob/main/LICENSE">MIT licence</a>,
+    and built with <a href="https://fyne.io/">Fyne</a>.
+  </p>
+</footer>
+
+</div>
+</body>
+</html>
