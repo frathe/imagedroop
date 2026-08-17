@@ -50,6 +50,8 @@ func buildMainMenu(view *viewer) *fyne.MainMenu {
 	view.wallpaperItem = setWallpaper
 
 	closeFiles := fyne.NewMenuItem(lang.L("Close Files"), func() { view.closeFiles() })
+	closeFiles.Disabled = true // updateFileMenuState (save.go) enables it once a file is loaded
+	view.closeFilesItem = closeFiles
 	settings := fyne.NewMenuItem(lang.L("Settings…"), func() { view.settings.Show() })
 
 	fileMenu := fyne.NewMenu(lang.L("File"),

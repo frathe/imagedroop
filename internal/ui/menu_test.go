@@ -51,8 +51,8 @@ func TestBuildMainMenu_Structure(t *testing.T) {
 	if got := file.Items[4]; got.Label != "Set as Wallpaper" || got.Action == nil || !got.Disabled {
 		t.Errorf("File menu item 4 = %+v, want %q with an action, starting disabled", got, "Set as Wallpaper")
 	}
-	if got := file.Items[5]; got.Label != "Close Files" || got.Action == nil {
-		t.Errorf("File menu item 5 = %+v, want %q with an action", got, "Close Files")
+	if got := file.Items[5]; got.Label != "Close Files" || got.Action == nil || !got.Disabled {
+		t.Errorf("File menu item 5 = %+v, want %q with an action, starting disabled", got, "Close Files")
 	}
 	if !file.Items[6].IsSeparator {
 		t.Error("expected a separator between Close Files and Settings…")
@@ -122,6 +122,43 @@ func TestBuildMainMenu_SettingsItemOpensTheSettingsWindow(t *testing.T) {
 
 	if !v.settings.Open() {
 		t.Error("the Settings… action should open the settings window")
+	}
+}
+
+// --- Close Files menu item state ------------------------------------------
+
+// TestCloseFilesItem_DisabledWithNoFilesLoaded mirrors the other three
+// image-dependent File-menu items' own "starts disabled" tests
+// (save_test.go/export_test.go/wallpaper_test.go's TestCanSaveRotation_
+// FalseWithNoImage and friends): there's nothing to close with an empty
+// file set.
+func TestCloseFilesItem_DisabledWithNoFilesLoaded(t *testing.T) {
+	v := newTestViewer(t)
+
+	if !v.closeFilesItem.Disabled {
+		t.Error("Close Files menu item should be disabled with nothing loaded")
+	}
+}
+
+func TestCloseFilesItem_EnabledAfterFilesLoaded(t *testing.T) {
+	v := newTestViewer(t)
+	a := uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White)
+	dropAndWait(t, v, a)
+
+	if v.closeFilesItem.Disabled {
+		t.Error("Close Files menu item should be enabled once a file is loaded")
+	}
+}
+
+func TestCloseFilesItem_DisabledAgainAfterCloseFiles(t *testing.T) {
+	v := newTestViewer(t)
+	a := uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White)
+	dropAndWait(t, v, a)
+
+	v.closeFiles()
+
+	if !v.closeFilesItem.Disabled {
+		t.Error("Close Files menu item should be disabled again once files are closed")
 	}
 }
 

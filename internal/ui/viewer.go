@@ -83,16 +83,18 @@ type viewer struct {
 
 	// saveItem is the File menu's "Save Changes" item (save.go),
 	// exportPNGItem/exportJPEGItem its two "Export as…" items (export.go),
-	// and wallpaperItem its "Set as Wallpaper" one (wallpaper.go) - kept as
-	// their own fields, unlike the other menu items built in menu.go,
+	// wallpaperItem its "Set as Wallpaper" one (wallpaper.go), and
+	// closeFilesItem its "Close Files" one (viewer.go's closeFiles) - kept
+	// as their own fields, unlike the other menu items built in menu.go,
 	// because their Disabled fields need updating from outside
 	// buildMainMenu itself, at every site that can change whether there's
-	// anything to save, export or set: rotate.go, load.go, clearToDropzone,
-	// and save.go itself - see updateFileMenuState.
+	// anything to save, export, set or close: rotate.go, load.go,
+	// clearToDropzone, and save.go itself - see updateFileMenuState.
 	saveItem       *fyne.MenuItem
 	exportPNGItem  *fyne.MenuItem
 	exportJPEGItem *fyne.MenuItem
 	wallpaperItem  *fyne.MenuItem
+	closeFilesItem *fyne.MenuItem
 
 	// restoreLink offers to reload the file set saved when the window last
 	// closed (see session.go). Shown only while welcomeArt is - and only

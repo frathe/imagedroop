@@ -76,16 +76,17 @@ func (v *viewer) saveRotation() {
 	v.ShowToast(lang.L("Saved"))
 }
 
-// updateFileMenuState keeps the File menu's four image-dependent items in
+// updateFileMenuState keeps the File menu's five file-dependent items in
 // sync with what's currently loaded: "Save Changes" with canSaveRotation
-// above, and both "Export as…" items plus "Set as Wallpaper" with canExport
+// above, both "Export as…" items plus "Set as Wallpaper" with canExport
 // (export.go, and canSetWallpaper in wallpaper.go, which is the same
-// condition for the same reasons). Called
+// condition for the same reasons), and "Close Files" with whether there's
+// anything open at all. Called
 // wherever v.rotation, v.displayFrames, v.loading, or the current file can
 // change: rotateBy/resetRotation (rotate.go), ShowImage/finishLoad
 // (load.go), clearToDropzone (viewer.go), and after a successful
 // saveRotation above. One function rather than one per item because every
-// one of those sites can move both conditions at once.
+// one of those sites can move more than one of these conditions at once.
 func (v *viewer) updateFileMenuState() {
 	v.saveItem.Disabled = !v.canSaveRotation()
 
@@ -93,6 +94,8 @@ func (v *viewer) updateFileMenuState() {
 	v.exportPNGItem.Disabled = noExport
 	v.exportJPEGItem.Disabled = noExport
 	v.wallpaperItem.Disabled = !v.canSetWallpaper()
+
+	v.closeFilesItem.Disabled = v.FileCount() == 0
 
 	v.win.MainMenu().Refresh()
 }
