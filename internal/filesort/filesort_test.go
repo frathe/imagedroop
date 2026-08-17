@@ -10,6 +10,7 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/storage"
+	"fyne.io/fyne/v2/test"
 
 	"github.com/frathe/picfetch/internal/uitest"
 )
@@ -17,6 +18,18 @@ import (
 // These exercise the orderings directly, without a viewer: the S-key
 // cycling and the window-title prefix stay in internal/ui, which is what
 // actually owns those behaviours.
+
+// TestMain registers the fyne test app so storage.NewFileURI's "file"
+// scheme is resolvable - the same reason internal/imaging's own TestMain
+// does it. ByCaptureDate reaches the filesystem through imaging.CaptureDate,
+// which reads its bytes via storage.Reader; with no repository registered
+// that read fails, CaptureDate reports no date for every file, and the sort
+// silently degrades to captureOrModTime's mtime fallback instead of erroring
+// where a test would see it.
+func TestMain(m *testing.M) {
+	test.NewApp()
+	os.Exit(m.Run())
+}
 
 // TestModes_MatchesNextsCycleOrder guards the settings window's sort-order
 // dropdown: Modes must list every mode in exactly the order Next steps
@@ -89,6 +102,15 @@ func TestNaturalLess(t *testing.T) {
 // actual comparator: an earlier DateTimeOriginal sorts first, and a file
 // with no Exif data at all falls back to its mtime instead of clumping at
 // the zero time.
+//
+// The two Exif-bearing files are deliberately given mtimes in the *opposite*
+// order to their capture dates, so the expected order is only reachable by
+// actually reading the Exif. An earlier version set no mtimes at all and so
+// passed even when imaging.CaptureDate silently failed for every file and
+// the sort degraded to captureOrModTime's mtime fallback - which is how a
+// missing TestMain (see above) went unnoticed until a Linux CI run, where
+// coarser mtime granularity gave the two files identical timestamps and the
+// accidental pass turned into a confusing failure.
 func TestOrderedFiles_SortsByCaptureDate(t *testing.T) {
 	mode := ByCaptureDate
 
@@ -98,10 +120,21 @@ func TestOrderedFiles_SortsByCaptureDate(t *testing.T) {
 
 	// noExif has no Exif capture date, so it falls back to its mtime - push
 	// that later than both Exif dates above so the expected order doesn't
-	// depend on when the test happens to run.
-	future := time.Now().Add(time.Hour)
-	if err := os.Chtimes(noExif.Path(), future, future); err != nil {
-		t.Fatalf("os.Chtimes: %v", err)
+	// depend on when the test happens to run. The other two get mtimes that
+	// contradict their capture dates, so a fallback would order them newer
+	// before older and fail this test rather than quietly pass it.
+	now := time.Now()
+	for _, f := range []struct {
+		u  fyne.URI
+		mt time.Time
+	}{
+		{newer, now},
+		{older, now.Add(30 * time.Minute)},
+		{noExif, now.Add(time.Hour)},
+	} {
+		if err := os.Chtimes(f.u.Path(), f.mt, f.mt); err != nil {
+			t.Fatalf("os.Chtimes: %v", err)
+		}
 	}
 
 	got := Order(context.Background(), mode, []fyne.URI{newer, noExif, older})

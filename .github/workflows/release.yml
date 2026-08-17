@@ -9,7 +9,15 @@ permissions:
   contents: write
 
 jobs:
+  # The gate: a tag push runs the full CI suite (format, vet, build, test)
+  # before anything is packaged, and every job below needs it, so a red test
+  # leaves the release unpublished instead of shipping. Reuses ci.yml rather
+  # than restating its steps, so the two can't drift apart.
+  test:
+    uses: ./.github/workflows/ci.yml
+
   build-macos:
+    needs: test
     strategy:
       matrix:
         include:
@@ -47,6 +55,7 @@ jobs:
           if-no-files-found: error
 
   build-cross:
+    needs: test
     runs-on: ubuntu-latest
     steps:
       - name: Check out code
