@@ -27,6 +27,7 @@ import (
 	"github.com/frathe/picfetch/internal/ui/assets"
 	"github.com/frathe/picfetch/internal/ui/deletion"
 	"github.com/frathe/picfetch/internal/ui/exifwin"
+	"github.com/frathe/picfetch/internal/ui/favorites"
 	"github.com/frathe/picfetch/internal/ui/grid"
 	"github.com/frathe/picfetch/internal/ui/help"
 	"github.com/frathe/picfetch/internal/ui/settingswin"
@@ -379,6 +380,7 @@ func buildViewer(application fyne.App) (*viewer, fyne.Window) {
 	// settingswin.New takes the viewer as its Host, so it can only be built
 	// once view exists.
 	view.settings = settingswin.New(application, view)
+	view.favorites = favorites.New(view, window)
 
 	// Both secondary windows remember where the user last put them and how
 	// large they left them, the same way the main window does below - see
@@ -466,6 +468,7 @@ func buildViewer(application fyne.App) (*viewer, fyne.Window) {
 	})
 
 	wireOpenShortcuts(window.Canvas(), view)
+	wireFavoriteShortcuts(window.Canvas(), view.favorites.Open)
 	wireClipboardShortcuts(window.Canvas(), view)
 	wireDeleteShortcut(window.Canvas(), view)
 	wireSelectAllShortcut(window.Canvas(), view)
@@ -474,8 +477,8 @@ func buildViewer(application fyne.App) (*viewer, fyne.Window) {
 	return view, window
 }
 
-// shortcutAdder is the one method of fyne.Canvas that wireOpenShortcuts
-// needs, narrow enough that a bare *fyne.ShortcutHandler satisfies it too -
+// shortcutAdder is the one method the shortcut wiring needs from fyne.Canvas,
+// narrow enough that a bare *fyne.ShortcutHandler satisfies it too -
 // so tests can drive the exact same wiring against that handler directly
 // and then fire it via its own TypedShortcut, instead of going through a
 // full canvas. That detour is load-bearing, not a style choice: Fyne's test
@@ -508,6 +511,18 @@ func wireOpenShortcuts(c shortcutAdder, view *viewer) {
 		KeyName:  fyne.KeyO,
 		Modifier: fyne.KeyModifierShortcutDefault | fyne.KeyModifierShift,
 	}, openShortcut)
+}
+
+// wireFavoriteShortcuts binds the first ten sorted favorites to Cmd/Ctrl+1
+// through 9, then Cmd/Ctrl+0. The handlers stay registered while Feature.Open
+// resolves each slot against the latest menu refresh after an add or removal.
+func wireFavoriteShortcuts(c shortcutAdder, open func(index int)) {
+	for i := 0; i < favorites.ShortcutCount; i++ {
+		index := i
+		c.AddShortcut(favorites.ShortcutForIndex(index), func(fyne.Shortcut) {
+			open(index)
+		})
+	}
 }
 
 // wireClipboardShortcuts binds Cmd/Ctrl+C to copy the current image and

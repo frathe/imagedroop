@@ -17,6 +17,7 @@ import (
 	"github.com/frathe/picfetch/internal/imaging"
 	"github.com/frathe/picfetch/internal/ui/deletion"
 	"github.com/frathe/picfetch/internal/ui/exifwin"
+	"github.com/frathe/picfetch/internal/ui/favorites"
 	"github.com/frathe/picfetch/internal/ui/grid"
 	"github.com/frathe/picfetch/internal/ui/help"
 	"github.com/frathe/picfetch/internal/ui/settingswin"
@@ -68,6 +69,9 @@ type viewer struct {
 	// help owns the manual and About windows and the Help menu - see
 	// internal/ui/help, which needs nothing from the viewer at all.
 	help *help.Help
+
+	// favorites owns the Favorites menu and its add/open/remove dialogs.
+	favorites *favorites.Feature
 
 	// exif is the EXIF metadata panel - see internal/ui/exifwin, which
 	// reaches back only through the "which file is on screen" accessor
@@ -752,8 +756,8 @@ func (v *viewer) Modifiers() fyne.KeyModifier {
 	return v.keyModifiers()
 }
 
-// FileCount, FileAt, CurrentIndex, Generation, Unfocus, Modifiers, and
-// Advance complete the exported vocabulary the feature packages' Host
+// FileCount, FileAt, OpenFiles, CurrentIndex, Generation, Unfocus, Modifiers,
+// and Advance complete the exported vocabulary the feature packages' Host
 // interfaces bind to (see the note above CurrentFile). internal/ui/grid uses
 // the first six: the first three to draw the right cells, Generation to
 // discard a decode whose file set has since been replaced, Unfocus to
@@ -769,6 +773,12 @@ func (v *viewer) FileCount() int {
 // FileAt returns the file at index i.
 func (v *viewer) FileAt(i int) fyne.URI {
 	return v.files[i]
+}
+
+// OpenFiles sends a file list through the same scan, merge, sort, and display
+// path as a drag-and-drop or the native file chooser.
+func (v *viewer) OpenFiles(files []fyne.URI) {
+	v.handleDrop(files)
 }
 
 // CurrentIndex is the index of the file on screen.

@@ -1,5 +1,4 @@
-// The window's menu bar: File (open, close, settings) composed with
-// view.help's own Help menu.
+// The window's menu bar: File (open, close, settings), Favorites, and Help.
 
 package ui
 
@@ -57,5 +56,5 @@ func buildMainMenu(view *viewer) *fyne.MainMenu {
 	fileMenu := fyne.NewMenu(lang.L("File"),
 		open, save, exportPNG, exportJPEG, setWallpaper, closeFiles, fyne.NewMenuItemSeparator(), settings)
 
-	return fyne.NewMainMenu(fileMenu, view.help.Menu())
+	return fyne.NewMainMenu(fileMenu, view.favorites.Menu(), view.help.Menu())
 }

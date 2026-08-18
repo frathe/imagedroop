@@ -6,16 +6,21 @@ package ui
 import (
 	"errors"
 	"image/color"
+	"slices"
 	"testing"
 	"time"
 
+	"fyne.io/fyne/v2"
+
+	"github.com/frathe/picfetch/internal/favstore"
 	"github.com/frathe/picfetch/internal/filepicker"
+	favoriteui "github.com/frathe/picfetch/internal/ui/favorites"
 	"github.com/frathe/picfetch/internal/uitest"
 )
 
 // TestBuildMainMenu_Structure checks the bar's shape: File (Open Files…,
 // Save Changes, Export as PNG…, Export as JPEG…, Set as Wallpaper, Close
-// Files, a separator, Settings…) followed by view.help's own Help menu -
+// Files, a separator, Settings…) followed by Favorites and Help -
 // mirroring help's own
 // TestHelpMenu (manual_test.go), which covers the Help submenu's own
 // contents.
@@ -24,8 +29,8 @@ func TestBuildMainMenu_Structure(t *testing.T) {
 
 	menu := buildMainMenu(v)
 
-	if len(menu.Items) != 2 {
-		t.Fatalf("top-level menus = %d, want 2 (File, Help)", len(menu.Items))
+	if len(menu.Items) != 3 {
+		t.Fatalf("top-level menus = %d, want 3 (File, Favorites, Help)", len(menu.Items))
 	}
 
 	file := menu.Items[0]
@@ -61,8 +66,11 @@ func TestBuildMainMenu_Structure(t *testing.T) {
 		t.Errorf("File menu item 7 = %+v, want %q with an action", got, "Settings…")
 	}
 
-	if got := menu.Items[1]; got.Label != "Help" {
-		t.Errorf("second menu label = %q, want %q", got.Label, "Help")
+	if got := menu.Items[1]; got.Label != "Favorites" {
+		t.Errorf("second menu label = %q, want %q", got.Label, "Favorites")
+	}
+	if got := menu.Items[2]; got.Label != "Help" {
+		t.Errorf("third menu label = %q, want %q", got.Label, "Help")
 	}
 }
 
@@ -125,6 +133,63 @@ func TestBuildMainMenu_SettingsItemOpensTheSettingsWindow(t *testing.T) {
 	}
 }
 
+func TestFavoritesMenuItemOpensStoredFilesThroughViewer(t *testing.T) {
+	v := newTestViewer(t)
+	dir := t.TempDir()
+	image := uitest.TempJPEGURI(t, "favorite.jpg", 4, 4, color.White)
+	if err := favstore.Save(dir, "Trip", []fyne.URI{image}); err != nil {
+		t.Fatalf("favstore.Save: %v", err)
+	}
+	v.favorites.SetDir(dir)
+
+	v.favorites.Menu().Items[2].Action()
+	waitForScan(t, v)
+	waitForSort(t, v)
+	waitUntilLoaded(t, v)
+
+	if len(v.files) != 1 || v.files[0].Path() != image.Path() {
+		t.Errorf("files = %v, want favorite image %q", v.files, image.Path())
+	}
+}
+
+func TestWireFavoriteShortcutsMapsDigitsToFavoriteSlots(t *testing.T) {
+	handler := &fyne.ShortcutHandler{}
+	var opened []int
+	wireFavoriteShortcuts(handler, func(index int) {
+		opened = append(opened, index)
+	})
+
+	for i := 0; i < favoriteui.ShortcutCount; i++ {
+		handler.TypedShortcut(favoriteui.ShortcutForIndex(i))
+	}
+
+	want := []int{0, 1, 2, 3, 4, 5, 6, 7, 8, 9}
+	if !slices.Equal(opened, want) {
+		t.Errorf("opened slots = %v, want %v", opened, want)
+	}
+}
+
+func TestFavoriteShortcutOpensStoredFilesThroughViewer(t *testing.T) {
+	v := newTestViewer(t)
+	dir := t.TempDir()
+	image := uitest.TempJPEGURI(t, "shortcut-favorite.jpg", 4, 4, color.White)
+	if err := favstore.Save(dir, "Trip", []fyne.URI{image}); err != nil {
+		t.Fatalf("favstore.Save: %v", err)
+	}
+	v.favorites.SetDir(dir)
+
+	handler := &fyne.ShortcutHandler{}
+	wireFavoriteShortcuts(handler, v.favorites.Open)
+	handler.TypedShortcut(favoriteui.ShortcutForIndex(0))
+	waitForScan(t, v)
+	waitForSort(t, v)
+	waitUntilLoaded(t, v)
+
+	if len(v.files) != 1 || v.files[0].Path() != image.Path() {
+		t.Errorf("files = %v, want shortcut favorite %q", v.files, image.Path())
+	}
+}
+
 // --- Close Files menu item state ------------------------------------------
 
 // TestCloseFilesItem_DisabledWithNoFilesLoaded mirrors the other three
@@ -148,6 +213,9 @@ func TestCloseFilesItem_EnabledAfterFilesLoaded(t *testing.T) {
 	if v.closeFilesItem.Disabled {
 		t.Error("Close Files menu item should be enabled once a file is loaded")
 	}
+	if v.favorites.Menu().Items[0].Disabled {
+		t.Error("Add Current List to Favorites should be enabled once files are loaded")
+	}
 }
 
 func TestCloseFilesItem_DisabledAgainAfterCloseFiles(t *testing.T) {
@@ -159,6 +227,9 @@ func TestCloseFilesItem_DisabledAgainAfterCloseFiles(t *testing.T) {
 
 	if !v.closeFilesItem.Disabled {
 		t.Error("Close Files menu item should be disabled again once files are closed")
+	}
+	if !v.favorites.Menu().Items[0].Disabled {
+		t.Error("Add Current List to Favorites should be disabled again once files are closed")
 	}
 }
 

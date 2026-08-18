@@ -6,6 +6,7 @@ package ui
 import (
 	"fyne.io/fyne/v2"
 
+	"github.com/frathe/picfetch/internal/favstore"
 	"github.com/frathe/picfetch/internal/preferences"
 	"github.com/frathe/picfetch/internal/session"
 )
@@ -27,6 +28,7 @@ const (
 // the caller); empty for a plain launch.
 func Run(application fyne.App, initial []fyne.URI) {
 	view, window := buildViewer(application)
+	view.favorites.SetDir(favstore.DefaultDir())
 
 	// Deferred to SetOnStarted rather than called right away: it ends up
 	// calling handleDrop, which touches widgets directly (no fyne.Do) the
