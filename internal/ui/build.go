@@ -7,7 +7,9 @@ package ui
 
 import (
 	"fmt"
+	"image"
 	"image/color"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -318,6 +320,17 @@ func buildViewer(application fyne.App) (*viewer, fyne.Window) {
 		keyModifiers:  defaultKeyModifiers,
 	}
 
+	view.vectorStop = make(chan struct{})
+	view.vectorDebounce = defaultVectorDebounce
+	view.vectorRasterize = func(vec *imaging.Vector, w, h int) (image.Image, error) { return vec.RasterAt(w, h) }
+	view.vectorAfter = time.After
+
+	// Seeded here for the same reason imgCache's budget is: buildViewer
+	// applies the saved preference directly rather than through the
+	// setter. Every later change goes through SetMaxImageCacheMB, which
+	// keeps the two in step.
+	imaging.SetMaxVectorRasterPixels(vectorRasterPixelsFor(imgCacheMB))
+
 	if n := len(savedSession); n > 0 {
 		dz.restoreLink.SetText(fmt.Sprintf(lang.L("Restore last session (%d images)"), n))
 		dz.restoreLink.Show()
@@ -332,7 +345,8 @@ func buildViewer(application fyne.App) (*viewer, fyne.Window) {
 	// see the new one.
 	view.zoom = zoom.New(img,
 		func() { view.updateInfoOverlay() },
-		func() fyne.KeyModifier { return view.keyModifiers() })
+		func() fyne.KeyModifier { return view.keyModifiers() },
+		view.requestVectorRender)
 
 	// The full-window thumbnail grid (G key), built now for the same
 	// reason the zoom view is: grid.New takes the viewer as its Host. Also

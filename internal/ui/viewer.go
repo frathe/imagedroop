@@ -6,6 +6,7 @@ import (
 	"slices"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -407,6 +408,50 @@ type viewer struct {
 	// handleKeyEvent's Shift+R, and by the zoom view's Shift+scroll pan
 	// through the closure buildViewer hands it.
 	keyModifiers func() fyne.KeyModifier
+
+	// vector is the parsed SVG behind the image on screen, nil for every
+	// raster format. Non-nil is what makes a scale change mean anything.
+	vector *imaging.Vector
+
+	// vectorLogical is the size the app treats that vector as being - what
+	// the window, the title and the info overlay are built on. Fixed for
+	// the lifetime of the loaded image; the raster behind it is not.
+	vectorLogical fyne.Size
+
+	// vectorRaster is the pixel size of the raster currently on screen,
+	// which requestVectorRender compares a new target against.
+	vectorRaster image.Point
+
+	// vectorGen is the staleness guard for re-render goroutines: every
+	// request bumps it, and a goroutine that finds it moved on rasterizes
+	// nothing. Also bumped by clearVector, so work in flight when the
+	// image changes is discarded rather than landing on the new one.
+	vectorGen atomic.Uint64
+
+	// vectorPending is waited on by the test suite's drain, per the
+	// module's concurrency invariant.
+	vectorPending sync.WaitGroup
+
+	// vectorStop is closed once, at shutdown, to release a goroutine
+	// parked on its debounce. Deliberately not closed by clearVector,
+	// which runs on every reset - closing a closed channel panics, and
+	// abandoning in-flight work is vectorGen's job.
+	vectorStop chan struct{}
+
+	// vectorDebounce coalesces a burst of scroll-driven scale changes into
+	// one rasterization. A per-viewer field rather than a package var
+	// (concurrency invariant: the viewer has no mutable package state),
+	// which is also the seam that lets tests set it to zero.
+	vectorDebounce time.Duration
+
+	// vectorRasterize and vectorAfter are RasterAt and time.After behind
+	// per-viewer seams (the concurrency invariant forbids mutable package
+	// state), so the coalescing test can count rasterizations and release
+	// a parked burst deterministically. Production never overrides them.
+	// Like vectorDebounce, they are write-once: set at construction, and
+	// by a test only before its first drop.
+	vectorRasterize func(vec *imaging.Vector, w, h int) (image.Image, error)
+	vectorAfter     func(time.Duration) <-chan time.Time
 }
 
 // ForceRepaint refreshes the window's root content object, which has been
@@ -478,6 +523,7 @@ func (v *viewer) clearToDropzone() {
 
 	v.img.Image = nil
 	v.img.Hide()
+	v.clearVector() // an in-flight rasterization must not land on whatever loads next
 
 	// v.infoVisible itself is left alone - it's a standing preference like
 	// sortMode/mergeMode, so the card comes back on the next load if it
@@ -554,6 +600,13 @@ func (v *viewer) showFileIfPresent(target fyne.URI) bool {
 // clear.
 func (v *viewer) reset() {
 	v.clearToDropzone()
+
+	// Also cleared here, not just inside clearToDropzone: every path back to
+	// the drop zone must independently abandon the vector, so none of them
+	// can regress into leaving an in-flight rasterization able to land on
+	// whatever loads next.
+	v.clearVector()
+
 	v.showWelcomeState()
 	v.ForceRepaint()
 }
@@ -567,6 +620,7 @@ func (v *viewer) closeFiles() {
 		v.cancelScan()
 	}
 	v.reset()
+	v.clearVector() // see reset's own comment - each layer clears independently
 }
 
 // showWelcomeState restores the launch-time welcome look: welcome art in

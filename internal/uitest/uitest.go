@@ -24,6 +24,7 @@ package uitest
 import (
 	"bytes"
 	"encoding/binary"
+	"fmt"
 	"hash/crc32"
 	"image"
 	"image/color"
@@ -86,6 +87,23 @@ func EncodeJPEG(t *testing.T, w, h int, c color.Color) []byte {
 	}
 
 	return buf.Bytes()
+}
+
+// SVGBytes builds a synthetic SVG with the given viewBox and a filled rect
+// covering it, so a rasterization of it has visibly non-zero pixels.
+func SVGBytes(w, h int) []byte {
+	return []byte(fmt.Sprintf(
+		`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 %d %d">`+
+			`<rect width="%d" height="%d" fill="#cc0000"/></svg>`,
+		w, h, w, h))
+}
+
+// TempSVGURI writes SVGBytes to a temp file and returns its URI, mirroring
+// TempJPEGURI.
+func TempSVGURI(t *testing.T, name string, w, h int) fyne.URI {
+	t.Helper()
+
+	return storage.NewFileURI(WriteTempFile(t, name, SVGBytes(w, h)))
 }
 
 // EncodePNG returns a solid-color w x h PNG.

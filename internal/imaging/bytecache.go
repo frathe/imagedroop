@@ -280,6 +280,14 @@ func loadedImageBytes(l *LoadedImage) int64 {
 		total += imageBytes(f)
 	}
 
+	// A retained Vector's parse tree is real memory the cache would
+	// otherwise hold for free. Its true footprint cannot be measured
+	// without walking it, but it is proportional to the source, and the
+	// source length is already bounded by MaxEncodedBytes.
+	if l.Vector != nil {
+		total += int64(l.Vector.srcBytes)
+	}
+
 	return total
 }
 

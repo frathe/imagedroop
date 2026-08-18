@@ -53,6 +53,17 @@ func (v *viewer) SetMaxImageCacheMB(n int) {
 
 	v.imgCacheMB = n
 	v.imgCache.SetBudget(int64(n) * bytesPerMB)
+	imaging.SetMaxVectorRasterPixels(vectorRasterPixelsFor(n))
+}
+
+// vectorRasterPixelsFor derives the SVG re-render ceiling from the image
+// cache budget: a quarter of the budget's bytes, at 4 bytes per RGBA
+// pixel. The re-render raster is live display state rather than a cache
+// entry - deliberately never charged to imgCache - so this derivation is
+// how the one memory setting the user sees still bounds it.
+// imaging.SetMaxVectorRasterPixels applies the floor and ceiling.
+func vectorRasterPixelsFor(cacheMB int) int64 {
+	return int64(cacheMB) * bytesPerMB / 4 / 4
 }
 
 // SetMaxThumbCacheMB retunes the grid's thumbnail cache the same way, through

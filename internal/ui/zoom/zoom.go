@@ -17,11 +17,22 @@
 // without a lock or a callback: a new frame arriving from the app never
 // disturbs the layout, and a zoom never disturbs the pixels.
 //
-// The two funcs New takes are the only other coupling. onChanged is how
+// The three funcs New takes are the only other coupling. onChanged is how
 // the app hears that the zoom level moved (it redraws its info overlay);
 // modifiers reports which keyboard modifiers are held, which Fyne only
 // exposes through the desktop driver, so the app injects it and tests stub
 // it.
+//
+// One wrinkle that contract creates: an SVG's raster is re-rendered at a
+// different pixel count as the scale moves, so the number of pixels the
+// image has is no longer the size it should be drawn at. Everything here
+// therefore measures against a *logical* size (see native and
+// SetLogicalSize) rather than against img.Image.Bounds() directly. Raster
+// formats leave it unset and behave exactly as before.
+//
+// onScaleChanged is the third and last callback. It fires from apply -
+// which runs inside the renderer's Layout - so its handler must not touch
+// a widget synchronously; it may only record state and spawn.
 package zoom
 
 import (
@@ -101,17 +112,33 @@ type Zoom struct {
 	// itself trigger a resize - has a size to lay out against without
 	// waiting for the next one.
 	viewport fyne.Size
+
+	// onScaleChanged reports that the effective display scale moved, from
+	// any cause - a key, a scroll, or a window resize while fitting. The
+	// app uses it to re-rasterize a vector at the new density. Fires from
+	// apply, i.e. possibly mid-layout: see the package doc. May be nil.
+	onScaleChanged func(scale float32)
+
+	// lastScale is the value onScaleChanged was last called with, so a
+	// layout pass that changes nothing stays silent.
+	lastScale float32
+
+	// logical is the size this package's math treats the image as being,
+	// independent of how many pixels actually back it. Zero means "use the
+	// raster's own bounds", which is every format except SVG.
+	logical fyne.Size
 }
 
 // New builds the zoom view over img. onChanged and modifiers may both be
 // nil (no notification; no modifiers held). It starts out fitting, which
 // is the state every freshly loaded image is shown in.
-func New(img *canvas.Image, onChanged func(), modifiers func() fyne.KeyModifier) *Zoom {
+func New(img *canvas.Image, onChanged func(), modifiers func() fyne.KeyModifier, onScaleChanged func(scale float32)) *Zoom {
 	z := &Zoom{
-		img:       img,
-		onChanged: onChanged,
-		modifiers: modifiers,
-		fit:       true,
+		img:            img,
+		onChanged:      onChanged,
+		modifiers:      modifiers,
+		onScaleChanged: onScaleChanged,
+		fit:            true,
 	}
 	z.widget = newImageWidget(z)
 
@@ -138,12 +165,87 @@ func (z *Zoom) Fitting() bool {
 // scale or the manual scale actually applies - as a rounded percentage,
 // for the app's info overlay.
 func (z *Zoom) Percent() int {
-	scale := z.scale
+	return int(z.Scale()*100 + 0.5)
+}
+
+// Scale is the display scale currently in effect - whichever of the fit
+// scale or the manual scale actually applies. Percent is this rounded to a
+// whole percentage for the info overlay; the app's vector re-render needs
+// the unrounded value.
+func (z *Zoom) Scale() float32 {
 	if z.fit {
-		scale = z.fitScale()
+		return z.fitScale()
 	}
 
-	return int(scale*100 + 0.5)
+	return z.scale
+}
+
+// SetLogicalSize sets the size the zoom math measures against, replacing
+// the raster's own bounds. A zero Size clears it. Deliberately does not
+// re-lay out: every caller (finishLoad, applyRotationLayout) is mid-update
+// and calls ResetToFit immediately afterwards, which does.
+func (z *Zoom) SetLogicalSize(s fyne.Size) {
+	z.logical = s
+
+	// Re-arm the scale notification. lastScale exists to suppress a repeat
+	// notification for a scale that hasn't moved, but "hasn't moved" is only
+	// meaningful within one image: the next image can legitimately land on
+	// the very same number, and the app still has to hear about it, because
+	// what it does in response - rasterizing a vector to that density - has
+	// to happen again for the new image. Without this, a folder of
+	// same-sized SVGs shown at a fixed viewport (picture-frame mode, which
+	// skips the per-image window resize) notifies for the first one only,
+	// and every one after it stays at its load-time raster: blown up and
+	// blurry, in the one mode that has no zoom control to recover with.
+	//
+	// Zero rather than a flag because no real scale is ever zero, and this
+	// is reached on every load - clearVector calls it for raster formats
+	// too, where the extra notification costs a single early return.
+	z.lastScale = 0
+}
+
+// LogicalSize reports the size the zoom math is currently measuring
+// against - the logical size when one is set, zero otherwise. Like
+// Fitting, nothing in production branches on it: it exists so the app's
+// own tests can assert the contract that a quarter turn swaps the axes
+// zoom fits against, which is otherwise only observable as a magnitude
+// difference in a raster several steps downstream.
+func (z *Zoom) LogicalSize() fyne.Size {
+	return z.logical
+}
+
+// native is the size everything here measures against: the logical size
+// when one is set, otherwise the raster's own bounds.
+func (z *Zoom) native() fyne.Size {
+	if z.logical.Width > 0 && z.logical.Height > 0 {
+		return z.logical
+	}
+
+	if z.img.Image == nil {
+		return fyne.Size{}
+	}
+
+	b := z.img.Image.Bounds()
+
+	return fyne.NewSize(float32(b.Dx()), float32(b.Dy()))
+}
+
+// notifyScale reports an effective-scale change, and only a real one - a
+// layout pass that leaves the scale where it was stays silent. Exact
+// float comparison is deliberate: this filters out no-ops, and the app
+// applies its own hysteresis on top before deciding to re-render anything.
+func (z *Zoom) notifyScale() {
+	if z.onScaleChanged == nil || z.img.Image == nil {
+		return
+	}
+
+	s := z.Scale()
+	if s == z.lastScale {
+		return
+	}
+
+	z.lastScale = s
+	z.onScaleChanged(s)
 }
 
 // CanPan reports whether the image, at its current scale, overflows the
@@ -249,8 +351,7 @@ func (z *Zoom) at(dy float32, cursor fyne.Position) {
 	factor := float32(math.Exp(float64(dy * scrollSensitivity)))
 	newScale := min(max(oldScale*factor, minScale), maxScale)
 
-	b := z.img.Image.Bounds()
-	native := fyne.NewSize(float32(b.Dx()), float32(b.Dy()))
+	native := z.native()
 
 	// pan is guaranteed zero here whenever fit is true (see apply), so
 	// oldPos is exactly the position apply would have laid the image out
@@ -292,6 +393,8 @@ func (z *Zoom) apply() {
 		return
 	}
 
+	defer z.notifyScale()
+
 	// No image yet, or fitting: exactly the pre-zoom behaviour - fill the
 	// viewport with ImageFillContain, at (0, 0), no pan.
 	if z.img.Image == nil || z.fit {
@@ -318,9 +421,9 @@ func (z *Zoom) changed() {
 
 // scaledSize is the image's size at the current manual scale.
 func (z *Zoom) scaledSize() fyne.Size {
-	b := z.img.Image.Bounds()
+	n := z.native()
 
-	return fyne.NewSize(float32(b.Dx())*z.scale, float32(b.Dy())*z.scale)
+	return fyne.NewSize(n.Width*z.scale, n.Height*z.scale)
 }
 
 // originFor is where an image of size scaled sits in the viewport:
@@ -341,12 +444,12 @@ func (z *Zoom) fitScale() float32 {
 		return 1
 	}
 
-	b := z.img.Image.Bounds()
-	if b.Dx() == 0 || b.Dy() == 0 {
+	n := z.native()
+	if n.Width == 0 || n.Height == 0 {
 		return 1
 	}
 
-	return min(z.viewport.Width/float32(b.Dx()), z.viewport.Height/float32(b.Dy()))
+	return min(z.viewport.Width/n.Width, z.viewport.Height/n.Height)
 }
 
 // overflows reports whether scaled sticks out past viewport on either

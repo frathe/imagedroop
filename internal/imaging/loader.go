@@ -1,6 +1,11 @@
 // Package imaging reads, decodes, EXIF-orients, and caches the image files
 // PicFetch displays: JPEG, PNG, GIF (including animated), WebP, BMP,
-// TIFF, ICO, XPM, HEIC, and AVIF.
+// TIFF, ICO, XPM, HEIC, AVIF, and SVG.
+//
+// SVG is the one vector format here and the only one whose pixels are not
+// fixed at load: LoadedImage carries the parsed Vector alongside its first
+// raster, so internal/ui can rasterize it again whenever the display scale
+// changes. See svg.go and vector.go.
 package imaging
 
 import (
@@ -35,14 +40,14 @@ func IsSupportedImage(u fyne.URI) bool {
 	// recursive folder scan into thousands of needless file opens.
 	switch strings.ToLower(u.Extension()) {
 	case ".jpg", ".jpeg", ".jpe", ".jfif", ".png", ".gif", ".webp", ".bmp", ".tif", ".tiff", ".ico", ".xpm",
-		".heic", ".heif", ".avif":
+		".heic", ".heif", ".avif", ".svg":
 		return true
 	}
 
 	switch strings.ToLower(u.MimeType()) {
 	case "image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp", "image/tiff",
 		"image/x-icon", "image/vnd.microsoft.icon", "image/x-xpixmap",
-		"image/heic", "image/heif", "image/avif":
+		"image/heic", "image/heif", "image/avif", "image/svg+xml":
 		return true
 	}
 
@@ -71,6 +76,12 @@ type LoadedImage struct {
 	// doesn't move - which is a far better outcome for a valid file than
 	// refusing it outright; internal/ui says so with a toast.
 	AnimationTruncated bool
+
+	// Vector is the parsed source of an SVG, retained so the app can
+	// rasterize it again at a different size as the zoom level or window
+	// size changes. Nil for every raster format, which is what internal/ui
+	// branches on to decide whether re-rendering means anything.
+	Vector *Vector
 }
 
 // maxImagePixels caps the pixel count a decoded image header is allowed to
@@ -103,6 +114,21 @@ func NewImgCache(budget int64) *ByteCache[*LoadedImage] {
 // decompression-bomb risk.
 type InvalidDimensionsError struct {
 	w, h int
+}
+
+// checkDimensions is the one test both of ReadAndProbe's arms apply to a
+// header-declared size: positive on each axis, and no more than
+// maxImagePixels in total. The per-axis bound is not redundant with the
+// product: an SVG's axes come from a text attribute rather than a decoded
+// header, so a single axis can be large enough that the int64 product of
+// two of them wraps negative and slips past the total.
+func checkDimensions(w, h int) error {
+	if w <= 0 || h <= 0 || w > maxImagePixels || h > maxImagePixels ||
+		int64(w)*int64(h) > maxImagePixels {
+		return &InvalidDimensionsError{w: w, h: h}
+	}
+
+	return nil
 }
 
 func (e *InvalidDimensionsError) Error() string {
@@ -256,6 +282,19 @@ func ReadAndProbe(ctx context.Context, u fyne.URI) (data []byte, bounds image.Re
 		return nil, image.Rectangle{}, err
 	}
 
+	if isSVGData(data) {
+		b := svgProbeBounds(data)
+
+		// Same guard as the raster arm below, so a gigapixel viewBox - an
+		// outright panic inside oksvg - is refused here, before a single
+		// pixel is allocated.
+		if err := checkDimensions(b.Dx(), b.Dy()); err != nil {
+			return nil, image.Rectangle{}, err
+		}
+
+		return data, b, nil
+	}
+
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
 
 	if err != nil {
@@ -264,8 +303,8 @@ func ReadAndProbe(ctx context.Context, u fyne.URI) (data []byte, bounds image.Re
 
 	w, h := cfg.Width, cfg.Height
 
-	if w <= 0 || h <= 0 || int64(w)*int64(h) > maxImagePixels {
-		return nil, image.Rectangle{}, &InvalidDimensionsError{w: w, h: h}
+	if err := checkDimensions(w, h); err != nil {
+		return nil, image.Rectangle{}, err
 	}
 
 	if o := readEXIFOrientation(data); o >= 5 && o <= 8 {
@@ -290,6 +329,10 @@ func ReadAndProbe(ctx context.Context, u fyne.URI) (data []byte, bounds image.Re
 func DecodeLoaded(ctx context.Context, data []byte, maxAnimBytes int64) (*LoadedImage, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
+	}
+
+	if isSVGData(data) {
+		return decodeVector(data)
 	}
 
 	frames, delays, truncated := decodeAnimatedGIF(data, maxAnimBytes)

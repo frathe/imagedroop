@@ -155,6 +155,12 @@ func newTestUI(t *testing.T) (v *viewer, win fyne.Window, closed func() bool) {
 	// harmlessly until the process exits.
 	v.toast.duration = time.Hour
 
+	// Vector re-renders fire from every effective-scale change (a key, a
+	// scroll, or a window resize), and the production debounce would leave
+	// them still pending when a test asserts on vectorRaster/vectorPending
+	// moments later - zeroed here the same way the toast's duration is.
+	v.vectorDebounce = 0
+
 	// setAsWallpaper writes a PNG it then hands to the OS, and unlike every
 	// other file this suite produces that one is meant to outlive the
 	// process - so it is redirected out of the user's real cache directory
@@ -203,6 +209,14 @@ func drain(t *testing.T, v *viewer) {
 	v.invalidateLoad()
 	v.stopAnimation()
 	v.slides.Exit()
+
+	// Vector re-renders: spawned by any effective-scale change, so a test
+	// that zoomed or resized may still have one in flight. Must stay below
+	// invalidateLoad and slides.Exit above: only once no superseded decode
+	// can still land in finishLoad (whose resize triggers a scale change)
+	// and no slideshow advance can start a load is this Wait racing no
+	// further Add.
+	v.vectorPending.Wait()
 
 	for _, c := range []struct {
 		name string
@@ -2086,6 +2100,34 @@ func TestMemoryLimitSetters_FloorAtOne(t *testing.T) {
 		if got := v.MaxFileSizeMB(); got != 1 {
 			t.Errorf("MaxFileSizeMB() = %d after SetMaxFileSizeMB(%d), want 1", got, n)
 		}
+	}
+}
+
+// The SVG re-render raster is deliberately never charged to imgCache (it is
+// live display state, not a cache entry), so honoring the user's memory
+// setting means deriving its ceiling from the budget instead: a quarter of
+// the budget's bytes at 4 B per RGBA pixel, clamped by imaging's own
+// floor and default ceiling.
+func TestSetMaxImageCacheMBRetunesTheVectorRasterCeiling(t *testing.T) {
+	v := newTestViewer(t)
+	t.Cleanup(func() { imaging.SetMaxVectorRasterPixels(imaging.DefaultMaxVectorRasterPixels) })
+
+	// 256 MB / 4 (a quarter of the budget) / 4 B per RGBA px = 16,777,216.
+	v.SetMaxImageCacheMB(256)
+	if got := imaging.MaxVectorRasterPixels(); got != 16_777_216 {
+		t.Errorf("after 256 MB: ceiling = %d, want 16777216", got)
+	}
+
+	// A tiny budget lands on the floor rather than making SVGs unusable...
+	v.SetMaxImageCacheMB(64)
+	if got := imaging.MaxVectorRasterPixels(); got != 8_000_000 {
+		t.Errorf("after 64 MB: ceiling = %d, want the 8000000 floor", got)
+	}
+
+	// ...and a huge one never exceeds the shipped 32 MP behavior.
+	v.SetMaxImageCacheMB(4096)
+	if got := imaging.MaxVectorRasterPixels(); got != imaging.DefaultMaxVectorRasterPixels {
+		t.Errorf("after 4096 MB: ceiling = %d, want the %d default ceiling", got, int64(imaging.DefaultMaxVectorRasterPixels))
 	}
 }
 

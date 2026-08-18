@@ -62,14 +62,16 @@ second copy.
 - **XPM** — `.xpm` (X Pixmap)
 - **HEIC/HEIF** — `.heic`, `.heif` (iPhone photos; EXIF rotation applied)
 - **AVIF** — `.avif` (built-in rotation/mirroring applied)
+- **SVG** — `.svg` (vector; small icons open large enough to fill the window,
+  and the image re-renders sharp at every zoom level rather than scaling up)
 
 A file is also accepted if your system reports it as `image/jpeg`,
 `image/png`, `image/gif`, `image/webp`, `image/bmp`, `image/tiff`,
 `image/x-icon`, `image/vnd.microsoft.icon`, `image/x-xpixmap`, `image/heic`,
-`image/heif`, or `image/avif`, even when the extension is missing or
-unusual.
+`image/heif`, `image/avif`, or `image/svg+xml`, even when the extension is
+missing or unusual.
 
-Everything else — PDFs, RAW camera files, SVG, videos — is **not** supported.
+Everything else — PDFs, RAW camera files, videos — is **not** supported.
 
 ---
 
@@ -473,7 +475,7 @@ needed. macOS and Windows need nothing extra either way.
 - **File -> Save Changes** (`Cmd/Ctrl+S`) — writes a rotation you made with
   `R`/`Shift+R` back into the file it came from, in that file's own format.
   Greyed out unless there is a rotation to save; unavailable for animations
-  and for formats PicFetch can read but not write (WebP, HEIC, ICO, XPM).
+  and for formats PicFetch can read but not write (WebP, HEIC, ICO, XPM, SVG).
   This replaces the original file, and re-encodes rather than patching it,
   so EXIF metadata is not carried over
 - **File -> Export as PNG… / Export as JPEG…** — saves the image as it
@@ -598,7 +600,7 @@ Things PicFetch deliberately does not do (yet):
   (**File -> Save Changes**), a copy in another format
   (**File -> Export as PNG…/JPEG…**) and a wallpaper copy
   (**File -> Set as Wallpaper**), all described in "Menu" below
-- No support for RAW, SVG, or PDF
+- No support for RAW or PDF
 - No playback controls (pause, step, restart) for animated GIFs
 - No EXIF GPS/location display — deliberately left out of the EXIF data
   window (see "Info overlay" above) for privacy
@@ -650,5 +652,5 @@ Things PicFetch deliberately does not do (yet):
 - **Clear / Quit** — `Esc` (clears the loaded images first, then quits;
   cancels a folder scan still in progress instead, if one is running)
 - **Formats** — JPEG, PNG, GIF (incl. animated), WebP, BMP, TIFF, ICO, XPM,
-  HEIC/HEIF, AVIF
+  HEIC/HEIF, AVIF, SVG
 - **Max window size** — 1500 × 950

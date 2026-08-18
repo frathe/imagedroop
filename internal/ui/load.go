@@ -211,6 +211,21 @@ func (v *viewer) finishLoad(ctx context.Context, _ int, u fyne.URI, loaded *imag
 	b := loaded.Frames[0].Bounds()
 
 	v.displayFrames = loaded.Frames
+	v.clearVector()
+
+	if loaded.Vector != nil {
+		// A vector's frame is replaced in place by every re-render, so it
+		// must not share the backing array of the cached LoadedImage -
+		// writing through that would mutate the cache entry and invalidate
+		// the byte weight ByteCache computed for it.
+		v.displayFrames = []image.Image{loaded.Frames[0]}
+
+		v.vector = loaded.Vector
+		v.vectorLogical = fyne.NewSize(float32(b.Dx()), float32(b.Dy()))
+		v.vectorRaster = image.Pt(b.Dx(), b.Dy())
+		v.zoom.SetLogicalSize(v.vectorLogical)
+	}
+
 	v.displayFrameIdx = 0
 	v.rotation = 0
 

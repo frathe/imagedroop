@@ -71,14 +71,17 @@ bereits geöffnete Handbuchfenster nach vorne, statt eine zweite Kopie zu
 - **HEIC/HEIF** — `.heic`, `.heif` (iPhone-Fotos; EXIF-Rotation wird
   angewendet)
 - **AVIF** — `.avif` (eingebaute Rotation/Spiegelung wird angewendet)
+- **SVG** — `.svg` (Vektorgrafik; kleine Symbole werden groß genug geöffnet,
+  um das Fenster zu füllen, und das Bild wird bei jeder Zoomstufe scharf neu
+  gerendert, statt hochskaliert zu werden)
 
 Eine Datei wird auch akzeptiert, wenn Ihr System sie als `image/jpeg`,
 `image/png`, `image/gif`, `image/webp`, `image/bmp`, `image/tiff`,
 `image/x-icon`, `image/vnd.microsoft.icon`, `image/x-xpixmap`, `image/heic`,
-`image/heif` oder `image/avif` meldet, auch wenn die Dateiendung fehlt oder
-ungewöhnlich ist.
+`image/heif`, `image/avif` oder `image/svg+xml` meldet, auch wenn die
+Dateiendung fehlt oder ungewöhnlich ist.
 
-Alles andere — PDFs, RAW-Kameradateien, SVG, Videos — wird **nicht**
+Alles andere — PDFs, RAW-Kameradateien, Videos — wird **nicht**
 unterstützt.
 
 ---
@@ -536,7 +539,7 @@ benötigen in beiden Fällen nichts Zusätzliches.
   `R`/`Shift+R` vorgenommene Drehung in die Ursprungsdatei zurück, in deren
   eigenem Format. Ausgegraut, solange es keine Drehung zu speichern gibt;
   nicht verfügbar für Animationen und für Formate, die PicFetch lesen,
-  aber nicht schreiben kann (WebP, HEIC, ICO, XPM). Die Originaldatei wird
+  aber nicht schreiben kann (WebP, HEIC, ICO, XPM, SVG). Die Originaldatei wird
   dabei ersetzt und neu kodiert statt bearbeitet, EXIF-Metadaten bleiben
   also nicht erhalten
 - **Datei -> Als PNG exportieren… / Als JPEG exportieren…** — speichert das
@@ -684,7 +687,7 @@ Dinge, die PicFetch absichtlich (noch) nicht tut:
   eine Kopie in einem anderen Format (**Datei -> Als PNG/JPEG
   exportieren…**) und eine Hintergrundbild-Kopie (**Datei -> Als
   Hintergrundbild festlegen**), alle unter „Menü“ oben beschrieben
-- Keine Unterstützung für RAW, SVG oder PDF
+- Keine Unterstützung für RAW oder PDF
 - Keine Wiedergabesteuerung (Pause, Einzelschritt, Neustart) für animierte
   GIFs
 - Keine EXIF-GPS-/Standortanzeige — absichtlich aus dem EXIF-Datenfenster
@@ -742,5 +745,5 @@ Dinge, die PicFetch absichtlich (noch) nicht tut:
   dann; bricht stattdessen einen noch laufenden Ordner-Scan ab, falls einer
   läuft)
 - **Formate** — JPEG, PNG, GIF (inkl. animiert), WebP, BMP, TIFF, ICO, XPM,
-  HEIC/HEIF, AVIF
+  HEIC/HEIF, AVIF, SVG
 - **Maximale Fenstergröße** — 1500 × 950

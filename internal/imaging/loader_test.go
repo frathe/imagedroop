@@ -864,3 +864,99 @@ func TestCaptureDate(t *testing.T) {
 		}
 	})
 }
+
+// --- SVG ------------------------------------------------------------------
+
+func TestIsSupportedImageAcceptsSVG(t *testing.T) {
+	if !IsSupportedImage(storage.NewFileURI("/tmp/logo.svg")) {
+		t.Fatal("*.svg must be a supported image")
+	}
+	if !IsSupportedImage(storage.NewFileURI("/tmp/LOGO.SVG")) {
+		t.Fatal("extension match must be case-insensitive")
+	}
+}
+
+func TestReadAndProbeSVGReportsLogicalBounds(t *testing.T) {
+	path := writeTempFile(t, "icon.svg", svgDoc(`viewBox="0 0 24 24"`))
+
+	_, bounds, err := ReadAndProbe(context.Background(), storage.NewFileURI(path))
+	if err != nil {
+		t.Fatalf("ReadAndProbe: %v", err)
+	}
+	if bounds.Dx() != 340 || bounds.Dy() != 340 {
+		t.Fatalf("bounds = %dx%d, want the 340x340 logical size", bounds.Dx(), bounds.Dy())
+	}
+}
+
+func TestReadAndProbeRejectsGigapixelSVGBeforeDecoding(t *testing.T) {
+	path := writeTempFile(t, "bomb.svg", svgDoc(`viewBox="0 0 60000 60000"`))
+
+	_, _, err := ReadAndProbe(context.Background(), storage.NewFileURI(path))
+
+	var dimErr *InvalidDimensionsError
+	if !errors.As(err, &dimErr) {
+		t.Fatalf("err = %v, want InvalidDimensionsError - 3.6 gigapixels must be refused before allocating", err)
+	}
+}
+
+// The guard the comment at ReadAndProbe's SVG arm already claims: a
+// header-declared size is refused before anything is allocated. 4e9 x 4e9
+// is the case a bare product test misses - an SVG's axes come from a text
+// attribute, so each alone can be large enough that their int64 product
+// wraps negative and slips past a "> maxImagePixels" comparison.
+func TestReadAndProbeRejectsOverflowingSVGDimensions(t *testing.T) {
+	path := writeTempFile(t, "wrap.svg", svgDoc(`viewBox="0 0 4000000000 4000000000"`))
+
+	_, _, err := ReadAndProbe(context.Background(), storage.NewFileURI(path))
+
+	var dimErr *InvalidDimensionsError
+	if !errors.As(err, &dimErr) {
+		t.Fatalf("err = %v, want InvalidDimensionsError", err)
+	}
+}
+
+func TestDecodeLoadedSVGCarriesVector(t *testing.T) {
+	data := svgDoc(`viewBox="0 0 24 24"`)
+
+	loaded, err := DecodeLoaded(context.Background(), data, 0)
+	if err != nil {
+		t.Fatalf("DecodeLoaded: %v", err)
+	}
+	if loaded.Vector == nil {
+		t.Fatal("an SVG must carry its Vector so the app can re-rasterize it")
+	}
+	if len(loaded.Frames) != 1 {
+		t.Fatalf("len(Frames) = %d, want 1", len(loaded.Frames))
+	}
+	if b := loaded.Frames[0].Bounds(); b.Dx() != 340 || b.Dy() != 340 {
+		t.Fatalf("first frame = %dx%d, want the 340x340 logical size", b.Dx(), b.Dy())
+	}
+}
+
+func TestDecodeLoadedRasterCarriesNoVector(t *testing.T) {
+	loaded, err := DecodeLoaded(context.Background(), encodePNG(t, 8, 8, color.White), 0)
+	if err != nil {
+		t.Fatalf("DecodeLoaded: %v", err)
+	}
+	if loaded.Vector != nil {
+		t.Fatal("a raster format must not carry a Vector")
+	}
+}
+
+func TestCanEncodeRejectsSVG(t *testing.T) {
+	if CanEncodeExt(".svg") {
+		t.Fatal("SVG must not be encodable, so File > Save Changes stays disabled for one")
+	}
+}
+
+func TestLoadedImageBytesChargesForVector(t *testing.T) {
+	loaded, err := DecodeLoaded(context.Background(), svgDoc(`viewBox="0 0 24 24"`), 0)
+	if err != nil {
+		t.Fatalf("DecodeLoaded: %v", err)
+	}
+
+	frameOnly := imageBytes(loaded.Frames[0])
+	if got := loadedImageBytes(loaded); got <= frameOnly {
+		t.Fatalf("loadedImageBytes = %d, want more than the frame's own %d", got, frameOnly)
+	}
+}

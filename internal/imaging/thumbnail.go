@@ -1,6 +1,7 @@
 package imaging
 
 import (
+	"context"
 	"image"
 
 	"golang.org/x/image/draw"
@@ -34,17 +35,41 @@ func NewThumbCache(budget int64) *ByteCache[image.Image] {
 // orientation correction included - then downsamples the first frame
 // (animated GIFs show only their first frame here, same as every other
 // still context in this app) to fit within ThumbnailSize on its longer
-// edge.
+// edge. An SVG skips the decode-then-downsample round trip entirely and
+// rasterizes straight at the thumbnail's size.
 //
 // The zero animation budget is what makes that "first frame only" literal:
 // without it a long animation composited every one of its frames to a full
 // RGBA canvas so this could keep one and discard the rest, which for a
 // large GIF meant gigabytes of allocation per grid cell.
 func LoadThumbnail(u fyne.URI) (image.Image, error) {
-	loaded, err := LoadImage(u, 0)
+	data, bounds, err := ReadAndProbe(context.Background(), u)
 	if err != nil {
 		return nil, err
 	}
+
+	// An SVG has no fixed pixels, so rather than rasterizing at full
+	// logical size only for scaleToFit to discard nearly all of it,
+	// rasterize straight at the thumbnail's own size - bounds is the
+	// logical size here, so the aspect comes out identical. The Vector is
+	// ephemeral on purpose: one raster, then discarded (see vector.go's
+	// note on why thumbnails never share the display path's Vector).
+	if isSVGData(data) {
+		vec, err := ParseVector(data)
+		if err != nil {
+			return nil, err
+		}
+
+		w, h := fitEdge(bounds.Dx(), bounds.Dy(), ThumbnailSize)
+
+		return vec.RasterAt(w, h)
+	}
+
+	loaded, err := DecodeLoaded(context.Background(), data, 0)
+	if err != nil {
+		return nil, err
+	}
+
 	return scaleToFit(loaded.Frames[0], ThumbnailSize), nil
 }
 
@@ -61,18 +86,25 @@ func scaleToFit(src image.Image, maxEdge int) image.Image {
 		return src
 	}
 
-	dw, dh := maxEdge, h*maxEdge/w
-	if h > w {
-		dw, dh = w*maxEdge/h, maxEdge
-	}
-	if dw < 1 {
-		dw = 1
-	}
-	if dh < 1 {
-		dh = 1
-	}
+	dw, dh := fitEdge(w, h, maxEdge)
 
 	dst := image.NewRGBA(image.Rect(0, 0, dw, dh))
 	draw.ApproxBiLinear.Scale(dst, dst.Bounds(), src, b, draw.Src, nil)
 	return dst
+}
+
+// fitEdge is the size scaleToFit scales to, separated so LoadThumbnail's
+// SVG branch can aim a rasterization at it directly: w x h reduced to fit
+// within maxEdge on the longer side, aspect preserved, never upscaled.
+func fitEdge(w, h, maxEdge int) (int, int) {
+	if w <= maxEdge && h <= maxEdge {
+		return w, h
+	}
+
+	dw, dh := maxEdge, h*maxEdge/w
+	if h > w {
+		dw, dh = w*maxEdge/h, maxEdge
+	}
+
+	return max(dw, 1), max(dh, 1)
 }

@@ -1,6 +1,12 @@
 package ui
 
-import "github.com/frathe/picfetch/internal/imaging"
+import (
+	"image"
+
+	"fyne.io/fyne/v2"
+
+	"github.com/frathe/picfetch/internal/imaging"
+)
 
 // rotateBy is the R key (clockwise, steps=1) / Shift+R (counter-clockwise,
 // steps=-1): rotates the displayed image by one 90-degree step, view-only -
@@ -18,8 +24,22 @@ func (v *viewer) rotateBy(steps int) {
 
 	v.rotation = ((v.rotation+steps)%4 + 4) % 4
 	v.redrawRotatedFrame()
-	v.applyRotationLayout()
+
+	// updateFileMenuState before applyRotationLayout, not after: the layout
+	// call can itself spawn a vector re-render (SetLogicalSize/ResetToFit
+	// changing the effective scale fires zoom's onScaleChanged), and that
+	// goroutine's eventual write to v.img.Image is ordered against this
+	// method's own continuation only by fyne.Do - a real, single-goroutine
+	// guarantee in production, but the fake test driver runs a fyne.Do
+	// callback inline on whichever goroutine calls it rather than
+	// marshaling it (see ARCHITECTURE.md's concurrency invariant), so
+	// canExport's read of v.img.Image inside updateFileMenuState could
+	// otherwise race that write under -race. updateFileMenuState needs
+	// nothing applyRotationLayout computes - only v.rotation, already set
+	// above - so ordering it first removes the race instead of just hiding
+	// it.
 	v.updateFileMenuState()
+	v.applyRotationLayout()
 }
 
 // resetRotation is the other half of the 0 key (see zoom.FitToWindow):
@@ -32,8 +52,11 @@ func (v *viewer) resetRotation() {
 
 	v.rotation = 0
 	v.redrawRotatedFrame()
-	v.applyRotationLayout()
+
+	// Before applyRotationLayout, not after - see rotateBy's identical
+	// ordering for why.
 	v.updateFileMenuState()
+	v.applyRotationLayout()
 }
 
 // redrawRotatedFrame recomputes v.img.Image from the current unrotated
@@ -50,18 +73,53 @@ func (v *viewer) redrawRotatedFrame() {
 
 // applyRotationLayout re-fits and, outside picture-frame mode (where the
 // window is already full-screen with nothing to resize - see finishLoad's
-// matching comment), resizes the window to the just-redrawn frame's bounds.
+// matching comment), resizes the window to the image's displayed
+// dimensions - the rotation-aware logical size for a vector, whose frame
+// on screen may be denser than the size it is laid out at, and exactly the
+// frame's bounds for every raster format (see displayedDimensions).
 // Mirrors finishLoad's own ordering: re-fit first, for immediate visual
 // feedback against whatever viewport size the zoom view currently has
 // cached, then the window resize, whose own layout pass will re-lay it out
 // against the authoritative new size.
 func (v *viewer) applyRotationLayout() {
+	// A 90/270-degree turn swaps which axis is which, and the zoom math
+	// measures a vector against its logical size rather than its raster -
+	// so that size has to turn with it, or fit scale is computed against
+	// the wrong axis.
+	if v.vector != nil {
+		logical := v.vectorLogical
+		if v.rotation%2 != 0 {
+			logical = fyne.NewSize(logical.Height, logical.Width)
+		}
+
+		v.zoom.SetLogicalSize(logical)
+	}
+
 	v.zoom.ResetToFit()
 
 	if !v.slides.Active() {
 		v.undoGridMaximize()
-		resizeToImage(v.win, v.img.Image.Bounds(), v.maxWinW, v.maxWinH)
+
+		// Deliberately displayedDimensions rather than v.img.Image.Bounds():
+		// for a vector those bounds are the *current* raster, which
+		// rasterizeVector has been making denser the further the user zoomed
+		// in - so rotating a zoomed-in SVG would size the window to the
+		// zoom level rather than to the image. Same rule, and the same one
+		// helper, as the info overlay reports; for every raster format
+		// displayedDimensions still returns exactly these bounds.
+		w, h := v.displayedDimensions()
+		resizeToImage(v.win, image.Rect(0, 0, w, h), v.maxWinW, v.maxWinH)
 	}
 
+	// Deliberately after the layout work above, unlike the
+	// updateFileMenuState calls in rotateBy/resetRotation: this reads
+	// zoom.Percent(), which is only correct once the re-fit has run. Under
+	// the fake test driver that ordering has the same race shape those
+	// call sites fixed - a re-render goroutine the layout spawned may
+	// write img.Image while this reads it - and unlike them it cannot be
+	// fixed by reordering. Production is safe (fyne.Do serializes onto the
+	// UI goroutine, so the goroutine's write cannot overlap this read); a
+	// test that opens the info overlay while rotating a vector must first
+	// wait out vectorPending.
 	v.updateInfoOverlay()
 }

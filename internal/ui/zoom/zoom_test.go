@@ -34,7 +34,7 @@ func newZoom(t *testing.T, native image.Rectangle, viewport fyne.Size) (*Zoom, *
 	}
 
 	changes := 0
-	z := New(img, func() { changes++ }, nil)
+	z := New(img, func() { changes++ }, nil, nil)
 
 	// Through the widget rather than by setting z.viewport, since that is
 	// the only path production has: the renderer's Layout is what caches
@@ -473,7 +473,7 @@ func TestScrolled_ShiftWithNothingToPanIsNoop(t *testing.T) {
 // documented contract for a caller that has no way to ask.
 func TestScrolled_NilModifiersZoomsRatherThanPanning(t *testing.T) {
 	img := canvas.NewImageFromImage(image.NewRGBA(image.Rect(0, 0, 400, 200)))
-	z := New(img, nil, nil)
+	z := New(img, nil, nil, nil)
 	z.Widget().Resize(fyne.NewSize(800, 400))
 
 	scroll(z, fyne.NewPos(400, 200), fyne.NewDelta(0, 50))
@@ -577,5 +577,138 @@ func TestLayout_CachesViewportAndReflows(t *testing.T) {
 	}
 	if got := z.img.Size(); !uitest.ApproxEqual(got.Width, 400) || !uitest.ApproxEqual(got.Height, 200) {
 		t.Errorf("img size = %v, want the new 400x200 viewport while fitting", got)
+	}
+}
+
+// --- logical size / native --------------------------------------------------
+
+func TestLogicalSizeDrivesFitScale(t *testing.T) {
+	img := canvas.NewImageFromImage(image.NewRGBA(image.Rect(0, 0, 1360, 1360)))
+	z := New(img, nil, nil, nil)
+	z.viewport = fyne.NewSize(680, 680)
+
+	// Without a logical size, fit is measured against the 1360px raster.
+	if got := z.fitScale(); got != 0.5 {
+		t.Fatalf("fitScale = %v, want 0.5", got)
+	}
+
+	// With one, the same raster is treated as a 340px image - so it is 4x
+	// denser than it looks, which is the whole point.
+	z.SetLogicalSize(fyne.NewSize(340, 340))
+	if got := z.fitScale(); got != 2 {
+		t.Fatalf("fitScale = %v, want 2", got)
+	}
+}
+
+func TestLogicalSizeDrivesScaledSize(t *testing.T) {
+	img := canvas.NewImageFromImage(image.NewRGBA(image.Rect(0, 0, 1360, 1360)))
+	z := New(img, nil, nil, nil)
+	z.SetLogicalSize(fyne.NewSize(340, 340))
+	z.fit = false
+	z.scale = 2
+
+	if got := z.scaledSize(); got.Width != 680 || got.Height != 680 {
+		t.Fatalf("scaledSize = %v, want 680x680", got)
+	}
+}
+
+func TestZeroLogicalSizeFallsBackToBounds(t *testing.T) {
+	img := canvas.NewImageFromImage(image.NewRGBA(image.Rect(0, 0, 200, 100)))
+	z := New(img, nil, nil, nil)
+	z.SetLogicalSize(fyne.NewSize(50, 25))
+	z.SetLogicalSize(fyne.Size{}) // cleared
+
+	if got := z.native(); got.Width != 200 || got.Height != 100 {
+		t.Fatalf("native = %v, want the raster bounds 200x100", got)
+	}
+}
+
+// --- onScaleChanged -----------------------------------------------------------
+
+func TestOnScaleChangedFiresOnResizeWhileFitting(t *testing.T) {
+	img := canvas.NewImageFromImage(image.NewRGBA(image.Rect(0, 0, 100, 100)))
+
+	var got []float32
+	z := New(img, nil, nil, func(s float32) { got = append(got, s) })
+
+	z.viewport = fyne.NewSize(100, 100)
+	z.apply()
+	z.viewport = fyne.NewSize(400, 400)
+	z.apply()
+
+	if len(got) != 2 || got[0] != 1 || got[1] != 4 {
+		t.Fatalf("scales = %v, want [1 4]", got)
+	}
+}
+
+func TestOnScaleChangedDoesNotFireOnPan(t *testing.T) {
+	img := canvas.NewImageFromImage(image.NewRGBA(image.Rect(0, 0, 100, 100)))
+
+	var calls int
+	z := New(img, nil, nil, func(float32) { calls++ })
+
+	z.viewport = fyne.NewSize(100, 100)
+	z.apply()
+	before := calls
+
+	z.fit = false
+	z.scale = 4
+	z.apply()
+	afterZoom := calls
+
+	z.panBy(fyne.NewDelta(10, 10))
+
+	if afterZoom <= before {
+		t.Fatal("a scale change must notify")
+	}
+	if calls != afterZoom {
+		t.Fatalf("panning notified %d extra times, want 0", calls-afterZoom)
+	}
+}
+
+func TestScaleMatchesPercent(t *testing.T) {
+	img := canvas.NewImageFromImage(image.NewRGBA(image.Rect(0, 0, 100, 100)))
+	z := New(img, nil, nil, nil)
+	z.viewport = fyne.NewSize(250, 250)
+
+	if z.Percent() != int(z.Scale()*100+0.5) {
+		t.Fatalf("Percent %d and Scale %v disagree", z.Percent(), z.Scale())
+	}
+}
+
+// The scale notification must re-arm when the image changes. lastScale
+// suppresses a repeat notification for a scale that has not moved, which is
+// right within one image and wrong across two: the next image can land on
+// the identical scale and still needs its own notification, since what the
+// app does in response has to happen again for the new image. Without the
+// re-arm a folder of same-sized SVGs at a fixed viewport - picture-frame
+// mode, which skips the per-image window resize - notifies only for the
+// first, leaving every later one stuck at its load-time raster.
+func TestSetLogicalSizeReArmsTheScaleNotification(t *testing.T) {
+	img := canvas.NewImageFromImage(image.NewRGBA(image.Rect(0, 0, 100, 100)))
+
+	var scales []float32
+	z := New(img, nil, nil, func(s float32) { scales = append(scales, s) })
+	z.viewport = fyne.NewSize(400, 400)
+
+	z.SetLogicalSize(fyne.NewSize(100, 100))
+	z.apply()
+
+	if len(scales) != 1 {
+		t.Fatalf("first image notified %v, want exactly one notification", scales)
+	}
+
+	// A second image of the same logical size, at the same viewport, lands
+	// on the identical scale - the case the suppression must not swallow.
+	z.SetLogicalSize(fyne.Size{})
+	z.SetLogicalSize(fyne.NewSize(100, 100))
+	z.apply()
+
+	if len(scales) != 2 {
+		t.Fatalf("after a second image the notifications are %v, want two - "+
+			"an identical scale on a new image must still be reported", scales)
+	}
+	if scales[0] != scales[1] {
+		t.Fatalf("scales %v differ; this test is only meaningful when they match", scales)
 	}
 }

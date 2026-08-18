@@ -21,11 +21,12 @@ set with the keyboard.
 ## Features
 
 - Drag-and-drop viewing of JPEG, PNG, GIF, WebP, BMP, TIFF, ICO, XPM, HEIC,
-  and AVIF (`.jpg`, `.jpeg`, `.jpe`, `.jfif`, `.png`, `.gif`, `.webp`, `.bmp`,
-  `.tif`, `.tiff`, `.ico`, `.xpm`, `.heic`, `.heif`, `.avif`, or anything
-  reporting a matching `image/*` MIME type). HEIC/AVIF decode through
-  embedded WASM (no cgo), so they need no system libraries and don't
-  complicate cross-compilation
+  AVIF, and SVG (`.jpg`, `.jpeg`, `.jpe`, `.jfif`, `.png`, `.gif`, `.webp`,
+  `.bmp`, `.tif`, `.tiff`, `.ico`, `.xpm`, `.heic`, `.heif`, `.avif`, `.svg`,
+  or anything reporting a matching `image/*` MIME type). HEIC/AVIF decode
+  through embedded WASM (no cgo), so they need no system libraries and don't
+  complicate cross-compilation. SVG is rasterized on the fly and re-rendered
+  as you zoom, so it stays sharp at any zoom level
 - Animated GIFs play back frame-by-frame at their encoded speed, correctly
   compositing each frame per its disposal method (a partial-region update
   won't leave stale pixels or wrongly clear the whole frame); playback stops

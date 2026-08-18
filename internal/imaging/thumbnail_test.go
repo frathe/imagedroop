@@ -122,3 +122,42 @@ func TestLoadThumbnail_PropagatesDecodeError(t *testing.T) {
 		t.Error("LoadThumbnail returned nil error for an unparseable file, want an error")
 	}
 }
+
+func TestFitEdge(t *testing.T) {
+	for _, tc := range []struct {
+		name             string
+		w, h             int
+		wantW, wantH     int
+	}{
+		{"wide", 800, 600, 200, 150},
+		{"tall", 600, 800, 150, 200},
+		{"already small enough is never upscaled", 120, 80, 120, 80},
+		{"extreme aspect floors at one", 100000, 3, 200, 1},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			w, h := fitEdge(tc.w, tc.h, 200)
+			if w != tc.wantW || h != tc.wantH {
+				t.Fatalf("fitEdge(%d, %d, 200) = %dx%d, want %dx%d",
+					tc.w, tc.h, w, h, tc.wantW, tc.wantH)
+			}
+		})
+	}
+}
+
+func TestLoadThumbnailRastersSVGAtThumbnailSize(t *testing.T) {
+	// 800x600 is its own logical size (over the 520x340 floor), so the
+	// thumbnail must come back at 200x150 - and with drawn pixels, proving
+	// the direct RasterAt path actually rendered rather than scaled.
+	path := writeTempFile(t, "thumb.svg", []byte(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600"><rect width="800" height="600" fill="#ff0000"/></svg>`))
+
+	img, err := LoadThumbnail(storage.NewFileURI(path))
+	if err != nil {
+		t.Fatalf("LoadThumbnail: %v", err)
+	}
+	if b := img.Bounds(); b.Dx() != 200 || b.Dy() != 150 {
+		t.Fatalf("thumbnail = %dx%d, want 200x150", b.Dx(), b.Dy())
+	}
+	if _, _, _, a := img.At(100, 75).RGBA(); a == 0 {
+		t.Fatal("centre pixel is transparent - nothing was drawn")
+	}
+}
