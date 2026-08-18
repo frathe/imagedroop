@@ -125,9 +125,9 @@ func TestLoadThumbnail_PropagatesDecodeError(t *testing.T) {
 
 func TestFitEdge(t *testing.T) {
 	for _, tc := range []struct {
-		name             string
-		w, h             int
-		wantW, wantH     int
+		name         string
+		w, h         int
+		wantW, wantH int
 	}{
 		{"wide", 800, 600, 200, 150},
 		{"tall", 600, 800, 150, 200},
