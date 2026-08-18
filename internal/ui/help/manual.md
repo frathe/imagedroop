@@ -405,6 +405,8 @@ many of them actually went.
 - **`Cmd`/`Ctrl+O`** / **`Cmd`/`Ctrl+Shift+O`** — open the system file picker
   (same as clicking the drop zone; both bindings do the same thing; files and
   folders on macOS/Linux, files only on Windows — see above)
+- **`Cmd`/`Ctrl+1`** through **`Cmd`/`Ctrl+9`** — open sorted favorites 1
+  through 9; **`Cmd`/`Ctrl+0`** opens favorite 10 (see "Menu" below)
 - **`→`** / **`↓`** — next image
 - **`←`** / **`↑`** — previous image
 - **`Home`** / **`End`** — first / last image
@@ -493,6 +495,20 @@ needed. macOS and Windows need nothing extra either way.
   neither is installed
 - **File -> Close Files** — returns to the drop zone without quitting
 - **File -> Settings…** — opens the settings window
+- **Favorites -> Add Current List to Favorites…** — saves the complete
+  currently open file list as a named collection. Favorites remain available
+  after restarting PicFetch. This stores references to the original files,
+  not copies of the images; moving or deleting an original means it can no
+  longer be loaded from the favorite
+- **Favorites -> _favorite name_** — opens that saved list through the same
+  scan, sort, and merge behavior as Open Files. Entries are sorted by name,
+  case-insensitively. The first nine show `Cmd/Ctrl+1` through
+  `Cmd/Ctrl+9`; the tenth shows `Cmd/Ctrl+0`. Saving another collection with
+  an existing name asks before replacing its stored list
+- **Favorites -> Manage Favorites…** — lists every saved collection and lets
+  you remove one after confirmation. Removing a favorite moves the
+  collection's own folder to the system Trash; it does **not** move or delete
+  any of the original images
 - **Help -> Manual** — opens this manual, same as `F1`
 
 ---
@@ -613,6 +629,10 @@ Things PicFetch deliberately does not do (yet):
 - **Open** — click the drop zone, or press `Cmd`/`Ctrl+O` (or
   `Cmd`/`Ctrl+Shift+O`, same thing), for the system file picker (files and
   folders on macOS/Linux, files only on Windows)
+- **Favorites** — Favorites -> Add Current List to Favorites… saves the open
+  list; choose its name to reopen it, or use `Cmd`/`Ctrl+1`–`9` for the first
+  nine sorted favorites and `Cmd`/`Ctrl+0` for the tenth; Manage Favorites…
+  removes collections without touching their original images
 - **Merge mode** — `M` toggles it on/off; while on, drops add to the set
   instead of replacing it, and the title bar shows `[merge]`
 - **Next / previous** — `→` `↓` / `←` `↑` (wraps around)

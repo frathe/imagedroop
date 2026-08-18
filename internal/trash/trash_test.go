@@ -120,34 +120,68 @@ func TestMoveLinux_ReturnsErrorWhenNeitherToolInstalled(t *testing.T) {
 }
 
 func TestMoveWindows_BuildsExpectedScript(t *testing.T) {
-	origRun := runTrashCommand
-	t.Cleanup(func() { runTrashCommand = origRun })
+	tests := []struct {
+		name       string
+		makeTarget func(*testing.T) string
+		method     string
+		notMethod  string
+	}{
+		{
+			name: "file",
+			makeTarget: func(t *testing.T) string {
+				path := filepath.Join(t.TempDir(), "photo.jpg")
+				if err := os.WriteFile(path, nil, 0o644); err != nil {
+					t.Fatal(err)
+				}
+				return path
+			},
+			method:    "DeleteFile",
+			notMethod: "DeleteDirectory",
+		},
+		{
+			name:       "directory",
+			makeTarget: func(t *testing.T) string { return t.TempDir() },
+			method:     "DeleteDirectory",
+			notMethod:  "DeleteFile",
+		},
+	}
 
-	var gotScript string
-	runTrashCommand = func(cmd *exec.Cmd) ([]byte, error) {
-		for i, a := range cmd.Args {
-			if a == "-Command" && i+1 < len(cmd.Args) {
-				gotScript = cmd.Args[i+1]
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			origRun := runTrashCommand
+			t.Cleanup(func() { runTrashCommand = origRun })
+
+			var gotScript string
+			runTrashCommand = func(cmd *exec.Cmd) ([]byte, error) {
+				for i, a := range cmd.Args {
+					if a == "-Command" && i+1 < len(cmd.Args) {
+						gotScript = cmd.Args[i+1]
+					}
+				}
+				return nil, nil
 			}
-		}
-		return nil, nil
-	}
 
-	if err := moveWindows(`C:\Users\me\photo.jpg`); err != nil {
-		t.Fatalf("moveWindows() error = %v", err)
-	}
+			path := tt.makeTarget(t)
+			if err := moveWindows(path); err != nil {
+				t.Fatalf("moveWindows() error = %v", err)
+			}
 
-	for _, want := range []string{
-		"Microsoft.VisualBasic",
-		"[Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile",
-		"SendToRecycleBin",
-		"catch",
-		"exit 1",
-		`C:\Users\me\photo.jpg`,
-	} {
-		if !strings.Contains(gotScript, want) {
-			t.Errorf("script does not contain %q:\n%s", want, gotScript)
-		}
+			for _, want := range []string{
+				"Microsoft.VisualBasic",
+				"[Microsoft.VisualBasic.FileIO.FileSystem]::" + tt.method,
+				"SendToRecycleBin",
+				"catch",
+				"exit 1",
+				path,
+			} {
+				if !strings.Contains(gotScript, want) {
+					t.Errorf("script does not contain %q:\n%s", want, gotScript)
+				}
+			}
+			if strings.Contains(gotScript, "[Microsoft.VisualBasic.FileIO.FileSystem]::"+tt.notMethod) {
+				t.Errorf("script unexpectedly contains %s:\n%s", tt.notMethod, gotScript)
+			}
+		})
 	}
 }
 
@@ -171,7 +205,11 @@ func TestMoveWindows_EscapesPathMetacharacters(t *testing.T) {
 		return nil, nil
 	}
 
-	if err := moveWindows("C:\\Users\\me\\$weird`file.jpg"); err != nil {
+	path := filepath.Join(t.TempDir(), "$weird`file.jpg")
+	if err := os.WriteFile(path, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := moveWindows(path); err != nil {
 		t.Fatalf("moveWindows() error = %v", err)
 	}
 
@@ -180,6 +218,30 @@ func TestMoveWindows_EscapesPathMetacharacters(t *testing.T) {
 	}
 	if !strings.Contains(gotScript, "``file") {
 		t.Errorf("script does not escape ` in the path:\n%s", gotScript)
+	}
+}
+
+func TestMoveWindows_ReturnsStatErrorBeforeRunningCommand(t *testing.T) {
+	origRun := runTrashCommand
+	t.Cleanup(func() { runTrashCommand = origRun })
+	runTrashCommand = func(*exec.Cmd) ([]byte, error) {
+		t.Fatal("command should not run for a missing target")
+		return nil, nil
+	}
+
+	if err := moveWindows(filepath.Join(t.TempDir(), "missing")); !errors.Is(err, os.ErrNotExist) {
+		t.Errorf("moveWindows error = %v, want os.ErrNotExist", err)
+	}
+}
+
+func TestMoveWindows_ReturnsCommandError(t *testing.T) {
+	origRun := runTrashCommand
+	t.Cleanup(func() { runTrashCommand = origRun })
+	wantErr := errors.New("powershell failed")
+	runTrashCommand = func(*exec.Cmd) ([]byte, error) { return nil, wantErr }
+
+	if err := moveWindows(t.TempDir()); !errors.Is(err, wantErr) {
+		t.Errorf("moveWindows error = %v, want %v", err, wantErr)
 	}
 }
 

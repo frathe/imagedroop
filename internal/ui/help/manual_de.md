@@ -459,6 +459,8 @@ tatsächlich verschoben wurden.
   öffnen (dasselbe wie ein Klick in den Ablegebereich; beide
   Tastenkombinationen bewirken dasselbe; Dateien und Ordner unter
   macOS/Linux, nur Dateien unter Windows — siehe oben)
+- **`Cmd`/`Strg+1`** bis **`Cmd`/`Strg+9`** — die sortierten Favoriten 1 bis
+  9 öffnen; **`Cmd`/`Strg+0`** öffnet Favorit 10 (siehe „Menü“ unten)
 - **`→`** / **`↓`** — nächstes Bild
 - **`←`** / **`↑`** — vorheriges Bild
 - **`Home`** / **`End`** — erstes / letztes Bild
@@ -561,6 +563,23 @@ benötigen in beiden Fällen nichts Zusätzliches.
 - **Datei -> Dateien schließen** — zurück zum Ablagebereich, ohne das
   Programm zu beenden
 - **Datei -> Einstellungen…** — öffnet das Einstellungsfenster
+- **Favoriten -> Aktuelle Liste zu Favoriten hinzufügen…** — speichert die
+  gesamte aktuell geöffnete Dateiliste als benannte Sammlung. Favoriten
+  bleiben nach einem Neustart von PicFetch erhalten. Gespeichert werden
+  Verweise auf die Originaldateien, keine Kopien der Bilder; wird ein
+  Original verschoben oder gelöscht, kann es aus dem Favoriten nicht mehr
+  geladen werden
+- **Favoriten -> _Favoritenname_** — öffnet die gespeicherte Liste mit
+  demselben Scan-, Sortier- und Zusammenführen-Verhalten wie „Dateien
+  öffnen“. Die Einträge sind ohne Beachtung der Groß-/Kleinschreibung nach
+  Namen sortiert. Die ersten neun zeigen `Cmd`/`Strg+1` bis
+  `Cmd`/`Strg+9`, der zehnte zeigt `Cmd`/`Strg+0`. Wird eine Sammlung unter
+  einem bereits vorhandenen Namen gespeichert, fragt PicFetch vor dem
+  Ersetzen der gespeicherten Liste nach
+- **Favoriten -> Favoriten verwalten…** — zeigt alle gespeicherten Sammlungen
+  an und ermöglicht, eine davon nach Bestätigung zu entfernen. Dabei wird
+  nur der eigene Ordner der Sammlung in den Papierkorb verschoben; die
+  Originalbilder werden **nicht** verschoben oder gelöscht
 - **Hilfe -> Handbuch** — öffnet dieses Handbuch, genau wie `F1`
 
 ---
@@ -702,6 +721,11 @@ Dinge, die PicFetch absichtlich (noch) nicht tut:
 - **Öffnen** — auf den Ablegebereich klicken, oder `Cmd`/`Strg+O` drücken
   (oder `Cmd`/`Strg+Shift+O`, dasselbe), für den System-Dateidialog (Dateien
   und Ordner unter macOS/Linux, nur Dateien unter Windows)
+- **Favoriten** — Favoriten -> Aktuelle Liste zu Favoriten hinzufügen…
+  speichert die geöffnete Liste; der Favoritenname öffnet sie wieder,
+  `Cmd`/`Strg+1`–`9` öffnet die ersten neun sortierten Favoriten und
+  `Cmd`/`Strg+0` den zehnten; „Favoriten verwalten…“ entfernt Sammlungen,
+  ohne ihre Originalbilder anzutasten
 - **Zusammenführen-Modus** — `M` schaltet ihn ein/aus; solange aktiv,
   ergänzen Ablagen die Auswahl, statt sie zu ersetzen, und die Titelzeile
   zeigt `[Zusammenführen]`

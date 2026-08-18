@@ -96,6 +96,7 @@ func (v *viewer) updateFileMenuState() {
 	v.wallpaperItem.Disabled = !v.canSetWallpaper()
 
 	v.closeFilesItem.Disabled = v.FileCount() == 0
+	v.favorites.SetHasFiles(v.FileCount() > 0)
 
 	v.win.MainMenu().Refresh()
 }

@@ -93,12 +93,21 @@ func homeTrashEnv() []string {
 }
 
 // moveWindows shells out to Microsoft.VisualBasic.FileIO.FileSystem's
-// DeleteFile with RecycleOption.SendToRecycleBin - the same recycle-bin
-// delete Explorer's own Delete key uses.
+// DeleteFile/DeleteDirectory with RecycleOption.SendToRecycleBin - the same
+// recycle-bin delete Explorer's own Delete key uses.
 func moveWindows(path string) error {
+	info, err := os.Stat(path)
+	if err != nil {
+		return err
+	}
+
+	method := "DeleteFile"
+	if info.IsDir() {
+		method = "DeleteDirectory"
+	}
 	script := `Add-Type -AssemblyName Microsoft.VisualBasic
 try {
-	[Microsoft.VisualBasic.FileIO.FileSystem]::DeleteFile("` + escapePowerShellPath(path) + `", 'OnlyErrorDialogs', 'SendToRecycleBin')
+	[Microsoft.VisualBasic.FileIO.FileSystem]::` + method + `("` + escapePowerShellPath(path) + `", 'OnlyErrorDialogs', 'SendToRecycleBin')
 } catch {
 	[Console]::Error.WriteLine($_.Exception.Message)
 	exit 1
@@ -106,7 +115,7 @@ try {
 
 	cmd := exec.Command("powershell", "-NoProfile", "-NonInteractive", "-Command", script)
 	hideConsoleWindow(cmd)
-	_, err := runTrashCommand(cmd)
+	_, err = runTrashCommand(cmd)
 	return err
 }
 
