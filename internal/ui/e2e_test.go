@@ -1,7 +1,6 @@
-// e2e_test.go drives the real app the way a user would: buildViewer is the
-// exact constructor main() calls, so these tests exercise the production
-// wiring (widgets, drop handler, key dispatch) instead of a hand-copied
-// replica that could quietly drift out of sync with it.
+// e2e_test.go drives the real app the way a user would: these tests use the
+// same startup load, buildViewer assembly, and geometry restoration as Run,
+// so the production wiring cannot drift into a hand-copied test replica.
 //
 // Each scenario checks both state (files/visibility/index - fast, exact,
 // portable) and a full-window screenshot compared against a golden master
@@ -57,9 +56,9 @@ func TestE2E_InitialLaunchShowsWelcome(t *testing.T) {
 }
 
 // TestE2E_HoveringDropzoneHighlightsBorderThenReverts exercises
-// dropzoneArt's onHover wiring (build.go) - the border around the drop zone
-// should brighten while the pointer is over it and return to exactly the
-// initial-launch look once it leaves, confirmed against the same golden
+// dropzoneArt's onHover wiring (components.go) - the border around the drop
+// zone should brighten while the pointer is over it and return to exactly
+// the initial-launch look once it leaves, confirmed against the same golden
 // master rather than a second one.
 func TestE2E_HoveringDropzoneHighlightsBorderThenReverts(t *testing.T) {
 	v, win, _ := newTestUI(t)
@@ -170,7 +169,7 @@ func TestE2E_LaunchWithSavedSessionShowsRestoreLink(t *testing.T) {
 	b := uitest.TempJPEGURI(t, "b.jpg", 40, 30, color.RGBA{B: 200, A: 255})
 	session.Save(application, []fyne.URI{a, b})
 
-	v, win := buildViewer(application)
+	v, win := buildStartupViewer(application)
 	defer win.Close()
 
 	if !v.restoreLink.Visible() {
@@ -195,7 +194,7 @@ func TestE2E_LaunchWithSavedSessionShowsRestoreLink(t *testing.T) {
 }
 
 // TestE2E_TappingRestoreLinkRestoresNotFileDialog guards dropzoneArt's
-// bigger tap target (build.go): restoreLink is now nested inside it, and
+// bigger tap target (components.go): restoreLink is now nested inside it, and
 // Fyne's hit-testing must still resolve a tap on restoreLink's own rendered
 // position to restoreLink rather than to the wrapping dropzoneArt - or
 // tapping "Restore last session" would silently open the file chooser
@@ -206,7 +205,7 @@ func TestE2E_TappingRestoreLinkRestoresNotFileDialog(t *testing.T) {
 	saved := uitest.TempJPEGURI(t, "saved.jpg", 40, 30, color.RGBA{G: 200, A: 255})
 	session.Save(application, []fyne.URI{saved})
 
-	v, win := buildViewer(application)
+	v, win := buildStartupViewer(application)
 	defer win.Close()
 
 	if !v.restoreLink.Visible() {

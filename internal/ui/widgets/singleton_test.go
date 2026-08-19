@@ -71,9 +71,9 @@ func TestSingleton_GeometryTracksResizes(t *testing.T) {
 
 // The seeded position has to survive until a live reading replaces it -
 // the same rule the main window's own tracker follows (internal/ui's
-// buildViewer stores the saved position before the poller ever runs), so a
-// launch that never gets a fresh reading still saves last launch's good
-// value instead of losing it to a zero.
+// startup restoration stores the saved position before Run starts the
+// poller), so a launch that never gets a fresh reading still saves last
+// launch's good value instead of losing it to a zero.
 func TestSingleton_RememberedPositionSurvivesWithoutALiveReading(t *testing.T) {
 	app := test.NewApp()
 

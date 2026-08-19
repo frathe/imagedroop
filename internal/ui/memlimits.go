@@ -25,8 +25,8 @@ const bytesPerMB = 1 << 20
 // The shipped defaults, derived from internal/imaging's own so there is
 // exactly one place each number is chosen - see DefaultImgCacheBytes,
 // DefaultThumbCacheBytes and DefaultMaxEncodedBytes for why each is what it
-// is. Used by buildViewer when nothing was ever saved, the same
-// zero-means-unset fallback maxScan and maxWinW/maxWinH already use.
+// is. Used by startup preference normalization when nothing was ever saved,
+// the same zero-means-unset fallback maxScan and maxWinW/maxWinH use.
 const (
 	defaultMaxImageCacheMB = imaging.DefaultImgCacheBytes / bytesPerMB
 	defaultMaxThumbCacheMB = imaging.DefaultThumbCacheBytes / bytesPerMB

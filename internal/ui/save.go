@@ -38,7 +38,7 @@ func (v *viewer) canSaveRotation() bool {
 }
 
 // saveRotation is the File menu's "Save Changes" action (also Cmd/Ctrl+S,
-// see wireSaveShortcut in build.go): it writes the currently displayed,
+// see wireSaveShortcut in shortcuts.go): it writes the currently displayed,
 // already-rotated frame back to the file it came from, in that file's own
 // format. A no-op unless canSaveRotation() is currently true - re-checked
 // here rather than trusted from the menu item's Disabled state, since the

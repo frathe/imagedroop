@@ -33,6 +33,10 @@ func windowSizeTracker(v *viewer, win fyne.Window) fyne.Layout {
 	return widgets.NewSizeTracker(win, &v.windowSize)
 }
 
+// noPollerStop marks the construction-time state before Run starts runtime
+// position polling.
+func noPollerStop() {}
+
 // startWindowPosPolling keeps v.winPos current for the lifetime of the app -
 // the position equivalent of windowSizeTracker above, and the app's binding
 // of winpos.Poll, which owns the loop itself and every reason it has to be
@@ -48,6 +52,9 @@ func windowSizeTracker(v *viewer, win fyne.Window) fyne.Layout {
 // winding down (the tracker keeps its last reading, so the save still has
 // a value). A no-op func, never nil, when no poller started.
 func startWindowPosPolling(v *viewer, win fyne.Window) (stop func()) {
+	if v.slides == nil {
+		panic("ui: startWindowPosPolling called before slideshow construction")
+	}
 	return winpos.Poll(win, &v.winPos, v.slides.Active)
 }
 
@@ -58,7 +65,7 @@ func startWindowPosPolling(v *viewer, win fyne.Window) (stop func()) {
 // one shared type: internal/preferences would otherwise have to import a UI
 // package, or widgets a persistence one, and this package is already where
 // every other preference is translated (filesort.FromPref, the zero-means-
-// default caps in buildViewer).
+// default caps in startup.go).
 func widgetGeometry(g preferences.WindowGeometry) widgets.Geometry {
 	return widgets.Geometry{X: g.X, Y: g.Y, PositionSet: g.PositionSet, Size: g.Size}
 }

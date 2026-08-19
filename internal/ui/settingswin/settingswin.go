@@ -123,8 +123,8 @@ func (w *Window) Open() bool {
 }
 
 // RestoreGeometry makes the window remember where and how large it was,
-// seeded with what the last run left it at. Called once at construction
-// (internal/ui's buildViewer); the app reads the current values back out of
+// seeded with what the last run left it at. Called once during internal/ui's
+// startup restoration; the app reads the current values back out of
 // Geometry at shutdown. Without it the window opens at windowW x windowH
 // wherever the OS puts it, which is what it always did.
 func (w *Window) RestoreGeometry(g widgets.Geometry) {

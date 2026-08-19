@@ -74,7 +74,7 @@ type viewer struct {
 
 	// exif is the EXIF metadata panel - see internal/ui/exifwin, which
 	// reaches back only through the "which file is on screen" accessor
-	// buildViewer hands it. finishLoad calls its Refresh so navigating
+	// registerFeatures hands it. finishLoad calls its Refresh so navigating
 	// while it's open keeps it in sync.
 	exif *exifwin.Window
 
@@ -150,11 +150,10 @@ type viewer struct {
 	winPos winpos.Tracker
 
 	// stopWinPosPoll stops startWindowPosPolling's background ticker
-	// goroutine; wired by buildViewer and called from Run's SetOnStopped
-	// just before the final preferences save (winPos keeps its last
-	// reading, so the save still has a value). Always non-nil after
-	// buildViewer - a no-op func when the window isn't a
-	// driver.NativeWindow and no poller ever started.
+	// goroutine; initialized to noPollerStop by buildViewer, replaced by
+	// Run after startup geometry is restored, and called from SetOnStopped
+	// just before the final preferences save (winPos keeps its last reading,
+	// so the save still has a value).
 	stopWinPosPoll func()
 
 	scanSpinner *widget.ProgressBarInfinite
@@ -271,7 +270,7 @@ type viewer struct {
 	// container" layout. It needs no Host: the app and that package share
 	// img on a single-writer-per-field contract (the app owns img.Image,
 	// zoom owns img's size and position), and the only reach back is the
-	// updateInfoOverlay callback buildViewer hands it.
+	// updateInfoOverlay callback registerFeatures hands it.
 	zoom *zoom.Zoom
 
 	// infoVisible is a standing preference toggled by I, mirroring
@@ -283,13 +282,14 @@ type viewer struct {
 	// tracks the undecoded size.
 	infoVisible bool
 	infoText    *widget.Label
-	// exifLink is the "Show EXIF data" link inside infoCard - see build.go's
-	// wiring. Kept as its own field only so tests can trigger it directly
-	// (OnTapped) the same way e2e_test.go does for restoreLink, without a
-	// real click through the widget tree. It is only shown for a file that
-	// actually has metadata to show (currentHasEXIF, carried the same way
-	// currentFileSize is): the link is a promise, and offering it for a file
-	// with no Exif at all can only ever open a panel saying so.
+	// exifLink is the "Show EXIF data" link inside infoCard - see
+	// components.go's construction and build.go's callback wiring. Kept as
+	// its own field only so tests can trigger it directly (OnTapped) the
+	// same way e2e_test.go does for restoreLink, without a real click through
+	// the widget tree. It is only shown for a file that actually has metadata
+	// to show (currentHasEXIF, carried the same way currentFileSize is): the
+	// link is a promise, and offering it for a file with no Exif at all can
+	// only ever open a panel saying so.
 	exifLink        *widget.Hyperlink
 	infoCard        *fyne.Container
 	currentFileSize int64
@@ -367,7 +367,7 @@ type viewer struct {
 	// defaultKeyModifiers (keys.go) in production, stubbed by tests (the
 	// fyne test driver can't synthesize modifier state at all). Read by
 	// handleKeyEvent's Shift+R, and by the zoom view's Shift+scroll pan
-	// through the closure buildViewer hands it.
+	// through the closure registerFeatures hands it.
 	keyModifiers func() fyne.KeyModifier
 
 	// vector is the parsed SVG behind the image on screen, nil for every

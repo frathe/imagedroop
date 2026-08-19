@@ -146,10 +146,10 @@ func (s *Singleton) Show(app fyne.App, title string, size fyne.Size, build func(
 
 	s.win = win
 
-	// Applied before Show for the reason internal/ui's buildViewer applies
-	// the main window's saved position before its own: RequestPosition on a
-	// window that isn't up yet just primes the coordinates the glfw driver's
-	// window-creation path uses once it does run.
+	// Applied before Show for the reason internal/ui's startup restoration
+	// applies the main window's saved position before that window is shown:
+	// RequestPosition on a window that isn't up yet just primes the
+	// coordinates the glfw driver's window-creation path uses once it does run.
 	if s.remember {
 		s.pos.Restore(win)
 	}

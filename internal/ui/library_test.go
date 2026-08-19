@@ -31,9 +31,9 @@ import (
 // Sharing is safe because nothing in the viewer writes persistent state
 // during a test: preferences.Save and session.Save are only ever called
 // from main()'s SetOnStopped. The tests that do assert on persistence
-// build their own app (test.NewApp) and hand it to buildViewer directly -
-// keep doing that rather than saving into this one, which every other
-// test expects to find empty.
+// build their own app (test.NewApp) and run the startup/build path with it -
+// keep doing that rather than saving into this one, which every other test
+// expects to find empty.
 var testApp fyne.App
 
 func TestMain(m *testing.M) {
@@ -122,11 +122,9 @@ func TestSetMaxWindowSize_FloorsAtTheDropZoneSize(t *testing.T) {
 
 // --- test viewer construction ----------------------------------------------
 
-// newTestUI builds a fresh app and window through buildViewer - the same
-// constructor main() uses - so tests exercise the real construction path
-// instead of a hand-copied replica. (Until stage 3 of refactoring.md there
-// were two: this one, and a 75-line clone that had already drifted from
-// production in four fields.)
+// newTestUI builds a fresh app and window through the same startup load,
+// assembly, and geometry restoration Run uses, without starting runtime
+// polling or touching production favorites storage.
 //
 // It tracks whether the window has already been closed (e.g. by Escape,
 // mid-test) so cleanup never closes it a second time: Fyne's test driver's
@@ -145,7 +143,7 @@ func newTestUI(t *testing.T) (v *viewer, win fyne.Window, closed func() bool) {
 	// buildViewer was handed. Cheap, unlike test.NewApp - see testApp.
 	fyne.SetCurrentApp(testApp)
 
-	v, win = buildViewer(testApp)
+	v, win = buildStartupViewer(testApp)
 
 	// The auto-hide timer must never fire on its own mid-suite: its inline
 	// fyne.Do (under the test driver) would write widgets concurrently with
@@ -2403,9 +2401,26 @@ func TestInvalidateLoad_WakesAnimateImmediately(t *testing.T) {
 func TestStartWindowPosPolling_TestDriverGetsNoopStop(t *testing.T) {
 	v := newTestViewer(t)
 
+	if v.stopWinPosPoll == nil {
+		t.Fatal("buildStartupViewer should initialize stopWinPosPoll")
+	}
+	v.stopWinPosPoll() // safe before Run replaces it with the live poller's stop
+
 	stop := startWindowPosPolling(v, v.win)
 	if stop == nil {
 		t.Fatal("startWindowPosPolling should never return a nil stop func")
 	}
 	stop() // must not panic or block
+}
+
+func TestStartWindowPosPolling_PanicsWithoutConstructedSlideshow(t *testing.T) {
+	const want = "ui: startWindowPosPolling called before slideshow construction"
+
+	defer func() {
+		if got := recover(); got != want {
+			t.Fatalf("panic = %v, want %q", got, want)
+		}
+	}()
+
+	startWindowPosPolling(&viewer{}, nil)
 }

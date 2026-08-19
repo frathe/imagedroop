@@ -1,30 +1,35 @@
-// preferences_wiring_test.go covers the build.go/run.go glue around
-// internal/preferences: buildViewer applying a previously saved State to a
-// fresh viewer/window, and windowSizeTracker keeping viewer.windowSize
-// current so main() has something accurate to save at shutdown. The
-// persistence logic itself (Save/Load round-tripping, zero-value guards) is
-// covered directly in internal/preferences.
+// preferences_wiring_test.go covers the startup/build/run glue around
+// internal/preferences: loading and normalizing a previously saved State,
+// applying it to a fresh viewer/window, and keeping geometry current for
+// shutdown. Persistence round trips and zero-value write guards are covered
+// directly in internal/preferences.
 package ui
 
 import (
+	"reflect"
+	"runtime"
 	"testing"
 	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
 
+	"github.com/frathe/picfetch/internal/favstore"
 	"github.com/frathe/picfetch/internal/filesort"
 	"github.com/frathe/picfetch/internal/imaging"
 	"github.com/frathe/picfetch/internal/preferences"
 )
 
-func TestBuildViewer_LoadsSavedPreferences(t *testing.T) {
+func TestStartup_LoadsSavedPreferencesIntoViewer(t *testing.T) {
 	application := test.NewApp()
 	preferences.Save(application, preferences.State{
 		SortMode:          preferences.SortBySize,
 		MergeMode:         true,
 		SlideInterval:     7 * time.Second,
 		SlideShuffle:      true,
+		MaxScanFiles:      5000,
+		MaxWindowWidth:    1800,
+		MaxWindowHeight:   1100,
 		MaxImageCacheMB:   384,
 		MaxThumbCacheMB:   192,
 		MaxFileSizeMB:     256,
@@ -34,7 +39,7 @@ func TestBuildViewer_LoadsSavedPreferences(t *testing.T) {
 		WindowPositionSet: true,
 	})
 
-	v, win := buildViewer(application)
+	v, win := buildStartupViewer(application)
 	defer win.Close()
 	t.Cleanup(func() { imaging.SetMaxEncodedBytes(0) }) // process-wide - see memlimits.go
 
@@ -52,6 +57,15 @@ func TestBuildViewer_LoadsSavedPreferences(t *testing.T) {
 	}
 	if got, want := win.Canvas().Size(), fyne.NewSize(700, 500); got != want {
 		t.Errorf("initial window size = %v, want %v", got, want)
+	}
+	if got, want := v.MaxScan(), 5000; got != want {
+		t.Errorf("MaxScan() = %d, want %d (from saved preferences)", got, want)
+	}
+	if got, want := v.MaxWindowWidth(), float32(1800); got != want {
+		t.Errorf("MaxWindowWidth() = %v, want %v (from saved preferences)", got, want)
+	}
+	if got, want := v.MaxWindowHeight(), float32(1100); got != want {
+		t.Errorf("MaxWindowHeight() = %v, want %v (from saved preferences)", got, want)
 	}
 
 	// The three memory limits reach three different places (memlimits.go):
@@ -83,7 +97,7 @@ func TestBuildViewer_LoadsSavedPreferences(t *testing.T) {
 	}
 }
 
-func TestBuildViewer_LoadsSavedSecondaryWindowGeometry(t *testing.T) {
+func TestStartup_LoadsSavedSecondaryWindowGeometry(t *testing.T) {
 	application := test.NewApp()
 	preferences.Save(application, preferences.State{
 		SettingsWindow: preferences.WindowGeometry{
@@ -94,7 +108,7 @@ func TestBuildViewer_LoadsSavedSecondaryWindowGeometry(t *testing.T) {
 		},
 	})
 
-	v, win := buildViewer(application)
+	v, win := buildStartupViewer(application)
 	defer win.Close()
 	t.Cleanup(func() { imaging.SetMaxEncodedBytes(0) }) // process-wide - see memlimits.go
 
@@ -117,13 +131,14 @@ func TestBuildViewer_LoadsSavedSecondaryWindowGeometry(t *testing.T) {
 
 // The shutdown save (Run's SetOnStopped) is what has to carry both windows'
 // geometry back out again - a round trip that is only worth anything if
-// what buildViewer seeded above survives to the State that gets written.
+// what startup restoration seeded above survives to the State that gets
+// written.
 func TestCurrentPreferences_CarriesSecondaryWindowGeometry(t *testing.T) {
 	application := test.NewApp()
 	saved := preferences.WindowGeometry{X: 70, Y: 80, PositionSet: true, Size: fyne.NewSize(500, 400)}
 	preferences.Save(application, preferences.State{SettingsWindow: saved, ExifWindow: saved})
 
-	v, win := buildViewer(application)
+	v, win := buildStartupViewer(application)
 	defer win.Close()
 	t.Cleanup(func() { imaging.SetMaxEncodedBytes(0) }) // process-wide - see memlimits.go
 
@@ -136,10 +151,10 @@ func TestCurrentPreferences_CarriesSecondaryWindowGeometry(t *testing.T) {
 	}
 }
 
-func TestBuildViewer_NoSavedPreferencesUsesShippedDefaults(t *testing.T) {
+func TestStartup_OmittedPreferencesUseShippedDefaults(t *testing.T) {
 	application := test.NewApp()
 
-	v, win := buildViewer(application)
+	v, win := buildStartupViewer(application)
 	defer win.Close()
 
 	if v.state.SortMode() != filesort.ByName {
@@ -153,6 +168,15 @@ func TestBuildViewer_NoSavedPreferencesUsesShippedDefaults(t *testing.T) {
 	}
 	if v.slides.Shuffle() {
 		t.Error("slides.Shuffle() = true, want false (the shipped default)")
+	}
+	if got, want := v.MaxScan(), defaultMaxScannedFiles; got != want {
+		t.Errorf("MaxScan() = %d, want %d (the shipped default)", got, want)
+	}
+	if got, want := v.MaxWindowWidth(), float32(defaultMaxWindowWidth); got != want {
+		t.Errorf("MaxWindowWidth() = %v, want %v (the shipped default)", got, want)
+	}
+	if got, want := v.MaxWindowHeight(), float32(defaultMaxWindowHeight); got != want {
+		t.Errorf("MaxWindowHeight() = %v, want %v (the shipped default)", got, want)
 	}
 	if got, want := v.MaxImageCacheMB(), defaultMaxImageCacheMB; got != want {
 		t.Errorf("MaxImageCacheMB() = %d, want %d (the shipped default)", got, want)
@@ -171,10 +195,144 @@ func TestBuildViewer_NoSavedPreferencesUsesShippedDefaults(t *testing.T) {
 	}
 }
 
+func TestNormalizePreferenceDefaults(t *testing.T) {
+	defaults := preferences.State{
+		MaxScanFiles:    defaultMaxScannedFiles,
+		MaxWindowWidth:  defaultMaxWindowWidth,
+		MaxWindowHeight: defaultMaxWindowHeight,
+		MaxImageCacheMB: defaultMaxImageCacheMB,
+		MaxThumbCacheMB: defaultMaxThumbCacheMB,
+		MaxFileSizeMB:   defaultMaxFileSizeMB,
+	}
+	custom := preferences.State{
+		MaxScanFiles:    1,
+		MaxWindowWidth:  1,
+		MaxWindowHeight: 1,
+		MaxImageCacheMB: 1,
+		MaxThumbCacheMB: 1,
+		MaxFileSizeMB:   1,
+	}
+	negative := preferences.State{
+		MaxScanFiles:    -1,
+		MaxWindowWidth:  -1,
+		MaxWindowHeight: -1,
+		MaxImageCacheMB: -1,
+		MaxThumbCacheMB: -1,
+		MaxFileSizeMB:   -1,
+	}
+	sentinels := preferences.State{
+		WindowSize:        fyne.NewSize(0, 500),
+		WindowPosX:        17,
+		WindowPosY:        -23,
+		WindowPositionSet: false,
+		SettingsWindow: preferences.WindowGeometry{
+			PositionSet: true,
+		},
+		ExifWindow: preferences.WindowGeometry{
+			X: 31, Y: 32, Size: fyne.NewSize(430, 0),
+		},
+	}
+	sentinelsWithDefaults := sentinels
+	sentinelsWithDefaults.MaxScanFiles = defaultMaxScannedFiles
+	sentinelsWithDefaults.MaxWindowWidth = defaultMaxWindowWidth
+	sentinelsWithDefaults.MaxWindowHeight = defaultMaxWindowHeight
+	sentinelsWithDefaults.MaxImageCacheMB = defaultMaxImageCacheMB
+	sentinelsWithDefaults.MaxThumbCacheMB = defaultMaxThumbCacheMB
+	sentinelsWithDefaults.MaxFileSizeMB = defaultMaxFileSizeMB
+
+	for _, tc := range []struct {
+		name  string
+		input preferences.State
+		want  preferences.State
+	}{
+		{name: "zero caps use defaults", want: defaults},
+		{name: "negative caps use defaults", input: negative, want: defaults},
+		{name: "positive caps survive", input: custom, want: custom},
+		{name: "non-cap sentinels survive", input: sentinels, want: sentinelsWithDefaults},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := normalizePreferenceDefaults(tc.input); got != tc.want {
+				t.Errorf("normalizePreferenceDefaults() = %+v, want %+v", got, tc.want)
+			}
+		})
+	}
+}
+
+func funcName(f func()) string {
+	if f == nil {
+		return "<nil>"
+	}
+	return runtime.FuncForPC(reflect.ValueOf(f).Pointer()).Name()
+}
+
+func TestStartViewerRuntime_ReplacesConstructionStopAfterGeometryRestoration(t *testing.T) {
+	application := test.NewApp()
+	settingsGeometry := preferences.WindowGeometry{
+		X: 210, Y: 220, PositionSet: true, Size: fyne.NewSize(600, 520),
+	}
+	exifGeometry := preferences.WindowGeometry{
+		X: 310, Y: 320, PositionSet: true, Size: fyne.NewSize(430, 370),
+	}
+	preferences.Save(application, preferences.State{
+		WindowSize:        fyne.NewSize(700, 500),
+		WindowPosX:        120,
+		WindowPosY:        340,
+		WindowPositionSet: true,
+		SettingsWindow:    settingsGeometry,
+		ExifWindow:        exifGeometry,
+	})
+
+	favoritesDir := t.TempDir()
+	if err := favstore.Save(favoritesDir, "Runtime Favorite", nil); err != nil {
+		t.Fatalf("save temporary favorite: %v", err)
+	}
+
+	v, win := buildStartupViewer(application)
+	t.Cleanup(win.Close)
+	t.Cleanup(func() { imaging.SetMaxEncodedBytes(0) }) // process-wide - see memlimits.go
+
+	if v.stopWinPosPoll == nil {
+		t.Fatal("buildStartupViewer left stopWinPosPoll nil")
+	}
+	noPollerStopName := funcName(noPollerStop)
+	if got := funcName(v.stopWinPosPoll); got != noPollerStopName {
+		t.Fatalf("buildStartupViewer stop callback = %s, want noPollerStop %s", got, noPollerStopName)
+	}
+
+	if got, want := win.Canvas().Size(), fyne.NewSize(700, 500); got != want {
+		t.Errorf("main window size = %v, want restored %v", got, want)
+	}
+	x, y, positionSet := v.winPos.Get()
+	if !positionSet || x != 120 || y != 340 {
+		t.Errorf("main window position = (%d, %d, set=%v), want restored (120, 340, set=true)", x, y, positionSet)
+	}
+	if got := prefGeometry(v.settings.Geometry()); got != settingsGeometry {
+		t.Errorf("settings geometry = %+v, want restored %+v", got, settingsGeometry)
+	}
+	if got := prefGeometry(v.exif.Geometry()); got != exifGeometry {
+		t.Errorf("EXIF geometry = %+v, want restored %+v", got, exifGeometry)
+	}
+
+	startViewerRuntime(v, win, favoritesDir)
+	runtimeStop := v.stopWinPosPoll
+	if runtimeStop == nil {
+		t.Fatal("startViewerRuntime left stopWinPosPoll nil")
+	}
+	t.Cleanup(runtimeStop)
+	if got := funcName(runtimeStop); got == noPollerStopName {
+		t.Fatalf("startViewerRuntime left noPollerStop installed (%s)", got)
+	}
+
+	items := v.favorites.Menu().Items
+	if len(items) != 5 || items[2].Label != "Runtime Favorite" {
+		t.Errorf("favorites menu items = %+v, want the temporary favorite", items)
+	}
+}
+
 func TestWindowSizeTracker_RecordsResizes(t *testing.T) {
 	application := test.NewApp()
 
-	v, win := buildViewer(application)
+	v, win := buildStartupViewer(application)
 	defer win.Close()
 
 	win.Resize(fyne.NewSize(900, 650))

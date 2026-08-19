@@ -194,12 +194,14 @@ seams — live in `internal/uitest`.
 ### End-to-end suite (`internal/ui/e2e_test.go`)
 
 Rather than a hand-copied replica of the UI that could drift out of sync,
-the e2e tests drive the *real* app: `buildViewer(application fyne.App)` in
-[internal/ui/build.go](internal/ui/build.go) is the exact widget/handler
-wiring `main()` runs live, factored out so tests can call it too. Every
-test in the package builds a fresh window through it (`newTestUI`), drives
-it the way a user would — `handleDrop` for a drop, `handleKeyEvent` for a
-key press — and checks two things:
+the e2e tests drive the *real* app: `buildViewer(application fyne.App,
+startup startupState)` in [internal/ui/build.go](internal/ui/build.go) is
+the exact top-level widget/handler wiring `Run` uses, including the ordered
+feature construction in [internal/ui/features.go](internal/ui/features.go), after
+[internal/ui/startup.go](internal/ui/startup.go) loads startup state. Every
+test in the package mirrors that load/build/geometry-restoration path
+through `newTestUI`, then drives it the way a user would — `handleDrop` for
+a drop, `handleKeyEvent` for a key press — and checks two things:
 
 - **State** — `v.files`, `v.index`, and widget visibility (`.Visible()`).
   Fast, exact, and portable; this is the real regression guard.
@@ -250,11 +252,16 @@ for a drop. Add the matching wait if you add a scenario that starts one.
 ```sh
 main.go               Entry point: app setup, translations, CLI arguments
 internal/ui/          The application - the viewer core and the key dispatcher
-  run.go              Run(): builds the window, wires startup/shutdown
-  build.go            buildViewer(): the whole widget tree, in one place
+  run.go              Run(): explicit startup/runtime/shutdown lifecycle
+  startup.go          Loads startup state, normalizes defaults, restores geometry
+  build.go            buildViewer(): top-level window/overlay composition
+  components.go       App-owned widget clusters and fixed-height layout
+  features.go         Explicit ordered construction of all eight feature modules
+  shortcuts.go        Ordered global modified-key shortcut registration
   zoom/ grid/         One package per feature that owns its own state,
   slideshow/ help/    each declaring only what it needs from the app
   deletion/ exifwin/
+  settingswin/ favorites/
   widgets/            Shared viewer-free UI mechanics
   assets/             Placeholder/welcome art, embedded at build time
   help/manual.md      End-user manual, embedded at build time

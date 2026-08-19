@@ -142,11 +142,11 @@ func TestOpenFileDialog_RunsChooserInBackground(t *testing.T) {
 	settleChooser(t, v)
 }
 
-// TestOpenShortcuts_InvokeFileDialog checks that wireOpenShortcuts (build.go)
-// binds Cmd/Ctrl+O and Cmd/Ctrl+Shift+O to openFileDialog. It drives a bare
-// *fyne.ShortcutHandler through the real wiring function rather than a full
-// window/canvas: Fyne's test driver canvas (fyne.io/fyne/v2/test) embeds
-// software.WindowlessCanvas by interface, which doesn't include
+// TestOpenShortcuts_InvokeFileDialog checks that wireOpenShortcuts
+// (shortcuts.go) binds Cmd/Ctrl+O and Cmd/Ctrl+Shift+O to openFileDialog. It
+// drives a bare *fyne.ShortcutHandler through the real wiring function rather
+// than a full window/canvas: Fyne's test driver canvas (fyne.io/fyne/v2/test)
+// embeds software.WindowlessCanvas by interface, which doesn't include
 // TypedShortcut, so a real key-plus-modifier press can't be simulated
 // through it - only the production glfw driver's canvas exposes that
 // method (see wireOpenShortcuts's own comment). A bare ShortcutHandler is

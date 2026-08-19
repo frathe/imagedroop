@@ -15,7 +15,7 @@ import (
 func buildMainMenu(view *viewer) *fyne.MainMenu {
 	open := fyne.NewMenuItem(lang.L("Open Files…"), func() { view.openFileDialog() })
 	// Display-only: the Cmd/Ctrl+O binding itself is wireOpenShortcuts's
-	// AddShortcut call in build.go. This just shows the same accelerator
+	// AddShortcut call in shortcuts.go. This just shows the same accelerator
 	// as a hint next to the menu item.
 	open.Shortcut = &desktop.CustomShortcut{
 		KeyName:  fyne.KeyO,
