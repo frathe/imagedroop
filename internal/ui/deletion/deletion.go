@@ -2,12 +2,14 @@
 // behind a centered card asking whether to move the file on screen to the
 // Trash, and the trash.Move that follows if the user says yes.
 //
-// It owns its own widgets and its own selection state, and reaches back
+// It owns which files a pending confirmation is about, and reaches back
 // into the app only through Host - the first of the per-feature interfaces
 // this app's package split is built on. Host is declared here, by the
-// consumer, and lists exactly what this feature needs and nothing else;
-// the viewer satisfies it incidentally, without knowing this package
-// exists.
+// consumer, and lists exactly what this feature needs and nothing else; the
+// viewer satisfies it incidentally, without knowing this package exists.
+// The card itself - scrim, message, buttons, focus rings, the selection
+// behind them, and the Left/Right/Return/Escape handling - is
+// internal/ui/widgets.ChoiceCard, shared with the export-format prompt.
 package deletion
 
 import (
@@ -15,10 +17,7 @@ import (
 	"sync"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/canvas"
-	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/lang"
-	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
 	"github.com/frathe/picfetch/internal/trash"
@@ -67,6 +66,15 @@ type Target struct {
 	Index int
 }
 
+// cancelChoice and dangerChoice are the card's two button indices - Cancel
+// first/left (selected by default), the red "Move to Trash" button
+// second/right, so the Right arrow key - which moves selection toward the
+// higher index - points toward where it actually sits.
+const (
+	cancelChoice = 0
+	dangerChoice = 1
+)
+
 // Confirmer is the confirmation card and the state behind it.
 type Confirmer struct {
 	host Host
@@ -78,18 +86,6 @@ type Confirmer struct {
 	// about exactly the files it named.
 	targets []Target
 
-	// visible is true while the card is up. The app's key dispatcher
-	// checks it before its own handling, so every other key is swallowed
-	// rather than acted on while a decision about moving a file to the
-	// Trash is pending.
-	visible bool
-
-	// dangerSelected tracks which button Left/Right has selected: false
-	// (Cancel, the default) or true (the red "Move to Trash"
-	// button) - reset to false every time Request opens the card, never
-	// carried over from a previous prompt.
-	dangerSelected bool
-
 	// pending tracks the background goroutine performDelete starts for its
 	// trash.Move call - see performDelete's doc comment for why that call
 	// can't run on the UI goroutine. Settle waits on it, the same way
@@ -97,77 +93,46 @@ type Confirmer struct {
 	// background goroutine before asserting on state it's still touching.
 	pending sync.WaitGroup
 
-	overlay    *fyne.Container
-	message    *widget.Label
-	cancelRing *canvas.Rectangle
-	dangerRing *canvas.Rectangle
+	// card is the prompt itself: scrim, message, the two buttons and their
+	// focus rings, and the Left/Right/Return/Escape handling over them. It
+	// owns the selection outright - this type keeps no copy of it, so a
+	// click on a button (which reaches the card directly, never this
+	// package) can't leave the two disagreeing.
+	card *widgets.ChoiceCard
 }
 
 // New builds the confirmation card (hidden) around host.
 //
 // The card is a dimmed scrim behind a centered box, with Cancel first/left
-// (selected by default) and the red "Move to Trash" button
-// second/right, so the Right arrow key - which moves selection there, see
-// HandleKey - points toward where it actually sits. Left/Right/Return/
-// Escape are handled by HandleKey while it's up, not Fyne's own
-// widget-focus system (this app never uses that - see the app's
-// wireOpenShortcuts comment on why modified combos already have to bypass
-// it), so the selection rings are drawn manually to match, rather than
-// relying on Button's own FocusGained highlight.
+// (selected by default) and the red "Move to Trash" button second/right -
+// see cancelChoice/dangerChoice. The Cancel choice runs nothing of its own:
+// widgets.ChoiceCard already hides itself before running either choice, and
+// that is everything Cancel/Escape have ever needed to do here, so there is
+// nothing left for SetOnCancel to add.
 func New(host Host) *Confirmer {
 	c := &Confirmer{host: host}
 
-	scrim := canvas.NewRectangle(widgets.ScrimColor)
-
-	c.message = widget.NewLabel("")
-	c.message.Alignment = fyne.TextAlignCenter
-	c.message.Wrapping = fyne.TextWrapWord
-
-	cancelBtn := widget.NewButton(lang.L("Cancel"), c.Cancel)
-	dangerBtn := widget.NewButton(lang.L("Move to Trash"), c.performDelete)
-	dangerBtn.Importance = widget.DangerImportance
-
-	c.cancelRing = widgets.NewFocusRing(widgets.ButtonRingWidth, widgets.RingRadius)
-
-	c.dangerRing = widgets.NewFocusRing(widgets.ButtonRingWidth, widgets.RingRadius)
-	c.dangerRing.Hide()
-
-	buttons := container.NewGridWithColumns(2,
-		ringed(c.cancelRing, cancelBtn),
-		ringed(c.dangerRing, dangerBtn),
+	c.card = widgets.NewChoiceCard(host.ForceRepaint,
+		widgets.Choice{Label: lang.L("Cancel")},
+		widgets.Choice{
+			Label:      lang.L("Move to Trash"),
+			Importance: widget.DangerImportance,
+			OnChosen:   c.performDelete,
+		},
 	)
-
-	cardBG := canvas.NewRectangle(theme.Color(theme.ColorNameOverlayBackground))
-	cardBG.CornerRadius = widgets.CardRadius
-	card := container.NewStack(cardBG, container.NewPadded(container.NewVBox(c.message, buttons)))
-
-	c.overlay = container.NewStack(scrim, container.NewCenter(card))
-	c.overlay.Hide()
 
 	return c
 }
 
-// ringed pairs a button with its selection ring: the ring fills the cell,
-// the button is inset by one padding step inside it, so the ring's stroke
-// lands in that gap instead of underneath the button. Stacking the two at
-// the same size hides the ring entirely - a Fyne button paints an opaque
-// background across its whole area, including the DangerImportance red -
-// and the card then looks identical whichever button is selected. Behind
-// rather than on top so the ring can never sit between the pointer and the
-// button it marks.
-func ringed(ring *canvas.Rectangle, btn *widget.Button) *fyne.Container {
-	return container.NewStack(ring, container.NewPadded(btn))
-}
-
 // Overlay is the card, for the app to place in its window stack.
 func (c *Confirmer) Overlay() fyne.CanvasObject {
-	return c.overlay
+	return c.card.Overlay()
 }
 
 // Visible reports whether the card is up - the app's key dispatcher checks
 // this before its own handling.
 func (c *Confirmer) Visible() bool {
-	return c.visible
+	return c.card.Visible()
 }
 
 // Request opens the confirmation card for the file currently on screen - the
@@ -191,23 +156,22 @@ func (c *Confirmer) Request() {
 // naming the file; anything more names the count instead, since a card
 // listing forty file names would be unreadable and unbounded in height.
 func (c *Confirmer) RequestFiles(targets []Target) {
-	if len(targets) == 0 || c.visible {
+	if len(targets) == 0 || c.card.Visible() {
 		return
 	}
 
 	c.targets = targets
+
+	var msg string
 	if len(targets) == 1 {
-		c.message.SetText(fmt.Sprintf(lang.L("Move %q to the Trash?"), targets[0].URI.Name()))
+		msg = fmt.Sprintf(lang.L("Move %q to the Trash?"), targets[0].URI.Name())
 	} else {
-		c.message.SetText(fmt.Sprintf(lang.L("Move %d files to the Trash?"), len(targets)))
+		msg = fmt.Sprintf(lang.L("Move %d files to the Trash?"), len(targets))
 	}
 
-	c.dangerSelected = false
-	c.updateSelectionVisual()
-
-	c.visible = true
-	c.overlay.Show()
-	c.host.ForceRepaint()
+	// Show resets the selection to cancelChoice, so a card never opens with
+	// the destructive button already under Return.
+	c.card.Show(msg)
 }
 
 // Cancel dismisses the card without touching any file - Escape while it's
@@ -215,68 +179,26 @@ func (c *Confirmer) RequestFiles(targets []Target) {
 // the card isn't showing, so callers that call it defensively (the app, on
 // every drop) don't need to check Visible themselves first.
 func (c *Confirmer) Cancel() {
-	if !c.visible {
+	if !c.card.Visible() {
 		return
 	}
 
-	c.visible = false
-	c.overlay.Hide()
-	c.host.ForceRepaint()
+	c.card.Hide()
 }
 
 // HandleKey handles a key press while the card is up: Left/Right move the
 // selection, Return runs whichever action is selected, Escape cancels.
 // Every other key is deliberately swallowed by the caller.
 func (c *Confirmer) HandleKey(ev *fyne.KeyEvent) {
-	switch ev.Name {
-	case fyne.KeyLeft:
-		c.setSelection(false)
-	case fyne.KeyRight:
-		c.setSelection(true)
-	case fyne.KeyReturn, fyne.KeyEnter:
-		c.confirmSelection()
-	case fyne.KeyEscape:
-		c.Cancel()
-	}
-}
-
-// setSelection moves the card's Left/Right selection between Cancel
-// (false) and the red "Move to Trash" button (true), redrawing
-// whichever ring highlights the currently selected one.
-func (c *Confirmer) setSelection(dangerSelected bool) {
-	c.dangerSelected = dangerSelected
-	c.updateSelectionVisual()
-}
-
-// updateSelectionVisual shows the focus ring around whichever button
-// setSelection last selected and hides it on the other one.
-func (c *Confirmer) updateSelectionVisual() {
-	if c.dangerSelected {
-		c.cancelRing.Hide()
-		c.dangerRing.Show()
-	} else {
-		c.cancelRing.Show()
-		c.dangerRing.Hide()
-	}
-	c.host.ForceRepaint()
-}
-
-// confirmSelection is Return/Enter while the card is up: it runs whichever
-// action Left/Right last selected, so Return always agrees with what's
-// visibly highlighted rather than always meaning one specific thing.
-func (c *Confirmer) confirmSelection() {
-	if c.dangerSelected {
-		c.performDelete()
-	} else {
-		c.Cancel()
-	}
+	c.card.HandleKey(ev)
 }
 
 // performDelete is the danger button's action (or Return with it
 // selected): it moves the current file to the OS trash/recycle bin via
 // trash.Move rather than removing it outright, so Shift+Delete is
 // recoverable the same way a delete from Finder/Explorer/a Linux file
-// manager already is.
+// manager already is. It runs as the danger choice's OnChosen, so
+// widgets.ChoiceCard has already hidden the card by the time this starts.
 //
 // It runs on its own goroutine, mirroring openFileDialog/copyImageToClipboard
 // - and here that's not just consistency with them, it's load-bearing:
@@ -308,9 +230,6 @@ func (c *Confirmer) confirmSelection() {
 // what actually moved is removed from the file set, so anything left behind
 // on disk is also still in the app.
 func (c *Confirmer) performDelete() {
-	c.visible = false
-	c.overlay.Hide()
-
 	targets := c.targets
 	if len(targets) == 0 {
 		return

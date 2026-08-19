@@ -40,9 +40,10 @@ func defaultKeyModifiers() fyne.KeyModifier {
 // every key binding is dispatched from here rather than from a focused
 // widget (see grid.Close on the one place that has to actively restore it).
 func (v *viewer) handleTypedRune(r rune) {
-	// The delete confirmation owns the keyboard whole while it's up, for
-	// the same reasons it does in handleKeyEvent below.
-	if v.deletion.Visible() {
+	// The delete confirmation and the export-format prompt own the keyboard
+	// whole while either is up, for the same reasons they do in
+	// handleKeyEvent below.
+	if v.deletion.Visible() || v.exportPrompt.Visible() {
 		return
 	}
 
@@ -68,6 +69,17 @@ func (v *viewer) handleKeyEvent(ev *fyne.KeyEvent) {
 	// just dismissing the prompt) if it fell through to the switch below.
 	if v.deletion.Visible() {
 		v.deletion.HandleKey(ev)
+		return
+	}
+
+	// The export-format prompt (Cmd/Ctrl+E, see promptExport in export.go)
+	// owns the keyboard the same way while it's up. Note this doesn't shadow
+	// plain, unmodified E below - that still opens the EXIF panel - since
+	// the prompt is only ever reached through the modified shortcut
+	// (wireExportShortcuts) or the menu, both of which bypass this switch
+	// entirely.
+	if v.exportPrompt.Visible() {
+		v.exportPrompt.HandleKey(ev)
 		return
 	}
 

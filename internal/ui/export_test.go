@@ -1,6 +1,6 @@
-// canExport/exportAs (export.go): the File > "Export as PNG…"/"Export as
-// JPEG…" actions that write the frame on screen to a new file, in a format
-// chosen by the menu item rather than by the source file.
+// canExport/exportAs (export.go): what runs once the File > "Export image"
+// prompt's PNG or JPEG choice is made, writing the frame on screen to a new
+// file in that format rather than the source file's own.
 //
 // Per-OS save-panel dispatch (zenity/PowerShell/AppKit) is covered by
 // internal/filepicker's own tests, and the encoders by internal/imaging's;
@@ -20,7 +20,6 @@ import (
 	"testing"
 	"time"
 
-	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/storage"
 
 	"github.com/frathe/picfetch/internal/filepicker"
@@ -378,42 +377,43 @@ func TestExportAs_RunsSavePanelInBackground(t *testing.T) {
 	settleChooser(t, v)
 }
 
-// --- Export menu items ---------------------------------------------------
+// --- Export menu item ------------------------------------------------------
 
-func TestExportItems_DisabledInitiallyAndEnabledOnceAnImageLoads(t *testing.T) {
+func TestExportItem_DisabledInitiallyAndEnabledOnceAnImageLoads(t *testing.T) {
 	v := newTestViewer(t)
 
-	for i, item := range []*fyne.MenuItem{v.exportPNGItem, v.exportJPEGItem} {
-		if !item.Disabled {
-			t.Errorf("export item %d should start disabled, with nothing loaded", i)
-		}
+	if !v.exportItem.Disabled {
+		t.Error("export item should start disabled, with nothing loaded")
 	}
 
 	dropAndWait(t, v, uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White))
 
-	for i, item := range []*fyne.MenuItem{v.exportPNGItem, v.exportJPEGItem} {
-		if item.Disabled {
-			t.Errorf("export item %d should be enabled once an image is loaded", i)
-		}
+	if v.exportItem.Disabled {
+		t.Error("export item should be enabled once an image is loaded")
 	}
 
 	v.closeFiles()
 
-	for i, item := range []*fyne.MenuItem{v.exportPNGItem, v.exportJPEGItem} {
-		if !item.Disabled {
-			t.Errorf("export item %d should be disabled again after Close Files", i)
-		}
+	if !v.exportItem.Disabled {
+		t.Error("export item should be disabled again after Close Files")
 	}
 }
 
-func TestBuildMainMenu_ExportItemsExportTheirOwnFormat(t *testing.T) {
+// TestPromptExport_EachChoiceExportsItsOwnFormat is what the deleted
+// TestBuildMainMenu_ExportItemsExportTheirOwnFormat used to pin, moved from
+// the menu to the prompt: that the button labelled PNG is the one wired to
+// exportPNGExt. widgets.ChoiceCard knows nothing about extensions - the
+// mapping lives entirely in registerFeatures' two OnChosen closures
+// (features.go), so without this, swapping them would leave the PNG button
+// writing .jpg with the whole suite still green.
+func TestPromptExport_EachChoiceExportsItsOwnFormat(t *testing.T) {
 	tests := []struct {
-		name  string
-		index int
-		want  string
+		name   string
+		choice int
+		want   string
 	}{
-		{"Export as PNG…", 2, ".png"},
-		{"Export as JPEG…", 3, ".jpg"},
+		{"PNG", pngChoice, ".png"},
+		{"JPEG", jpegChoice, ".jpg"},
 	}
 
 	for _, tt := range tests {
@@ -424,17 +424,91 @@ func TestBuildMainMenu_ExportItemsExportTheirOwnFormat(t *testing.T) {
 			var suggested string
 			uitest.StubSaveChooser(t, func(s string) ([]byte, error) {
 				suggested = s
-				return nil, nil
+				return nil, nil // cancelled: the suggested name is what names the format
 			})
 
-			menu := buildMainMenu(v)
-			menu.Items[0].Items[tt.index].Action()
+			v.promptExport()
+			v.exportPrompt.Select(tt.choice)
+			v.exportPrompt.Confirm()
 			settleChooser(t, v)
 
 			if got := filepath.Ext(suggested); got != tt.want {
-				t.Errorf("the %s action suggested %q (extension %q), want extension %q", tt.name, suggested, got, tt.want)
+				t.Errorf("the %s choice suggested %q (extension %q), want extension %q", tt.name, suggested, got, tt.want)
 			}
 		})
+	}
+}
+
+// TestPromptExport_DoesNothingWhileTheDeleteCardIsUp covers the guard that
+// keeps two modal cards from stacking: Cmd/Ctrl+E is a shortcut and arrives
+// without passing handleKeyEvent, so without it the export prompt would
+// paint over a delete confirmation that still owns the keyboard - see
+// promptExport.
+func TestPromptExport_DoesNothingWhileTheDeleteCardIsUp(t *testing.T) {
+	v := newTestViewer(t)
+	dropAndWait(t, v, uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White))
+
+	v.requestDelete()
+	if !v.deletion.Visible() {
+		t.Fatal("the delete card should be up - the premise of this test")
+	}
+
+	v.promptExport()
+
+	if v.exportPrompt.Visible() {
+		t.Error("the export prompt must not open over a pending delete confirmation")
+	}
+}
+
+// TestRequestDelete_DoesNothingWhileTheExportPromptIsUp is the mirror image:
+// Shift+Delete is a shortcut too, so it can arrive mid-prompt and would
+// otherwise raise the delete card underneath it.
+func TestRequestDelete_DoesNothingWhileTheExportPromptIsUp(t *testing.T) {
+	v := newTestViewer(t)
+	dropAndWait(t, v, uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White))
+
+	v.promptExport()
+	if !v.exportPrompt.Visible() {
+		t.Fatal("the export prompt should be up - the premise of this test")
+	}
+
+	v.requestDelete()
+
+	if v.deletion.Visible() {
+		t.Error("Shift+Delete must not raise the delete card under the export prompt")
+	}
+}
+
+// TestPromptExport_ReopeningDoesNotResetAnAlreadyMadeChoice mirrors
+// deletion's TestRequest_ReopeningDoesNotResetAnAlreadyMadeSelection: a
+// second Cmd/Ctrl+E must not move the ring back to PNG under someone who has
+// already moved it to JPEG.
+func TestPromptExport_ReopeningDoesNotResetAnAlreadyMadeChoice(t *testing.T) {
+	v := newTestViewer(t)
+	dropAndWait(t, v, uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White))
+
+	v.promptExport()
+	v.exportPrompt.Select(jpegChoice)
+
+	v.promptExport()
+
+	if got := v.exportPrompt.Selected(); got != jpegChoice {
+		t.Errorf("selection = %d after re-opening, want it left on jpegChoice (%d)", got, jpegChoice)
+	}
+}
+
+// TestBuildMainMenu_ExportItemOpensThePrompt covers only that the menu
+// reaches promptExport; which format each button then exports is
+// TestPromptExport_EachChoiceExportsItsOwnFormat's job.
+func TestBuildMainMenu_ExportItemOpensThePrompt(t *testing.T) {
+	v := newTestViewer(t)
+	dropAndWait(t, v, uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White))
+
+	menu := buildMainMenu(v)
+	menu.Items[0].Items[2].Action()
+
+	if !v.exportPrompt.Visible() {
+		t.Error("the Export image menu action should open the export-format prompt")
 	}
 }
 

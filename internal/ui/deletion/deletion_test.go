@@ -112,16 +112,16 @@ func TestRequest_ShowsCardWithMessageAndCancelSelectedByDefault(t *testing.T) {
 
 	c.Request()
 
-	if !c.Visible() || !c.overlay.Visible() {
+	if !c.Visible() || !c.card.Overlay().Visible() {
 		t.Fatal("the card should be visible after Request")
 	}
-	if !strings.Contains(c.message.Text, "sunset.jpg") {
-		t.Errorf("message = %q, want it to name the current file", c.message.Text)
+	if !strings.Contains(c.card.Message().Text, "sunset.jpg") {
+		t.Errorf("message = %q, want it to name the current file", c.card.Message().Text)
 	}
-	if c.dangerSelected {
+	if c.dangerSelected() {
 		t.Error("Cancel should be selected by default, not the danger button")
 	}
-	if !c.cancelRing.Visible() || c.dangerRing.Visible() {
+	if !c.card.Ring(cancelChoice).Visible() || c.card.Ring(dangerChoice).Visible() {
 		t.Error("the Cancel ring should be visible and the danger ring hidden by default")
 	}
 }
@@ -131,7 +131,7 @@ func TestRequest_NoOpWithNothingLoaded(t *testing.T) {
 
 	c.Request()
 
-	if c.Visible() || c.overlay.Visible() {
+	if c.Visible() || c.card.Overlay().Visible() {
 		t.Error("Request should do nothing with no files loaded")
 	}
 }
@@ -144,7 +144,7 @@ func TestRequest_ReopeningDoesNotResetAnAlreadyMadeSelection(t *testing.T) {
 
 	c.Request() // re-triggering the shortcut mid-prompt
 
-	if !c.dangerSelected {
+	if !c.dangerSelected() {
 		t.Error("a second Request while already showing should not reset the selection back to Cancel")
 	}
 }
@@ -153,12 +153,12 @@ func TestSetSelection_TogglesRingVisibility(t *testing.T) {
 	c := New(&fakeHost{})
 
 	c.setSelection(true)
-	if c.cancelRing.Visible() || !c.dangerRing.Visible() {
+	if c.card.Ring(cancelChoice).Visible() || !c.card.Ring(dangerChoice).Visible() {
 		t.Error("selecting the danger button should show its ring and hide Cancel's")
 	}
 
 	c.setSelection(false)
-	if !c.cancelRing.Visible() || c.dangerRing.Visible() {
+	if !c.card.Ring(cancelChoice).Visible() || c.card.Ring(dangerChoice).Visible() {
 		t.Error("selecting Cancel should show its ring and hide the danger button's")
 	}
 }
@@ -168,12 +168,12 @@ func TestHandleKey_MovesSelectionAndCancels(t *testing.T) {
 	c.Request()
 
 	c.HandleKey(&fyne.KeyEvent{Name: fyne.KeyRight})
-	if !c.dangerSelected {
+	if !c.dangerSelected() {
 		t.Error("Right should move the selection to the danger button")
 	}
 
 	c.HandleKey(&fyne.KeyEvent{Name: fyne.KeyLeft})
-	if c.dangerSelected {
+	if c.dangerSelected() {
 		t.Error("Left should move the selection back to Cancel")
 	}
 
