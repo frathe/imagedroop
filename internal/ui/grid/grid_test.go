@@ -305,6 +305,57 @@ func TestHandleKey_ArrowMovesHighlight(t *testing.T) {
 	}
 }
 
+func TestHandleKey_PageMovesHighlightByOneVisiblePage(t *testing.T) {
+	names := make([]string, 30)
+	for i := range names {
+		names[i] = fmt.Sprintf("image-%02d.jpg", i)
+	}
+	g, _ := openGrid(t, names...)
+	g.wrap.Resize(fyne.NewSize(cellSize*4, cellSize*3))
+
+	step := g.wrap.ColumnCount() * max(1, int(g.wrap.Size().Height/cellSize))
+	g.HandleKey(&fyne.KeyEvent{Name: fyne.KeyPageUp})
+	if g.Highlight() != 0 {
+		t.Errorf("Highlight() = %d, want 0 - Page Up at the first page must stay put", g.Highlight())
+	}
+
+	g.HandleKey(&fyne.KeyEvent{Name: fyne.KeyPageDown})
+	if want := step; g.Highlight() != want {
+		t.Errorf("Highlight() = %d, want %d after Page Down", g.Highlight(), want)
+	}
+
+	g.HandleKey(&fyne.KeyEvent{Name: fyne.KeyPageUp})
+	if g.Highlight() != 0 {
+		t.Errorf("Highlight() = %d, want 0 after Page Up", g.Highlight())
+	}
+
+	g.setHighlight(len(names) - 2)
+	g.HandleKey(&fyne.KeyEvent{Name: fyne.KeyPageDown})
+	if want := len(names) - 1; g.Highlight() != want {
+		t.Errorf("Highlight() = %d, want %d - Page Down must clamp at the last cell", g.Highlight(), want)
+	}
+}
+
+func TestHandleKey_PageMovesHighlightWhileSearching(t *testing.T) {
+	names := make([]string, 20)
+	for i := range names {
+		names[i] = fmt.Sprintf("match-%02d.jpg", i)
+	}
+	g, _ := openGrid(t, names...)
+	g.wrap.Resize(fyne.NewSize(cellSize*4, cellSize*3))
+	typeQuery(g, "match")
+
+	step := g.wrap.ColumnCount() * max(1, int(g.wrap.Size().Height/cellSize))
+	g.HandleKey(&fyne.KeyEvent{Name: fyne.KeyPageDown})
+
+	if want := min(step, len(names)-1); g.Highlight() != want {
+		t.Errorf("Highlight() = %d, want %d after Page Down in search", g.Highlight(), want)
+	}
+	if !g.Searching() || g.Query() != "match" {
+		t.Errorf("page navigation changed search state: Searching() = %v, Query() = %q", g.Searching(), g.Query())
+	}
+}
+
 // hover stands in for the pointer entering the cell at display index id.
 // Fyne's GridWrap gives its items an onHovered that does exactly this call
 // and nothing else, so driving the callback is the whole of a hover as far
