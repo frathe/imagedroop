@@ -1,6 +1,6 @@
-// canExport/exportAs (export.go): the File > "Export as PNG…"/"Export as
-// JPEG…" actions that write the frame on screen to a new file, in a format
-// chosen by the menu item rather than by the source file.
+// canExport/exportAs (export.go): what runs once the File > "Export image"
+// prompt's PNG or JPEG choice is made, writing the frame on screen to a new
+// file in that format rather than the source file's own.
 //
 // Per-OS save-panel dispatch (zenity/PowerShell/AppKit) is covered by
 // internal/filepicker's own tests, and the encoders by internal/imaging's;
@@ -21,6 +21,7 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/storage"
 
 	"github.com/frathe/picfetch/internal/filepicker"
@@ -378,42 +379,43 @@ func TestExportAs_RunsSavePanelInBackground(t *testing.T) {
 	settleChooser(t, v)
 }
 
-// --- Export menu items ---------------------------------------------------
+// --- Export menu item ------------------------------------------------------
 
-func TestExportItems_DisabledInitiallyAndEnabledOnceAnImageLoads(t *testing.T) {
+func TestExportItem_DisabledInitiallyAndEnabledOnceAnImageLoads(t *testing.T) {
 	v := newTestViewer(t)
 
-	for i, item := range []*fyne.MenuItem{v.exportPNGItem, v.exportJPEGItem} {
-		if !item.Disabled {
-			t.Errorf("export item %d should start disabled, with nothing loaded", i)
-		}
+	if !v.exportItem.Disabled {
+		t.Error("export item should start disabled, with nothing loaded")
 	}
 
 	dropAndWait(t, v, uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White))
 
-	for i, item := range []*fyne.MenuItem{v.exportPNGItem, v.exportJPEGItem} {
-		if item.Disabled {
-			t.Errorf("export item %d should be enabled once an image is loaded", i)
-		}
+	if v.exportItem.Disabled {
+		t.Error("export item should be enabled once an image is loaded")
 	}
 
 	v.closeFiles()
 
-	for i, item := range []*fyne.MenuItem{v.exportPNGItem, v.exportJPEGItem} {
-		if !item.Disabled {
-			t.Errorf("export item %d should be disabled again after Close Files", i)
-		}
+	if !v.exportItem.Disabled {
+		t.Error("export item should be disabled again after Close Files")
 	}
 }
 
-func TestBuildMainMenu_ExportItemsExportTheirOwnFormat(t *testing.T) {
+// TestPromptExport_EachChoiceExportsItsOwnFormat is what the deleted
+// TestBuildMainMenu_ExportItemsExportTheirOwnFormat used to pin, moved from
+// the menu to the prompt: that the button labelled PNG is the one wired to
+// exportPNGExt. widgets.ChoiceCard knows nothing about extensions - the
+// mapping lives entirely in registerFeatures' two OnChosen closures
+// (features.go), so without this, swapping them would leave the PNG button
+// writing .jpg with the whole suite still green.
+func TestPromptExport_EachChoiceExportsItsOwnFormat(t *testing.T) {
 	tests := []struct {
-		name  string
-		index int
-		want  string
+		name   string
+		choice int
+		want   string
 	}{
-		{"Export as PNG…", 2, ".png"},
-		{"Export as JPEG…", 3, ".jpg"},
+		{"PNG", pngChoice, ".png"},
+		{"JPEG", jpegChoice, ".jpg"},
 	}
 
 	for _, tt := range tests {
@@ -424,18 +426,254 @@ func TestBuildMainMenu_ExportItemsExportTheirOwnFormat(t *testing.T) {
 			var suggested string
 			uitest.StubSaveChooser(t, func(s string) ([]byte, error) {
 				suggested = s
-				return nil, nil
+				return nil, nil // cancelled: the suggested name is what names the format
 			})
 
-			menu := buildMainMenu(v)
-			menu.Items[0].Items[tt.index].Action()
+			v.promptExport()
+			v.exportPrompt.Select(tt.choice)
+			v.exportPrompt.Confirm()
 			settleChooser(t, v)
 
 			if got := filepath.Ext(suggested); got != tt.want {
-				t.Errorf("the %s action suggested %q (extension %q), want extension %q", tt.name, suggested, got, tt.want)
+				t.Errorf("the %s choice suggested %q (extension %q), want extension %q", tt.name, suggested, got, tt.want)
 			}
 		})
 	}
+}
+
+// TestPromptExport_DoesNothingWhileTheDeleteCardIsUp covers the guard that
+// keeps two modal cards from stacking: Cmd/Ctrl+E is a shortcut and arrives
+// without passing handleKeyEvent, so without it the export prompt would
+// paint over a delete confirmation that still owns the keyboard - see
+// promptExport.
+func TestPromptExport_DoesNothingWhileTheDeleteCardIsUp(t *testing.T) {
+	v := newTestViewer(t)
+	dropAndWait(t, v, uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White))
+
+	v.requestDelete()
+	if !v.deletion.Visible() {
+		t.Fatal("the delete card should be up - the premise of this test")
+	}
+
+	v.promptExport()
+
+	if v.exportPrompt.Visible() {
+		t.Error("the export prompt must not open over a pending delete confirmation")
+	}
+}
+
+// TestRequestDelete_DoesNothingWhileTheExportPromptIsUp is the mirror image:
+// Shift+Delete is a shortcut too, so it can arrive mid-prompt and would
+// otherwise raise the delete card underneath it.
+func TestRequestDelete_DoesNothingWhileTheExportPromptIsUp(t *testing.T) {
+	v := newTestViewer(t)
+	dropAndWait(t, v, uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White))
+
+	v.promptExport()
+	if !v.exportPrompt.Visible() {
+		t.Fatal("the export prompt should be up - the premise of this test")
+	}
+
+	v.requestDelete()
+
+	if v.deletion.Visible() {
+		t.Error("Shift+Delete must not raise the delete card under the export prompt")
+	}
+}
+
+// TestPromptExport_ReopeningDoesNotResetAnAlreadyMadeChoice mirrors
+// deletion's TestRequest_ReopeningDoesNotResetAnAlreadyMadeSelection: a
+// second Cmd/Ctrl+E must not move the ring back to PNG under someone who has
+// already moved it to JPEG.
+func TestPromptExport_ReopeningDoesNotResetAnAlreadyMadeChoice(t *testing.T) {
+	v := newTestViewer(t)
+	dropAndWait(t, v, uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White))
+
+	v.promptExport()
+	v.exportPrompt.Select(jpegChoice)
+
+	v.promptExport()
+
+	if got := v.exportPrompt.Selected(); got != jpegChoice {
+		t.Errorf("selection = %d after re-opening, want it left on jpegChoice (%d)", got, jpegChoice)
+	}
+}
+
+// TestBuildMainMenu_ExportItemOpensThePrompt covers only that the menu
+// reaches promptExport; which format each button then exports is
+// TestPromptExport_EachChoiceExportsItsOwnFormat's job.
+func TestBuildMainMenu_ExportItemOpensThePrompt(t *testing.T) {
+	v := newTestViewer(t)
+	dropAndWait(t, v, uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White))
+
+	menu := buildMainMenu(v)
+	menu.Items[0].Items[2].Action()
+
+	if !v.exportPrompt.Visible() {
+		t.Error("the Export image menu action should open the export-format prompt")
+	}
+}
+
+// --- keyboard ownership ----------------------------------------------------
+//
+// The prompt's own selection/confirm/cancel state machine is
+// widgets.ChoiceCard's job, covered in internal/ui/widgets against a fake
+// repaint callback. What's here is the viewer's side, exactly the split
+// delete_test.go documents for the delete confirmation: that the key
+// dispatcher hands over to the prompt while it's up, and that Escape's usual
+// meaning (reset the session, or close the window with nothing loaded) is
+// suspended in favor of just dismissing it.
+
+// TestHandleKeyEvent_ExportPromptSwallowsNavigationButRespondsToItsOwnKeys
+// mirrors delete_test.go's
+// TestHandleKeyEvent_DeleteConfirmSwallowsNavigationButRespondsToItsOwnKeys:
+// while the prompt is up, every key that would otherwise navigate, zoom,
+// sort, toggle merge mode, open the grid, toggle the info overlay, or open
+// the EXIF panel must be swallowed - except Left/Right, which are the card's
+// own selection keys (widgets.ChoiceCard.HandleKey), and Escape, which
+// dismisses the prompt instead of falling through to its usual meaning.
+func TestHandleKeyEvent_ExportPromptSwallowsNavigationButRespondsToItsOwnKeys(t *testing.T) {
+	v, _, closed := newTestUI(t)
+	a := uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White)
+	b := uitest.TempJPEGURI(t, "b.jpg", 4, 4, color.White)
+	c := uitest.TempJPEGURI(t, "c.jpg", 4, 4, color.White)
+	dropAndWait(t, v, a, b, c)
+
+	// Three files, opened on the middle one: from index 0, a Home that fell
+	// all the way through to ShowImage(0) would land exactly where the test
+	// started, so the assertion below would hold just as well with no guard
+	// at all. Starting at 1 makes every one of Up/Down/Home/End a real jump.
+	v.handleKeyEvent(&fyne.KeyEvent{Name: fyne.KeyRight})
+	waitUntilLoaded(t, v)
+
+	v.promptExport()
+	if !v.exportPrompt.Visible() {
+		t.Fatal("setup: the export prompt should be up after promptExport")
+	}
+	startIndex := v.state.index
+	if startIndex != 1 {
+		t.Fatalf("setup: index = %d, want the middle image (1) so Home and End both move", startIndex)
+	}
+
+	// Left/Right are the card's own: they move the selection ring, not the
+	// image behind it.
+	v.handleKeyEvent(&fyne.KeyEvent{Name: fyne.KeyRight})
+	if got := v.exportPrompt.Selected(); got != jpegChoice {
+		t.Errorf("selection after Right = %d, want jpegChoice (%d)", got, jpegChoice)
+	}
+	v.handleKeyEvent(&fyne.KeyEvent{Name: fyne.KeyLeft})
+	if got := v.exportPrompt.Selected(); got != pngChoice {
+		t.Errorf("selection after Left = %d, want pngChoice (%d)", got, pngChoice)
+	}
+	if v.state.index != startIndex {
+		t.Error("Left/Right handled by the export prompt must not also navigate the image behind it")
+	}
+
+	// Up/Down/Home/End are the image view's own navigation keys - Left/Right
+	// are covered separately above since the card claims those for itself.
+	for _, ev := range []*fyne.KeyEvent{
+		{Name: fyne.KeyUp}, {Name: fyne.KeyDown}, {Name: fyne.KeyHome}, {Name: fyne.KeyEnd},
+	} {
+		v.handleKeyEvent(ev)
+		if v.state.index != startIndex {
+			t.Errorf("%v changed the index to %d while the export prompt was up, want unchanged from %d", ev.Name, v.state.index, startIndex)
+		}
+	}
+
+	// Zoom keys: 1 leaves "fit to window" for 100%, +/- step the percentage.
+	fitting, percent := v.zoom.Fitting(), v.zoom.Percent()
+	for _, ev := range []*fyne.KeyEvent{{Name: fyne.Key1}, {Name: fyne.KeyPlus}, {Name: fyne.KeyMinus}} {
+		v.handleKeyEvent(ev)
+	}
+	if v.zoom.Fitting() != fitting || v.zoom.Percent() != percent {
+		t.Errorf("zoom keys changed zoom state while the export prompt was up: fitting %v -> %v, percent %d -> %d",
+			fitting, v.zoom.Fitting(), percent, v.zoom.Percent())
+	}
+
+	// S cycles the sort order.
+	startSort := v.state.SortMode()
+	v.handleKeyEvent(&fyne.KeyEvent{Name: fyne.KeyS})
+	if v.state.SortMode() != startSort {
+		t.Error("S (sort) should be swallowed while the export prompt is up")
+	}
+
+	// M toggles merge mode.
+	startMerge := v.state.MergeMode()
+	v.handleKeyEvent(&fyne.KeyEvent{Name: fyne.KeyM})
+	if v.state.MergeMode() != startMerge {
+		t.Error("M (merge mode) should be swallowed while the export prompt is up")
+	}
+
+	// G opens the grid.
+	v.handleKeyEvent(&fyne.KeyEvent{Name: fyne.KeyG})
+	if v.grid.Visible() {
+		t.Error("G (grid) should be swallowed while the export prompt is up")
+	}
+
+	// I toggles the persistent info overlay.
+	v.handleKeyEvent(&fyne.KeyEvent{Name: fyne.KeyI})
+	if v.infoCard.Visible() {
+		t.Error("I (info overlay) should be swallowed while the export prompt is up")
+	}
+
+	// Plain E would otherwise open the EXIF panel - only the modified
+	// Cmd/Ctrl+E shortcut (which bypasses this dispatcher entirely) opens
+	// the prompt itself; see handleKeyEvent's own comment.
+	v.handleKeyEvent(&fyne.KeyEvent{Name: fyne.KeyE})
+	if v.exif.Open() {
+		t.Error("plain E (EXIF panel) should be swallowed while the export prompt is up")
+	}
+
+	// Escape dismisses the prompt, not the session or the window.
+	v.handleKeyEvent(&fyne.KeyEvent{Name: fyne.KeyEscape})
+	if v.exportPrompt.Visible() {
+		t.Error("Escape should dismiss the export prompt")
+	}
+	if len(v.state.files) != 3 {
+		t.Error("Escape on the export prompt must not also reset the loaded file set")
+	}
+	if closed() {
+		t.Error("Escape on the export prompt must not close the window")
+	}
+}
+
+// --- Cmd/Ctrl+E / Cmd/Ctrl+Shift+E shortcuts --------------------------------
+
+// TestWireExportShortcuts_OpensPromptAndSetsWallpaperWithoutColliding covers
+// wireExportShortcuts (shortcuts.go): E isn't one of the glfw driver's
+// specially-cased bare shortcuts, so both combos reach it as plain
+// desktop.CustomShortcuts the way Cmd/Ctrl+S reaches wireSaveShortcut (see
+// TestWireSaveShortcut_SavesTheCurrentRotation, save_test.go). Firing both
+// through the same handler is what proves they don't collide: the plain
+// combo must not touch the wallpaper and the Shift combo must not open the
+// prompt.
+func TestWireExportShortcuts_OpensPromptAndSetsWallpaperWithoutColliding(t *testing.T) {
+	v := newTestViewer(t)
+	dropAndWait(t, v, uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White))
+	uitest.StubWallpaperSet(t, func(string) error { return nil })
+
+	handler := &fyne.ShortcutHandler{}
+	wireExportShortcuts(handler, v)
+
+	handler.TypedShortcut(&desktop.CustomShortcut{KeyName: fyne.KeyE, Modifier: fyne.KeyModifierShortcutDefault})
+	if !v.exportPrompt.Visible() {
+		t.Fatal("expected Cmd/Ctrl+E to open the export prompt")
+	}
+	if v.wallpaperDone != nil {
+		t.Error("Cmd/Ctrl+E must not also set the wallpaper")
+	}
+	v.exportPrompt.Hide()
+
+	handler.TypedShortcut(&desktop.CustomShortcut{KeyName: fyne.KeyE, Modifier: fyne.KeyModifierShortcutDefault | fyne.KeyModifierShift})
+	settleWallpaper(t, v)
+	if v.exportPrompt.Visible() {
+		t.Error("Cmd/Ctrl+Shift+E must not open the export prompt")
+	}
+	if got := wallpaperFiles(t, v); len(got) != 1 {
+		t.Errorf("wallpaper files = %v, want exactly one written by Cmd/Ctrl+Shift+E", got)
+	}
+
+	settleToast(t, v) // setAsWallpaper toasts on success
 }
 
 // --- suggestedExportPath -------------------------------------------------

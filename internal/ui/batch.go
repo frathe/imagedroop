@@ -26,7 +26,18 @@ import (
 // to the grid's selection while the overview is up and to the file on screen
 // otherwise, so one shortcut means the same thing - "get rid of what I'm
 // looking at" - in both places.
+//
+// It does nothing at all while the export-format prompt is up. Shift+Delete
+// is a shortcut, so it arrives without passing handleKeyEvent's dispatch and
+// could otherwise raise the delete card *underneath* a prompt that is still
+// what the user is looking at - while handleKeyEvent, which checks deletion
+// first, would hand their next Right/Return to the card they can't see. See
+// promptExport (export.go) for the same guard in the other direction.
 func (v *viewer) requestDelete() {
+	if v.exportPrompt.Visible() {
+		return
+	}
+
 	if v.grid.Visible() {
 		v.deleteGridSelection()
 		return

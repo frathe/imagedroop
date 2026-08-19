@@ -3,15 +3,15 @@
 ## Done
 
 - in grid view page down and page up keys can be used to navigate one page up or down.
+- Menu Items Export as PNG/JPEG combined to a single "Export image" menu item; choosing it asks whether to export as
+  PNG or JPEG through a keyboard-enabled prompt, the same shape as the delete file confirmation, also reachable via
+  the new keyboard shortcut CMD/CTRL + E.
+- The Set as Wallpaper menu item shows its new keybinding CMD/CTRL + SHIFT + E.
 
 ## ACTIVE DEVELOPMENT
 
 ## TODO
 
- - Menu Items Export as PNG/JPEG should be combined to "Export image" menu item. Then the user is asked if he'd like to 
-   export it as png or JPEG. The question should be keyboard enabled like the delete file confirmation. Also add a 
-   keyboard shortcut CMD/CTRL + E
- - The set as Wallpaper menu Item should show the new to create keybinding CMD/CTRL + SHIFT + E
  - when zooming in or out the window scales in size with the image. The minimum windows size should not be smaller 
    then the default app open window size, and not larger then the user configurable maximum window size. 
  - the manual should have a search bar. searches text should be highlighted in the text and when hitting enter the 

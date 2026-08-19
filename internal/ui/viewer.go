@@ -86,18 +86,17 @@ type viewer struct {
 	// setters).
 	settings *settingswin.Window
 
-	// saveItem is the File menu's "Save Changes" item (save.go),
-	// exportPNGItem/exportJPEGItem its two "Export as…" items (export.go),
-	// wallpaperItem its "Set as Wallpaper" one (wallpaper.go), and
-	// closeFilesItem its "Close Files" one (viewer.go's closeFiles) - kept
-	// as their own fields, unlike the other menu items built in menu.go,
-	// because their Disabled fields need updating from outside
-	// buildMainMenu itself, at every site that can change whether there's
-	// anything to save, export, set or close: rotate.go, load.go,
-	// clearToDropzone, and save.go itself - see updateFileMenuState.
+	// saveItem is the File menu's "Save Changes" item (save.go), exportItem
+	// its "Export image" one (export.go), wallpaperItem its "Set as
+	// Wallpaper" one (wallpaper.go), and closeFilesItem its "Close Files"
+	// one (viewer.go's closeFiles) - kept as their own fields, unlike the
+	// other menu items built in menu.go, because their Disabled fields need
+	// updating from outside buildMainMenu itself, at every site that can
+	// change whether there's anything to save, export, set or close:
+	// rotate.go, load.go, clearToDropzone, and save.go itself - see
+	// updateFileMenuState.
 	saveItem       *fyne.MenuItem
-	exportPNGItem  *fyne.MenuItem
-	exportJPEGItem *fyne.MenuItem
+	exportItem     *fyne.MenuItem
 	wallpaperItem  *fyne.MenuItem
 	closeFilesItem *fyne.MenuItem
 
@@ -310,6 +309,15 @@ type viewer struct {
 	// handleKeyEvent checks its Visible() before anything else so every
 	// other key is swallowed while a delete decision is pending.
 	deletion *deletion.Confirmer
+
+	// exportPrompt is the export-format choice raised by promptExport
+	// (export.go, File menu's "Export image" / Cmd/Ctrl+E): the same
+	// widgets.ChoiceCard deletion's own card is built on, but used bare
+	// here rather than through a wrapping type - exportAs already re-checks
+	// canExport/CurrentFile at call time, so there's no per-request state
+	// left for a wrapper to hold the way deletion's targets are.
+	// handleKeyEvent checks its Visible() the same way it does deletion's.
+	exportPrompt *widgets.ChoiceCard
 
 	// grid is the full-window thumbnail overview (G key) - see
 	// internal/ui/grid, which owns the thumbnail cache and its decode

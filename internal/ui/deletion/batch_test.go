@@ -32,8 +32,8 @@ func TestRequestFiles_NamesTheCountRatherThanEachFile(t *testing.T) {
 	if !c.Visible() {
 		t.Fatal("the card should be visible after RequestFiles")
 	}
-	if !strings.Contains(c.message.Text, "3") {
-		t.Errorf("message = %q, want it to say how many files are about to go", c.message.Text)
+	if !strings.Contains(c.card.Message().Text, "3") {
+		t.Errorf("message = %q, want it to say how many files are about to go", c.card.Message().Text)
 	}
 }
 
@@ -45,13 +45,13 @@ func TestRequestFiles_OneTargetReadsExactlyLikeTheSingleFilePrompt(t *testing.T)
 	c := New(host)
 
 	c.RequestFiles(targetsFor(host, 0))
-	batch := c.message.Text
+	batch := c.card.Message().Text
 
 	c.Cancel()
 	c.Request()
 
-	if batch != c.message.Text {
-		t.Errorf("RequestFiles message = %q, Request message = %q, want them identical for one file", batch, c.message.Text)
+	if batch != c.card.Message().Text {
+		t.Errorf("RequestFiles message = %q, Request message = %q, want them identical for one file", batch, c.card.Message().Text)
 	}
 }
 

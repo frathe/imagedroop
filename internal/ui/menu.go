@@ -30,22 +30,25 @@ func buildMainMenu(view *viewer) *fyne.MainMenu {
 	}
 	view.saveItem = save
 
-	// The two export items carry no accelerator: they sit next to Save
-	// Changes' own Cmd/Ctrl+S, and a "which of these two formats did I just
-	// bind?" shortcut is worse than none at all.
-	exportPNG := fyne.NewMenuItem(lang.L("Export as PNG…"), func() { view.exportAs(exportPNGExt) })
-	exportPNG.Disabled = true // updateFileMenuState (save.go) enables both once an image is loaded
-	view.exportPNGItem = exportPNG
+	export := fyne.NewMenuItem(lang.L("Export image"), func() { view.promptExport() })
+	export.Disabled = true // updateFileMenuState (save.go) enables it once an image is loaded
+	// Display-only, like Open's above: the binding itself is
+	// wireExportShortcuts's AddShortcut call in shortcuts.go.
+	export.Shortcut = &desktop.CustomShortcut{
+		KeyName:  fyne.KeyE,
+		Modifier: fyne.KeyModifierShortcutDefault,
+	}
+	view.exportItem = export
 
-	exportJPEG := fyne.NewMenuItem(lang.L("Export as JPEG…"), func() { view.exportAs(exportJPEGExt) })
-	exportJPEG.Disabled = true
-	view.exportJPEGItem = exportJPEG
-
-	// Carries no accelerator either, for the same reason the export items
-	// don't: it sits among them, and nothing about the action suggests one
-	// key over another.
 	setWallpaper := fyne.NewMenuItem(lang.L("Set as Wallpaper"), func() { view.setAsWallpaper() })
 	setWallpaper.Disabled = true // updateFileMenuState (save.go) enables it once an image is loaded
+	// Also display-only, also bound in wireExportShortcuts - Shift added to
+	// Export image's own Cmd/Ctrl+E, since the two sit right next to each
+	// other in the menu.
+	setWallpaper.Shortcut = &desktop.CustomShortcut{
+		KeyName:  fyne.KeyE,
+		Modifier: fyne.KeyModifierShortcutDefault | fyne.KeyModifierShift,
+	}
 	view.wallpaperItem = setWallpaper
 
 	closeFiles := fyne.NewMenuItem(lang.L("Close Files"), func() { view.closeFiles() })
@@ -54,7 +57,7 @@ func buildMainMenu(view *viewer) *fyne.MainMenu {
 	settings := fyne.NewMenuItem(lang.L("Settings…"), func() { view.settings.Show() })
 
 	fileMenu := fyne.NewMenu(lang.L("File"),
-		open, save, exportPNG, exportJPEG, setWallpaper, closeFiles, fyne.NewMenuItemSeparator(), settings)
+		open, save, export, setWallpaper, closeFiles, fyne.NewMenuItemSeparator(), settings)
 
 	return fyne.NewMainMenu(fileMenu, view.favorites.Menu(), view.help.Menu())
 }

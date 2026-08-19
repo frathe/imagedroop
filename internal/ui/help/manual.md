@@ -118,7 +118,8 @@ This is a viewing option by default: it resets back to upright with **`0`**
 (along with zoom) and — like navigating to a different image — starts over at
 upright on the next picture you view. To keep it, use **File -> Save
 Changes** (`Cmd/Ctrl+S`) to write it back into the file, or **File -> Export
-as PNG…/JPEG…** to write a rotated copy elsewhere; see "Menu" below.
+image** (`Cmd/Ctrl+E`) to write a rotated copy elsewhere in a format you
+choose; see "Menu" below.
 Rotating swaps the window between landscape and portrait to fit the image's
 new orientation, the same as loading a different image would.
 
@@ -461,6 +462,13 @@ many of them actually went.
   make/model, lens, exposure, aperture, ISO, focal length, capture date,
   coordinates);
   also reachable via the **"Show EXIF data"** link in the info overlay
+- **`Cmd`/`Ctrl+E`** — export the current image to a new file: a prompt asks
+  which format (**`←`**/**`→`** to choose between PNG and JPEG, **`Return`**
+  to export, **`Esc`** to cancel), then you name the file in the system save
+  panel (see "Menu" below). Plain `E` above still opens the EXIF window —
+  only the modified combination exports
+- **`Cmd`/`Ctrl+Shift+E`** — make the current image the desktop wallpaper
+  (see "Menu" below)
 - **`Cmd`/`Ctrl+C`** — copy the current image to the system clipboard, as
   image data you can paste into another app (not a file). In the grid
   overview it copies the selected *files* instead, so a paste in your file
@@ -504,18 +512,22 @@ needed. macOS and Windows need nothing extra either way.
   and for formats PicFetch can read but not write (WebP, HEIC, ICO, XPM, SVG).
   This replaces the original file, and re-encodes rather than patching it,
   so EXIF metadata is not carried over
-- **File -> Export as PNG… / Export as JPEG…** — saves the image as it
-  currently appears, rotation included, to a new file you name. Unlike Save
-  Changes it works for every image the app can display, including WebP and
-  HEIC files and a single frame of an animated GIF, and it never touches the
-  original. If the name you type already ends in a format PicFetch can
-  write, that format wins over the menu item you picked
-- **File -> Set as Wallpaper** — makes the image on screen your desktop
-  wallpaper, exactly as it currently appears. PicFetch writes its own copy
-  into its cache folder and points the desktop at that, so the wallpaper
-  keeps working after you move, rename or trash the original. On Linux this
-  needs `gsettings` (GNOME, Cinnamon, Budgie, Unity) or
-  `plasma-apply-wallpaperimage` (KDE Plasma 5.24+); a message says so if
+- **File -> Export image** (`Cmd/Ctrl+E`) — asks which format to export to
+  with a keyboard-enabled prompt, the same shape as the delete confirmation
+  card: **`←`**/**`→`** to choose between **PNG** (selected by default) and
+  **JPEG**, **`Return`** to export, **`Esc`** to cancel without opening a
+  save panel at all. The chosen format then saves the image as it currently
+  appears, rotation included, to a new file you name. Unlike Save Changes it
+  works for every image the app can display, including WebP and HEIC files
+  and a single frame of an animated GIF, and it never touches the original.
+  If the name you type already ends in a format PicFetch can write, that
+  format wins over the one you chose in the prompt
+- **File -> Set as Wallpaper** (`Cmd/Ctrl+Shift+E`) — makes the image on
+  screen your desktop wallpaper, exactly as it currently appears. PicFetch
+  writes its own copy into its cache folder and points the desktop at that,
+  so the wallpaper keeps working after you move, rename or trash the
+  original. On Linux this needs `gsettings` (GNOME, Cinnamon, Budgie, Unity)
+  or `plasma-apply-wallpaperimage` (KDE Plasma 5.24+); a message says so if
   neither is installed
 - **File -> Close Files** — returns to the drop zone without quitting
 - **File -> Settings…** — opens the settings window
@@ -638,7 +650,7 @@ Things PicFetch deliberately does not do (yet):
 - No image editing beyond rotation: no cropping, no colour or exposure
   adjustment, no resizing. What you can write to disk is a rotation
   (**File -> Save Changes**), a copy in another format
-  (**File -> Export as PNG…/JPEG…**) and a wallpaper copy
+  (**File -> Export image**) and a wallpaper copy
   (**File -> Set as Wallpaper**), all described in "Menu" below
 - No support for RAW or PDF
 - No playback controls (pause, step, restart) for animated GIFs

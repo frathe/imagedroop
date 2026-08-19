@@ -125,13 +125,14 @@ func buildViewer(application fyne.App, startup startupState) (*viewer, fyne.Wind
 	// Order is paint order, back to front, and the tail of it is load-bearing.
 	// The grid's backdrop is opaque and fills the window, so anything stacked
 	// below it is simply invisible while it is open - which is fine for the
-	// image view underneath, and wrong for the two things that now have to
-	// appear *over* an open grid: the batch delete confirmation (whose own
-	// scrim is translucent, so the grid dims through it) and the toast that
-	// reports what the batch did.
+	// image view underneath, and wrong for the things that now have to
+	// appear *over* an open grid: the batch delete confirmation and the
+	// export-format prompt (both share widgets.ChoiceCard, whose own scrim
+	// is translucent, so the grid dims through it rather than being hidden
+	// by it) and the toast that reports what the batch did.
 	window.SetContent(container.New(windowSizeTracker(view, window),
 		view.zoom.Widget(), dz.root, scanContainer, sortContainer, overlay, infoOverlay,
-		view.grid.Overlay(), view.deletion.Overlay(), toastOverlay))
+		view.grid.Overlay(), view.deletion.Overlay(), view.exportPrompt.Overlay(), toastOverlay))
 	window.SetMainMenu(buildMainMenu(view))
 
 	window.SetOnDropped(func(_ fyne.Position, uris []fyne.URI) {

@@ -36,6 +36,7 @@ func wireGlobalShortcuts(c shortcutAdder, view *viewer) {
 	wireDeleteShortcut(c, view)
 	wireSelectAllShortcut(c, view)
 	wireSaveShortcut(c, view)
+	wireExportShortcuts(c, view)
 }
 
 // wireOpenShortcuts binds Cmd/Ctrl+O and Cmd/Ctrl+Shift+O to the same
@@ -149,4 +150,26 @@ func wireSaveShortcut(c shortcutAdder, view *viewer) {
 		KeyName:  fyne.KeyS,
 		Modifier: fyne.KeyModifierShortcutDefault,
 	}, func(fyne.Shortcut) { view.saveRotation() })
+}
+
+// wireExportShortcuts binds Cmd/Ctrl+E to promptExport (export.go) and
+// Cmd/Ctrl+Shift+E to setAsWallpaper (wallpaper.go) - the File menu's
+// "Export image" and "Set as Wallpaper" actions, both displayed on their
+// menu items (menu.go) as well as bound here. E isn't one of the driver's
+// specially-cased bare shortcuts (only Z/Y/V/C/Insert/X/A are - see
+// wireClipboardShortcuts' own comment), so plain desktop.CustomShortcuts
+// reach both combos the same way Cmd/Ctrl+S reaches wireSaveShortcut above -
+// unlike Shift+Delete (wireDeleteShortcut) or bare Cmd/Ctrl+C
+// (wireClipboardShortcuts), neither needs a built-in fyne.Shortcut worked
+// around. Plain, unmodified E still opens the EXIF panel (handleKeyEvent,
+// keys.go) - only these two modified combos are new.
+func wireExportShortcuts(c shortcutAdder, view *viewer) {
+	c.AddShortcut(&desktop.CustomShortcut{
+		KeyName:  fyne.KeyE,
+		Modifier: fyne.KeyModifierShortcutDefault,
+	}, func(fyne.Shortcut) { view.promptExport() })
+	c.AddShortcut(&desktop.CustomShortcut{
+		KeyName:  fyne.KeyE,
+		Modifier: fyne.KeyModifierShortcutDefault | fyne.KeyModifierShift,
+	}, func(fyne.Shortcut) { view.setAsWallpaper() })
 }

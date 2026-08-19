@@ -1,5 +1,7 @@
 // Writing the frame on screen out as a new file, in a format of the user's
-// choosing rather than the source file's - the File > "Export as…" actions.
+// choosing rather than the source file's - the File > "Export image" prompt
+// (promptExport, also Cmd/Ctrl+E) and the exportAs it runs once a format is
+// chosen.
 
 package ui
 
@@ -30,8 +32,19 @@ const (
 	exportJPEGExt = ".jpg"
 )
 
-// canExport reports whether the File > "Export as…" items should be
-// enabled. Deliberately a much weaker condition than canSaveRotation
+// pngChoice and jpegChoice are the export prompt's two button indices - PNG
+// first/left and the default selection (lossless, so the safer of the two
+// formats to land on if Return is pressed without moving the ring), JPEG
+// second/right. These place the buttons rather than merely describing them:
+// registerFeatures (features.go) fills the card's choice slice through them.
+const (
+	pngChoice  = 0
+	jpegChoice = 1
+)
+
+// canExport reports whether the File > "Export image" item (and its prompt's
+// PNG/JPEG choices) should be enabled. Deliberately a much weaker condition
+// than canSaveRotation
 // (save.go), because an export answers a different question - "write these
 // pixels somewhere new", not "write them back where they came from":
 //
@@ -56,7 +69,41 @@ func (v *viewer) canExport() bool {
 	return ok && !v.loading.Load() && v.img.Image != nil
 }
 
-// exportAs is the File menu's "Export as PNG…"/"Export as JPEG…" action for
+// promptExport is the File menu's "Export image" action (also Cmd/Ctrl+E,
+// see wireExportShortcuts in shortcuts.go): it raises v.exportPrompt, the
+// widgets.ChoiceCard built in features.go, asking which format to export to
+// before exportAs actually runs. A no-op unless canExport() is currently
+// true - re-checked here rather than trusted from the menu item's Disabled
+// state, since the shortcut bypasses the menu entirely, mirroring
+// saveRotation's own check. Escape (or clicking neither button) leaves
+// without opening the save panel at all, since exportAs is only ever reached
+// through a choice's OnChosen.
+//
+// The other two guards are about the delete confirmation, and the dangerous
+// one is deletion.Visible(). Cmd/Ctrl+E is a shortcut, so it reaches this
+// function without passing handleKeyEvent's dispatch at all - it can fire
+// while the delete card is up. This prompt paints above that card (see the
+// window stack in build.go) while handleKeyEvent still routes every key to
+// deletion, which it checks first: the user would be reading "Export as
+// which format?", pressing Right expecting JPEG, and moving the *hidden*
+// delete card's ring onto "Move to Trash" for Return to press. requestDelete
+// (batch.go) carries the mirror-image guard for Shift+Delete arriving while
+// this prompt is up.
+//
+// exportPrompt.Visible() is the milder one, and the same guard
+// deletion.RequestFiles makes for itself: a second Cmd/Ctrl+E mid-decision
+// would otherwise re-Show the card and reset the ring back to PNG under
+// someone who had already moved it to JPEG and was reaching for Return.
+func (v *viewer) promptExport() {
+	if !v.canExport() || v.deletion.Visible() || v.exportPrompt.Visible() {
+		return
+	}
+
+	v.exportPrompt.Show(lang.L("Export as which format?"))
+}
+
+// exportAs is the export prompt's PNG/JPEG choice action (export.go's
+// promptExport, or a menu/shortcut bypassed test calling it directly) for
 // the format ext: it opens the OS's own save panel and writes the frame on
 // screen to whatever the user names there. A no-op unless canExport() is
 // currently true.
