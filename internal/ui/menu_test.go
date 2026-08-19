@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/driver/desktop"
 
 	"github.com/frathe/picfetch/internal/favstore"
 	"github.com/frathe/picfetch/internal/filepicker"
@@ -67,6 +68,40 @@ func TestBuildMainMenu_Structure(t *testing.T) {
 	}
 	if got := menu.Items[2]; got.Label != "Help" {
 		t.Errorf("third menu label = %q, want %q", got.Label, "Help")
+	}
+}
+
+// TestBuildMainMenu_ExportAndWallpaperItemsDisplayTheirAccelerators covers
+// the display-only *desktop.CustomShortcut menu.go sets on both items -
+// distinct from wireExportShortcuts (export_test.go), which is what
+// actually binds Cmd/Ctrl+E and Cmd/Ctrl+Shift+E; this only pins what the
+// menu shows next to each item as a hint.
+func TestBuildMainMenu_ExportAndWallpaperItemsDisplayTheirAccelerators(t *testing.T) {
+	v := newTestViewer(t)
+	file := buildMainMenu(v).Items[0]
+
+	// Guarded the way TestBuildMainMenu_Structure guards the same indices: an
+	// index-out-of-range here would panic rather than fail, and a panic takes
+	// the whole package's test binary - every other result in internal/ui -
+	// down with it.
+	if len(file.Items) < 4 {
+		t.Fatalf("File menu items = %d, want at least 4 (through Set as Wallpaper)", len(file.Items))
+	}
+
+	export, ok := file.Items[2].Shortcut.(*desktop.CustomShortcut)
+	if !ok {
+		t.Fatalf("Export image item's Shortcut = %#v, want a *desktop.CustomShortcut", file.Items[2].Shortcut)
+	}
+	if export.KeyName != fyne.KeyE || export.Modifier != fyne.KeyModifierShortcutDefault {
+		t.Errorf("Export image accelerator = %+v, want {KeyE, KeyModifierShortcutDefault}", export)
+	}
+
+	wallpaper, ok := file.Items[3].Shortcut.(*desktop.CustomShortcut)
+	if !ok {
+		t.Fatalf("Set as Wallpaper item's Shortcut = %#v, want a *desktop.CustomShortcut", file.Items[3].Shortcut)
+	}
+	if wallpaper.KeyName != fyne.KeyE || wallpaper.Modifier != fyne.KeyModifierShortcutDefault|fyne.KeyModifierShift {
+		t.Errorf("Set as Wallpaper accelerator = %+v, want {KeyE, KeyModifierShortcutDefault|KeyModifierShift}", wallpaper)
 	}
 }
 

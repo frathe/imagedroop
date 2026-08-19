@@ -90,6 +90,37 @@ func TestHandleTypedRune_GridVisible_SwallowedByDeleteConfirmation(t *testing.T)
 	}
 }
 
+// TestHandleTypedRune_GridVisible_SwallowedByExportPrompt is the export
+// prompt's twin of TestHandleTypedRune_GridVisible_SwallowedByDeleteConfirmation
+// above: it also owns the keyboard whole while it's up, so a typed character
+// must not reach a search behind it either.
+func TestHandleTypedRune_GridVisible_SwallowedByExportPrompt(t *testing.T) {
+	v := newTestViewer(t)
+
+	a := uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White)
+	dropAndWait(t, v, a)
+	warmThumbs(t, v)
+
+	v.grid.Toggle()
+	v.handleTypedRune('/')
+	v.promptExport()
+	// Asserted rather than assumed, unlike the delete twin's own
+	// deletion.Request(): promptExport can silently no-op behind any of its
+	// guards (canExport, a delete card already up, the prompt already up),
+	// and a future one - grid.Visible() is plausible, given requestDelete
+	// already special-cases the grid - would leave this test failing on the
+	// query below as if the key dispatcher had broken.
+	if !v.exportPrompt.Visible() {
+		t.Fatal("setup: the export prompt should be up after promptExport")
+	}
+
+	v.handleTypedRune('a')
+
+	if v.grid.Query() != "" {
+		t.Errorf("Query() = %q, want it untouched while the export prompt is up", v.grid.Query())
+	}
+}
+
 // TestHandleKeyEvent_GridVisible_SwallowsNavigation is the dispatcher's
 // half of the contract: while the grid is up, ordinary navigation must not
 // slip through and change what's on screen behind it.
