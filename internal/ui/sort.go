@@ -1,8 +1,6 @@
 package ui
 
 import (
-	"context"
-
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/lang"
 
@@ -56,22 +54,21 @@ func (v *viewer) SetSortMode(m filesort.Mode) {
 	})
 }
 
-// invalidateSort bumps sortGen and, if a reorder is currently in flight,
+// invalidateSort advances sortLifecycle and, if a reorder is currently in flight,
 // cancels its context so filesort.Order's per-file stat/Exif loop notices
 // and stops promptly instead of running to completion for a result that's
-// already guaranteed to be discarded - see sortGen's own field comment for
+// already guaranteed to be discarded - see sortLifecycle's field comment for
 // every caller (a newer sort superseding an older one, Escape via
-// cancelSort, RemoveFile, clearToDropzone). Returns the new generation, for
-// startSort's own use as the gen its freshly-started sort should report
-// under - nothing else could have bumped sortGen again between this call
-// and that one, since both run synchronously on the UI goroutine.
+// cancelSort, RemoveFile, clearToDropzone). It returns the new revision for
+// tests and diagnostics.
 func (v *viewer) invalidateSort() uint64 {
-	gen := v.sortGen.Add(1)
+	revision := v.sortLifecycle.invalidate()
 	if v.sorting {
 		v.sorting = false
-		v.sortCancel()
+		v.sortSpinner.Hide()
+		v.sortLabel.Hide()
 	}
-	return gen
+	return revision
 }
 
 // startSort reorders unsorted under mode in the background, showing the sort
@@ -80,19 +77,16 @@ func (v *viewer) invalidateSort() uint64 {
 // potentially large file set: its capture-date/modified/size modes stat or
 // Exif-read every file, which freezes the UI for as long as that takes if
 // done inline on the UI goroutine (see filesort.Order's own doc comment).
-// Any sort already in flight is cancelled first via invalidateSort, rather
+// Any sort already in flight is cancelled by sortLifecycle.begin, rather
 // than left to keep computing a result this call already supersedes - so
 // pressing S repeatedly cycles straight through modes instead of queuing up
 // wasted background work behind whichever one happened to be slowest.
-// onDone runs once, and only if this call's generation is still current once
-// the reorder finishes - see sortGen's field comment for every way it can be
+// onDone runs once, and only if this call's token is still current once
+// the reorder finishes - see sortLifecycle's field comment for every way it can be
 // superseded.
 func (v *viewer) startSort(mode filesort.Mode, unsorted []fyne.URI, onDone func(ordered []fyne.URI)) {
-	gen := v.invalidateSort()
+	token := v.sortLifecycle.begin()
 	v.sorting = true
-
-	ctx, cancel := context.WithCancel(context.Background())
-	v.sortCancel = cancel
 
 	sortDone := make(chan struct{})
 	v.sortDone = sortDone
@@ -105,9 +99,9 @@ func (v *viewer) startSort(mode filesort.Mode, unsorted []fyne.URI, onDone func(
 	v.ForceRepaint()
 
 	go func() {
-		ordered := filesort.Order(ctx, mode, unsorted)
+		ordered := filesort.Order(token.context(), mode, unsorted)
 		fyne.Do(func() {
-			v.finishSort(gen, ordered, sortDone, cancel, onDone)
+			v.finishSort(token, ordered, sortDone, onDone)
 		})
 	}()
 }
@@ -115,37 +109,33 @@ func (v *viewer) startSort(mode filesort.Mode, unsorted []fyne.URI, onDone func(
 // finishSort is startSort's completion step, shaped like drop.go's
 // applyScanResult: it must run on the UI goroutine (startSort's goroutine
 // wraps it in fyne.Do), always closes sortDone (honoring that channel's
-// contract even when a newer generation has made this result stale), and
-// always releases cancel - the context.CancelFunc for *this* generation's
-// own ctx, captured by the goroutine that's calling in, not read back
-// through v.sortCancel (which may already point at a newer generation's
-// cancel func by the time this runs).
-func (v *viewer) finishSort(gen uint64, ordered []fyne.URI, sortDone chan struct{}, cancel context.CancelFunc, onDone func([]fyne.URI)) {
+// contract even when a newer request has made this result stale), and always
+// releases this invocation's own token context.
+func (v *viewer) finishSort(token requestToken, ordered []fyne.URI, sortDone chan struct{}, onDone func([]fyne.URI)) {
 	defer close(sortDone)
-	defer cancel()
+	defer token.cancelContext()
 
-	v.sortSpinner.Hide()
-	v.sortLabel.Hide()
-
-	// Superseded either by a newer sort (another startSort call bumped
-	// sortGen again) or by something else that changed
+	// Superseded either by a newer sort or by something else that changed
 	// v.state.files/v.state.unsortedFiles while this one was still computing
 	// (Shift+Delete, or Escape/File>Close - see those call sites' own
 	// invalidateSort call). Applying ordered in either case would silently
 	// clobber newer state, so just drop it.
-	if gen != v.sortGen.Load() {
+	if !token.current() {
 		return
 	}
 
-	// v.sorting is cleared here, inside the staleness check, rather than
-	// unconditionally like the spinner/label above: if two sorts overlap (a
+	// v.sorting and the progress widgets are finalized here, inside the
+	// staleness check: if two sorts overlap (a
 	// second large first-drop landing before the first one's reorder
 	// finishes, say), the earlier, stale one's finishSort must not report
 	// "no sort in flight" while the current one is still computing - that
 	// would reopen the Escape-quits-mid-reorder bug v.sorting exists to
-	// close, just for a narrower window. Only the generation that's still
+	// close, just for a narrower window. Only the token that's still
 	// current when it finishes gets to clear it.
 	v.sorting = false
+	v.sortSpinner.Hide()
+	v.sortLabel.Hide()
+	v.fileSetRevision.advance()
 
 	onDone(ordered)
 }

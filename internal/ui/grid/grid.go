@@ -56,9 +56,10 @@ type Host interface {
 	// starts when the grid opens.
 	CurrentIndex() int
 
-	// Generation is the app's load generation. A decode captures it when
-	// it starts and discards its result if it no longer matches, so a
-	// fresh drop can't have a stale thumbnail painted into it.
+	// Generation is the app's index-to-URI file-set revision. A decode
+	// captures it when it starts and discards its result if it no longer
+	// matches, so replacement, reorder, or removal cannot paint a stale
+	// thumbnail. Navigation alone leaves it unchanged.
 	Generation() uint64
 
 	// ShowImage displays the file at index i.

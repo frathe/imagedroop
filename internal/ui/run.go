@@ -62,7 +62,10 @@ func Run(application fyne.App, initial []fyne.URI) {
 		view.stopWinPosPoll()
 		view.settings.StopTracking()
 		view.exif.StopTracking()
-		close(view.vectorStop)
+		view.scanLifecycle.invalidate()
+		view.loadLifecycle.invalidate()
+		view.sortLifecycle.invalidate()
+		view.vectorLifecycle.invalidate()
 
 		session.Save(application, view.state.unsortedFiles)
 		preferences.Save(application, view.currentPreferences())

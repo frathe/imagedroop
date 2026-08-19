@@ -3,7 +3,6 @@
 package ui
 
 import (
-	"context"
 	"errors"
 	"fmt"
 	"image"
@@ -24,11 +23,6 @@ func (v *viewer) ShowImage(i int) {
 	if len(v.state.files) == 0 {
 		return
 	}
-
-	// A playing animation belongs to the image being navigated away from;
-	// stop it now, alongside the gen bump below that would make it stale
-	// anyway, so it exits immediately instead of at its next frame tick.
-	v.stopAnimation()
 
 	// Once an image is on screen we keep showing it until the new one is
 	// ready, instead of blanking out to the drop-hint on every navigation.
@@ -53,48 +47,32 @@ func (v *viewer) ShowImage(i int) {
 	}
 	v.ForceRepaint()
 
-	// A new generation invalidates any decode/retry chain still in flight,
+	// A new request token invalidates any decode/retry chain still in flight,
 	// so a slow load can never overwrite a newer selection. Every retry in
 	// attemptLoad below - for a file that turns out to be broken - shares
-	// this one generation, this one done channel, and this one ctx: they're
+	// this one token and done channel: they're
 	// all part of the same logical navigation, not independent ones, so a
-	// genuinely newer ShowImage() call (which bumps gen again, via
-	// invalidateLoad below) correctly invalidates the whole chain - and,
-	// via ctx, stops attemptLoad's/preloadOne's I/O instead of just
+	// genuinely newer ShowImage() call correctly invalidates the whole chain
+	// and, via the token's context, stops attemptLoad's/preloadOne's I/O instead of just
 	// discarding a result they'd otherwise run to completion for - and a
 	// waiter on done sees the chain as finished only once it truly settles
 	// instead of racing whichever retry closes a channel first.
-	gen := v.invalidateLoad()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	v.loadCancel = cancel
+	token := v.loadLifecycle.begin()
 
 	done := make(chan struct{})
 	v.loadDone = done
 
-	v.attemptLoad(ctx, i, gen, done)
+	v.attemptLoad(token, i, done)
 }
 
-// invalidateLoad bumps gen and, if a load's decode/preload work is
-// currently in flight, cancels its context - mirroring invalidateSort
-// (sort.go) for the load/preload generation instead of the sort one. This
-// is what makes attemptLoad's and preloadOne's own ReadAndProbe/
-// DecodeLoaded calls notice and stop doing I/O for a superseded generation,
-// instead of running to completion for a result the gen check they already
-// make would only end up discarding anyway. Called by ShowImage (a fresh
-// navigation) and every other site that already bumped gen directly before
-// this existed: cancelScan, handleDrop (drop.go), and clearToDropzone
-// (viewer.go).
+// invalidateLoad cancels and permanently supersedes the current logical
+// navigation, including its decode/retry chain, preloads, and animation.
 func (v *viewer) invalidateLoad() uint64 {
-	gen := v.gen.Add(1)
-	if v.loadCancel != nil {
-		v.loadCancel()
-	}
-	return gen
+	return v.loadLifecycle.invalidate()
 }
 
 // attemptLoad decodes and displays v.state.files[i] (wrapped into range), sharing
-// gen, done, and ctx with the rest of its retry chain - see ShowImage's
+// token and done with the rest of its retry chain - see ShowImage's
 // comment. It first reads the file and probes just its header
 // (imaging.ReadAndProbe), which is enough to reject an invalid file
 // instantly, without spending time on a full pixel decode that was only
@@ -103,7 +81,7 @@ func (v *viewer) invalidateLoad() uint64 {
 // RemoveFile and retries at the same position, which now holds what used
 // to be the next file (or wraps around to the first, if i was the last);
 // once nothing is left it falls back to the empty-state error screen.
-func (v *viewer) attemptLoad(ctx context.Context, i int, gen uint64, done chan struct{}) {
+func (v *viewer) attemptLoad(token requestToken, i int, done chan struct{}) {
 	n := len(v.state.files)
 	i = ((i % n) + n) % n
 	v.state.index = i
@@ -115,12 +93,16 @@ func (v *viewer) attemptLoad(ctx context.Context, i int, gen uint64, done chan s
 	// the UI goroutine that called ShowImage(). No fyne.Do hop is needed since
 	// we're already on it.
 	if loaded, ok := v.imgCache.Get(u.String()); ok {
-		v.finishLoad(ctx, i, u, loaded, gen, done)
+		if !token.current() {
+			close(done)
+			return
+		}
+		v.finishLoad(token, i, u, loaded, done)
 		return
 	}
 
 	go func() {
-		data, bounds, err := imaging.ReadAndProbe(ctx, u)
+		data, bounds, err := imaging.ReadAndProbe(token.context(), u)
 
 		if err == nil {
 			fyne.Do(func() {
@@ -134,7 +116,7 @@ func (v *viewer) attemptLoad(ctx context.Context, i int, gen uint64, done chan s
 				// grid. Only reachable since the grid's batch delete, which
 				// re-shows whatever takes a deleted file's place without
 				// closing the grid first.
-				if gen == v.gen.Load() && !v.slides.Active() && !v.grid.Visible() {
+				if token.current() && !v.slides.Active() && !v.grid.Visible() {
 					v.undoGridMaximize()
 					resizeToImage(v.win, bounds, v.maxWinW, v.maxWinH)
 				}
@@ -147,7 +129,7 @@ func (v *viewer) attemptLoad(ctx context.Context, i int, gen uint64, done chan s
 			// animation whose composited frames couldn't fit in the cache
 			// at all is exactly the one not worth compositing, so this
 			// needs no limit of its own.
-			loaded, err = imaging.DecodeLoaded(ctx, data, v.imgCache.Budget())
+			loaded, err = imaging.DecodeLoaded(token.context(), data, v.imgCache.Budget())
 			if err == nil {
 				loaded.FileSize = int64(len(data))
 				loaded.HasEXIF = !imaging.ReadMetadata(data).Empty()
@@ -155,7 +137,7 @@ func (v *viewer) attemptLoad(ctx context.Context, i int, gen uint64, done chan s
 		}
 
 		fyne.Do(func() {
-			if gen != v.gen.Load() {
+			if !token.current() {
 				close(done) // user already navigated elsewhere
 				return
 			}
@@ -173,7 +155,7 @@ func (v *viewer) attemptLoad(ctx context.Context, i int, gen uint64, done chan s
 					msg = fmt.Sprintf(lang.L("%q is too large to open"), u.Name())
 				}
 
-				v.retryAfterLoadFailure(ctx, msg, i, gen, done)
+				v.retryAfterLoadFailure(token, msg, i, done)
 				return
 			}
 
@@ -181,7 +163,7 @@ func (v *viewer) attemptLoad(ctx context.Context, i int, gen uint64, done chan s
 
 			if b.Dx() == 0 || b.Dy() == 0 {
 				msg := fmt.Sprintf(lang.L("invalid image dimensions for %q"), u.Name())
-				v.retryAfterLoadFailure(ctx, msg, i, gen, done)
+				v.retryAfterLoadFailure(token, msg, i, done)
 				return
 			}
 
@@ -193,7 +175,7 @@ func (v *viewer) attemptLoad(ctx context.Context, i int, gen uint64, done chan s
 			}
 
 			v.imgCache.Add(u.String(), loaded)
-			v.finishLoad(ctx, i, u, loaded, gen, done)
+			v.finishLoad(token, i, u, loaded, done)
 		})
 	}()
 }
@@ -207,7 +189,7 @@ func (v *viewer) attemptLoad(ctx context.Context, i int, gen uint64, done chan s
 // test driver runs synchronously on whatever goroutine called it) and its
 // cache-hit path (called directly from attemptLoad, always on whichever
 // goroutine called ShowImage()).
-func (v *viewer) finishLoad(ctx context.Context, _ int, u fyne.URI, loaded *imaging.LoadedImage, gen uint64, done chan struct{}) {
+func (v *viewer) finishLoad(token requestToken, _ int, u fyne.URI, loaded *imaging.LoadedImage, done chan struct{}) {
 	b := loaded.Frames[0].Bounds()
 
 	v.displayFrames = loaded.Frames
@@ -295,9 +277,9 @@ func (v *viewer) finishLoad(ctx context.Context, _ int, u fyne.URI, loaded *imag
 	v.updateFileMenuState() // rotation just reset to 0 above, and loading has just cleared - see canSaveRotation
 	v.ForceRepaint()
 
-	// Animated GIFs keep playing until a newer generation (a navigation or
-	// a fresh drop) supersedes this one; animate checks gen itself so no
-	// separate cancellation is needed. It's spawned only after
+	// Animated GIFs keep playing until a newer load request (a navigation or
+	// a fresh drop) supersedes this one; animate checks the shared token and
+	// waits on its context. It's spawned only after
 	// ForceRepaint above has finished, not before via a defer: under the
 	// real driver both go through the same serialized fyne.Do queue either
 	// way, but the fyne test driver runs fyne.Do synchronously on the
@@ -305,10 +287,8 @@ func (v *viewer) finishLoad(ctx context.Context, _ int, u fyne.URI, loaded *imag
 	// Refresh race with this goroutine's still-running ForceRepaint.
 	if len(loaded.Frames) > 1 {
 		stopped := make(chan struct{})
-		stop := make(chan struct{})
 		v.animStopped = stopped
-		v.animStop = stop
-		go v.animate(gen, loaded.Frames, loaded.Delays, stop, stopped)
+		go v.animate(token, loaded.Frames, loaded.Delays, stopped)
 	}
 
 	// Must run - and finish reading v.state.files/v.state.index - before done closes
@@ -316,10 +296,10 @@ func (v *viewer) finishLoad(ctx context.Context, _ int, u fyne.URI, loaded *imag
 	// future navigation) synchronizes on to know this call is finished
 	// touching viewer state. Under the fyne test driver, this whole
 	// function already runs on whatever goroutine called fyne.Do rather
-	// than a dedicated UI goroutine (see attemptLoad's comment on gen), so
+	// than a dedicated UI goroutine (see attemptLoad's token comment), so
 	// closing done first would let a waiter go on to mutate v.state.files - via
 	// reset() or a fresh drop - concurrently with this read.
-	v.preloadNeighbors(ctx, gen)
+	v.preloadNeighbors(token)
 
 	close(done)
 }
@@ -329,11 +309,11 @@ func (v *viewer) finishLoad(ctx context.Context, _ int, u fyne.URI, loaded *imag
 // cache hit instead of a fresh disk read + decode. Always called from
 // finishLoad before done closes - see its comment - so reading
 // v.state.files/v.state.index here can't race a waiter that's about to mutate them.
-// ctx is the same one ShowImage created for this generation - the
-// preloads it starts belong to the generation that's now on screen, so
+// token is the same one ShowImage created for this navigation - the
+// preloads it starts belong to the request that's now on screen, so
 // they get cancelled alongside its own decode the moment a newer
 // navigation or drop supersedes it (see invalidateLoad).
-func (v *viewer) preloadNeighbors(ctx context.Context, gen uint64) {
+func (v *viewer) preloadNeighbors(token requestToken) {
 	n := len(v.state.files)
 	if n < 2 {
 		return
@@ -342,9 +322,9 @@ func (v *viewer) preloadNeighbors(ctx context.Context, gen uint64) {
 	next := ((v.state.index+1)%n + n) % n
 	prev := ((v.state.index-1)%n + n) % n
 
-	v.preloadOne(ctx, v.state.files[next], gen)
+	v.preloadOne(token, v.state.files[next])
 	if prev != next {
-		v.preloadOne(ctx, v.state.files[prev], gen)
+		v.preloadOne(token, v.state.files[prev])
 	}
 }
 
@@ -354,13 +334,13 @@ const preloadConcurrency = 2
 
 // preloadOne decodes u in the background and adds it to imgCache, unless
 // it's already cached or another preload of the same URI is already in
-// flight. gen is checked before and after the decode so a preload started
+// flight. The token is checked before and after the decode so a preload started
 // for a set of files that's since been replaced by a fresh drop doesn't
-// keep working, or land a stale result, after the fact; ctx backs that up
+// keep working, or land a stale result, after the fact; its context backs that up
 // by making ReadAndProbe/DecodeLoaded themselves stop doing I/O partway
 // through, for a preload that goes stale while it's actually running
 // rather than while still queued behind preloadSem.
-func (v *viewer) preloadOne(ctx context.Context, u fyne.URI, gen uint64) {
+func (v *viewer) preloadOne(token requestToken, u fyne.URI) {
 	key := u.String()
 
 	// Contains, not Get: a presence test on a speculative path shouldn't
@@ -380,14 +360,18 @@ func (v *viewer) preloadOne(ctx context.Context, u fyne.URI, gen uint64) {
 		// preloadNeighbors only ever asks for two files per settled image,
 		// but rapid navigation could otherwise stack an unbounded number
 		// of these full-size decode goroutines.
-		v.preloadSem <- struct{}{}
+		select {
+		case v.preloadSem <- struct{}{}:
+		case <-token.context().Done():
+			return
+		}
 		defer func() { <-v.preloadSem }()
 
-		if gen != v.gen.Load() {
+		if !token.current() {
 			return
 		}
 
-		data, bounds, err := imaging.ReadAndProbe(ctx, u)
+		data, bounds, err := imaging.ReadAndProbe(token.context(), u)
 		if err != nil {
 			return
 		}
@@ -407,7 +391,7 @@ func (v *viewer) preloadOne(ctx context.Context, u fyne.URI, gen uint64) {
 			return
 		}
 
-		loaded, err := imaging.DecodeLoaded(ctx, data, budget)
+		loaded, err := imaging.DecodeLoaded(token.context(), data, budget)
 		if err != nil {
 			return
 		}
@@ -419,7 +403,7 @@ func (v *viewer) preloadOne(ctx context.Context, u fyne.URI, gen uint64) {
 			return
 		}
 
-		if gen != v.gen.Load() {
+		if !token.current() {
 			return
 		}
 
@@ -431,25 +415,12 @@ func (v *viewer) preloadOne(ctx context.Context, u fyne.URI, gen uint64) {
 	})
 }
 
-// stopAnimation wakes the current animate goroutine, if any, out of its
-// frame-delay sleep so it exits right away. Called wherever a gen bump
-// supersedes a possibly-playing animation (ShowImage, clearToDropzone,
-// handleDrop, cancelScan); the nil-out keeps it idempotent, and it only
-// ever runs on the UI goroutine so the field swap needs no
-// synchronization. animStopped still signals the actual exit.
-func (v *viewer) stopAnimation() {
-	if v.animStop != nil {
-		close(v.animStop)
-		v.animStop = nil
-	}
-}
-
 // retryAfterLoadFailure reports msg, drops v.state.files[i], and either continues
 // the retry chain via attemptLoad or, if that emptied the set, falls back
 // to the empty-state error screen and finalizes done. See show/attemptLoad
-// for why gen, done, and ctx are threaded through unchanged rather than
+// for why token and done are threaded through unchanged rather than
 // starting a fresh chain.
-func (v *viewer) retryAfterLoadFailure(ctx context.Context, msg string, i int, gen uint64, done chan struct{}) {
+func (v *viewer) retryAfterLoadFailure(token requestToken, msg string, i int, done chan struct{}) {
 	v.RemoveFile(i)
 
 	if len(v.state.files) == 0 {
@@ -459,37 +430,33 @@ func (v *viewer) retryAfterLoadFailure(ctx context.Context, msg string, i int, g
 	}
 
 	v.ShowToast(msg)
-	v.attemptLoad(ctx, i, gen, done)
+	v.attemptLoad(token, i, done)
 }
 
 // animate cycles an animated GIF's frames on their own goroutine, sleeping
 // between frames for each one's delay and updating the canvas image via
-// fyne.Do. It stops on its own once gen no longer matches the viewer's
-// current generation, the same staleness check ShowImage's decode goroutine
-// uses, so a navigation or a fresh drop ends the previous animation without
-// any extra cancellation plumbing. stopped is closed right before it
+// fyne.Do. It stops once its load token is cancelled or superseded, the same
+// staleness contract ShowImage's decode goroutine uses, so a navigation or a
+// fresh drop wakes the previous animation immediately. stopped is closed right before it
 // returns, and animFrame is bumped after every frame write, so tests can
 // wait on those instead of reading v.img.Image from another goroutine - see
 // the animFrame/animStopped comment on the viewer struct.
-func (v *viewer) animate(gen uint64, frames []image.Image, delays []time.Duration, stop, stopped chan struct{}) {
+func (v *viewer) animate(token requestToken, frames []image.Image, delays []time.Duration, stopped chan struct{}) {
+	defer close(stopped)
+
 	idx := 0
 
 	for {
 		select {
 		case <-time.After(delays[idx]):
-		case <-stop:
-			// stopAnimation woke us mid-delay: a navigation or reset has
-			// already superseded this animation, so exit right away instead
-			// of sleeping out the rest of the frame delay just to discover
-			// the stale generation below.
-			close(stopped)
+		case <-token.context().Done():
 			return
 		}
 
 		stale := false
 
 		fyne.Do(func() {
-			if gen != v.gen.Load() {
+			if !token.current() {
 				stale = true
 				return
 			}
@@ -500,7 +467,6 @@ func (v *viewer) animate(gen uint64, frames []image.Image, delays []time.Duratio
 		})
 
 		if stale {
-			close(stopped)
 			return
 		}
 	}

@@ -207,7 +207,9 @@ func drain(t *testing.T, v *viewer) {
 	// slideshow is asked to stop for the same reason, on this goroutine,
 	// since leaving picture-frame mode touches the window.
 	v.invalidateLoad()
-	v.stopAnimation()
+	v.scanLifecycle.invalidate()
+	v.sortLifecycle.invalidate()
+	v.vectorLifecycle.invalidate()
 	v.slides.Exit()
 
 	// Vector re-renders: spawned by any effective-scale change, so a test
@@ -774,58 +776,49 @@ func TestSetMaxScan_FloorsAtOne(t *testing.T) {
 	}
 }
 
-// --- invalidateLoad (load-generation cancellation) -------------------------
+// --- invalidateLoad (load-request cancellation) ----------------------------
 
 // TestInvalidateLoad_CancelsPriorLoadContext checks invalidateLoad's own
-// contract - bump gen, and cancel whatever context the previous generation's
-// decode/preload work was still running under - the same way
-// TestHandleKeyEvent_EscapeDuringFirstDropReorderDoesNotCloseWindow stubs
-// v.sortCancel rather than racing a real background decode to catch it
-// mid-flight.
+// contract: advance the lifecycle and cancel the previous request token.
 func TestInvalidateLoad_CancelsPriorLoadContext(t *testing.T) {
 	v := newTestViewer(t)
 
-	var cancelled bool
-	v.loadCancel = func() { cancelled = true }
-	genBefore := v.gen.Load()
+	token := v.loadLifecycle.begin()
 
 	got := v.invalidateLoad()
 
-	if !cancelled {
+	if token.context().Err() == nil {
 		t.Error("invalidateLoad should cancel the previous generation's load context")
 	}
-	if got != genBefore+1 {
-		t.Errorf("invalidateLoad() = %d, want %d (genBefore+1)", got, genBefore+1)
+	if got != token.revision+1 {
+		t.Errorf("invalidateLoad() = %d, want %d", got, token.revision+1)
 	}
-	if v.gen.Load() != got {
-		t.Errorf("v.gen = %d, want %d", v.gen.Load(), got)
+	if v.loadLifecycle.currentRevision() != got {
+		t.Errorf("load revision = %d, want %d", v.loadLifecycle.currentRevision(), got)
 	}
 }
 
-// TestInvalidateLoad_NilCancelIsSafe checks the guard for the state before
-// any image has ever been shown: v.loadCancel is nil until ShowImage's
-// first call sets it, and every gen-bumping call site (cancelScan,
-// handleDrop, clearToDropzone) can run before that - a first drop's own
-// handleDrop, for one.
-func TestInvalidateLoad_NilCancelIsSafe(t *testing.T) {
+// TestInvalidateLoad_ZeroValueIsSafe covers the state before any image has
+// ever been shown.
+func TestInvalidateLoad_ZeroValueIsSafe(t *testing.T) {
 	v := newTestViewer(t)
-	v.loadCancel = nil
 
 	v.invalidateLoad() // must not panic
 }
 
-// TestShowImage_SetsLoadCancel checks that ShowImage actually wires a real
-// (non-nil) cancel func for its generation, rather than only relying on
-// gen's own staleness check - see loadCancel's field comment for why both
-// exist.
-func TestShowImage_SetsLoadCancel(t *testing.T) {
+// TestShowImage_StartsLoadLifecycle checks that navigation owns a cancellable
+// lifecycle request rather than relying only on a revision comparison.
+func TestShowImage_StartsLoadLifecycle(t *testing.T) {
 	v := newTestViewer(t)
 
 	a := uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White)
 	dropAndWait(t, v, a)
 
-	if v.loadCancel == nil {
-		t.Error("ShowImage should set v.loadCancel so a later navigation can cancel this generation's decode/preload work")
+	v.loadLifecycle.mu.Lock()
+	hasCancel := v.loadLifecycle.cancel != nil
+	v.loadLifecycle.mu.Unlock()
+	if !hasCancel {
+		t.Error("ShowImage should leave a cancellable load request for preloads and animation")
 	}
 }
 
@@ -835,12 +828,12 @@ func TestShowImage_SetsLoadCancel(t *testing.T) {
 // not bump gen or raise a spurious "cancelled scanning" toast.
 func TestCancelScan_NoOpWhenNotScanning(t *testing.T) {
 	v := newTestViewer(t)
-	genBefore := v.gen.Load()
+	revisionBefore := v.scanLifecycle.currentRevision()
 
 	v.cancelScan()
 
-	if v.gen.Load() != genBefore {
-		t.Error("cancelScan should not bump gen when nothing is scanning")
+	if v.scanLifecycle.currentRevision() != revisionBefore {
+		t.Error("cancelScan should not invalidate the scan lifecycle when nothing is scanning")
 	}
 	if v.toast.card.Visible() {
 		t.Error("cancelScan should not raise a toast when nothing is scanning")
@@ -849,14 +842,14 @@ func TestCancelScan_NoOpWhenNotScanning(t *testing.T) {
 
 // TestCancelScan_CancelsInFlightScanWithNoFilesYet drives cancelScan
 // directly against the UI state handleDrop leaves in place while its scan
-// is still in flight (gen bumped, spinner/counter shown, drop zone hidden),
+// is still in flight (token started, spinner/counter shown, drop zone hidden),
 // without racing handleDrop's own background goroutine to reproduce that
 // state - see the note on TestHandleDrop_SupersededScanGoroutineExits below
 // for why the goroutine itself is exercised separately instead.
 func TestCancelScan_CancelsInFlightScanWithNoFilesYet(t *testing.T) {
 	v := newTestViewer(t)
 
-	genBefore := v.gen.Add(1)
+	token := v.scanLifecycle.begin()
 	v.scanning = true
 	v.scanSpinner.Show()
 	v.scanLabel.Show()
@@ -874,8 +867,8 @@ func TestCancelScan_CancelsInFlightScanWithNoFilesYet(t *testing.T) {
 	if !v.dropzone.Visible() || !v.welcomeArt.Visible() {
 		t.Error("drop zone/welcome art should be restored after cancelling a scan that had no files loaded yet")
 	}
-	if v.gen.Load() == genBefore {
-		t.Error("cancelScan should bump gen to invalidate the in-flight scan")
+	if token.current() || token.context().Err() == nil {
+		t.Error("cancelScan should cancel and supersede the in-flight scan token")
 	}
 	if !v.toast.card.Visible() {
 		t.Error("want a toast confirming the scan was cancelled")
@@ -956,6 +949,33 @@ func TestHandleDrop_SupersededScanGoroutineExits(t *testing.T) {
 	if len(v.state.files) != 1 || v.state.files[0].String() != jpegB.String() {
 		t.Errorf("files = %v, want only the second drop's file applied", v.state.files)
 	}
+}
+
+// TestNavigationDoesNotInvalidateScan pins the lifecycle split: a user may
+// browse an existing set while a merge-mode directory scan is in flight, and
+// that navigation must not silently strand scanning=true or discard the scan.
+func TestNavigationDoesNotInvalidateScan(t *testing.T) {
+	v := newTestViewer(t)
+
+	a := uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White)
+	b := uitest.TempJPEGURI(t, "b.jpg", 4, 4, color.White)
+	dropAndWait(t, v, a, b)
+
+	scanToken := v.scanLifecycle.begin()
+	v.scanning = true
+
+	v.ShowImage(1)
+	waitUntilLoaded(t, v)
+
+	if !scanToken.current() {
+		t.Fatal("navigation invalidated an unrelated in-flight scan")
+	}
+	if !v.scanning {
+		t.Fatal("navigation cleared scanning before the scan completed")
+	}
+
+	v.cancelScan()
+	settleToast(t, v)
 }
 
 // TestHandleDrop_DedupesOverlappingDirectories drops a folder together with
@@ -1560,22 +1580,25 @@ func TestStaleFileStateCompletionsDoNotOverwriteNewerState(t *testing.T) {
 	v.state.files = append([]fyne.URI(nil), current...)
 	v.state.unsortedFiles = append([]fyne.URI(nil), current...)
 
-	staleScanGen := v.gen.Load()
-	v.gen.Add(1)
+	staleScanToken := v.scanLifecycle.begin()
+	v.scanLifecycle.begin()
 	scanDone := make(chan struct{})
-	v.applyScanResult(staleScanGen, false, stale, stale, false, scanDone)
+	v.applyScanResult(staleScanToken, false, stale, stale, false, scanDone)
 	<-scanDone
 	assertEquivalentFileSlices(t, v)
 	if got := namesOfURIs(v.state.files); !slices.Equal(got, []string{"current.jpg"}) {
 		t.Errorf("files = %v, want newer scan state retained", got)
 	}
 
-	staleSortGen := v.sortGen.Load()
-	v.sortGen.Add(1)
+	staleSortToken := v.sortLifecycle.begin()
+	newSortToken := v.sortLifecycle.begin()
+	defer newSortToken.cancelContext()
 	v.sorting = true
+	v.sortSpinner.Show()
+	v.sortLabel.Show()
 	sortDone := make(chan struct{})
 	called := false
-	v.finishSort(staleSortGen, stale, sortDone, func() {}, func([]fyne.URI) {
+	v.finishSort(staleSortToken, stale, sortDone, func([]fyne.URI) {
 		called = true
 	})
 	<-sortDone
@@ -1586,9 +1609,53 @@ func TestStaleFileStateCompletionsDoNotOverwriteNewerState(t *testing.T) {
 	if !v.sorting {
 		t.Error("stale sort completion should not clear a newer sort's in-flight state")
 	}
+	if !v.sortSpinner.Visible() || !v.sortLabel.Visible() {
+		t.Error("stale sort completion should not hide the newer sort's progress UI")
+	}
 	assertEquivalentFileSlices(t, v)
 	if got := namesOfURIs(v.state.files); !slices.Equal(got, []string{"current.jpg"}) {
 		t.Errorf("files = %v, want newer sort state retained", got)
+	}
+}
+
+func TestInvalidateSortCancelsAndFinalizesCurrentProgress(t *testing.T) {
+	v := newTestViewer(t)
+
+	token := v.sortLifecycle.begin()
+	v.sorting = true
+	v.sortSpinner.Show()
+	v.sortLabel.Show()
+
+	v.invalidateSort()
+
+	if token.current() || token.context().Err() == nil {
+		t.Fatal("invalidateSort should cancel and supersede the current sort token")
+	}
+	if v.sorting || v.sortSpinner.Visible() || v.sortLabel.Visible() {
+		t.Fatal("invalidateSort should synchronously finalize the current sort progress UI")
+	}
+}
+
+// TestGenerationTracksFileSetIdentityNotNavigation protects the contract used
+// by grid and deletion: indices retain their meaning across navigation but not
+// across a removal.
+func TestGenerationTracksFileSetIdentityNotNavigation(t *testing.T) {
+	v := newTestViewer(t)
+
+	a := uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White)
+	b := uitest.TempJPEGURI(t, "b.jpg", 4, 4, color.White)
+	dropAndWait(t, v, a, b)
+
+	beforeNavigation := v.Generation()
+	v.ShowImage(1)
+	waitUntilLoaded(t, v)
+	if got := v.Generation(); got != beforeNavigation {
+		t.Fatalf("Generation changed from %d to %d on navigation", beforeNavigation, got)
+	}
+
+	v.RemoveFile(0)
+	if got := v.Generation(); got <= beforeNavigation {
+		t.Fatalf("Generation = %d after removal, want greater than %d", got, beforeNavigation)
 	}
 }
 
@@ -1672,16 +1739,15 @@ func TestSetSortMode_SnapshotDoesNotAliasUnsortedFiles(t *testing.T) {
 // computing, v.state.files reads exactly like the "nothing left to reset" state
 // Escape otherwise closes the window on. v.sorting is what tells the two
 // apart. Drives the in-flight state directly - v.sorting true, v.state.files
-// still empty, v.sortCancel a harmless stub standing in for the real one
-// startSort would have paired with it - rather than racing a real drop's
+// still empty, and sortLifecycle armed - rather than racing a real drop's
 // background goroutine to reproduce that window, the same approach
 // TestCancelScan_CancelsInFlightScanWithNoFilesYet uses for the gathering
 // phase.
 func TestHandleKeyEvent_EscapeDuringFirstDropReorderDoesNotCloseWindow(t *testing.T) {
 	v, _, closed := newTestUI(t)
 
+	v.sortLifecycle.begin()
 	v.sorting = true
-	v.sortCancel = func() {}
 
 	v.handleKeyEvent(&fyne.KeyEvent{Name: fyne.KeyEscape})
 
@@ -1712,8 +1778,8 @@ func TestHandleKeyEvent_EscapeDuringResortOfExistingFilesDoesNotClearThem(t *tes
 	filesBefore := append([]fyne.URI(nil), v.state.files...)
 	indexBefore := v.state.index
 
+	v.sortLifecycle.begin()
 	v.sorting = true
-	v.sortCancel = func() {}
 
 	v.handleKeyEvent(&fyne.KeyEvent{Name: fyne.KeyEscape})
 
@@ -1921,19 +1987,19 @@ func TestViewerShow_AnimatesGIF(t *testing.T) {
 	dropAndWait(t, v, storage.NewFileURI(path))
 
 	// animate() writes v.img.Image from its own goroutine for as long as
-	// gen stays current, which the fyne test driver never marshals onto
+	// its load token stays current, which the fyne test driver never marshals onto
 	// this one - so reading v.img.Image from here at any point before that
 	// goroutine has fully stopped would race with those writes, even right
 	// after waitForAnimFrame observes a given count: animate is free to
 	// keep writing further frames in between that observation and the next
 	// statement. animFrame reaching 2 (1 for attemptLoad's own first frame,
 	// 1 more for animate's first cycle) is proof the animation loop ran at
-	// all; invalidating gen and waiting for animStopped then guarantees no
+	// all; invalidating loadLifecycle and waiting for animStopped then guarantees no
 	// further write can happen, at which point animFrame's final value is
 	// stable and it's finally safe to read v.img.Image.
 	waitForAnimFrame(t, v, 2)
 
-	v.gen.Add(1)
+	v.loadLifecycle.invalidate()
 	waitForAnimStopped(t, v)
 
 	// Frame 0 (red) is written on odd counts (attemptLoad's initial write
@@ -2180,8 +2246,8 @@ func TestAttemptLoad_ToastsAndFallsBackToAStaticFrameForAnOversizedAnimation(t *
 	if len(v.displayFrames) != 1 {
 		t.Errorf("displayFrames = %d, want 1 - the animation should not have been composited", len(v.displayFrames))
 	}
-	if v.animStop != nil {
-		t.Error("animStop is armed, want no animation goroutine for a refused animation")
+	if v.animStopped != nil {
+		t.Error("animStopped is armed, want no animation goroutine for a refused animation")
 	}
 	if len(v.state.files) != 1 {
 		t.Errorf("files = %v, want the file kept - it is valid, just too big to animate", v.state.files)
@@ -2306,13 +2372,10 @@ func TestSetMaxImageCacheMBRetunesTheVectorRasterCeiling(t *testing.T) {
 
 // --- stage-2 stop signals --------------------------------------------------
 
-// TestStopAnimation_WakesAnimateImmediately parks animate in a frame-delay
-// sleep far longer than the test (10s per frame) and checks stopAnimation
-// wakes it right away: before the stop channel existed, animate could only
-// notice a stale generation at its next frame tick, so a navigation away
-// from a slow GIF left the goroutine sleeping out the rest of the delay.
-// The 2s wait below times out if the wake-up doesn't work.
-func TestStopAnimation_WakesAnimateImmediately(t *testing.T) {
+// TestInvalidateLoad_WakesAnimateImmediately parks animate in a frame-delay
+// sleep far longer than the test and checks lifecycle cancellation wakes it
+// immediately rather than waiting for the next frame tick.
+func TestInvalidateLoad_WakesAnimateImmediately(t *testing.T) {
 	v := newTestViewer(t)
 
 	animURI := storage.NewFileURI(uitest.WriteTempFile(t, "slow.gif", uitest.EncodeAnimatedGIF(t, 4, 4,
@@ -2321,18 +2384,14 @@ func TestStopAnimation_WakesAnimateImmediately(t *testing.T) {
 
 	dropAndWait(t, v, animURI)
 
-	if v.animStop == nil {
-		t.Fatal("loading an animated GIF should arm animStop")
+	if v.animStopped == nil {
+		t.Fatal("loading an animated GIF should arm animStopped")
 	}
 
-	v.gen.Add(1) // supersede the animation, as every real stop site does
-	v.stopAnimation()
+	v.loadLifecycle.invalidate()
 
 	waitForAnimStopped(t, v)
-
-	if v.animStop != nil {
-		t.Error("stopAnimation should nil the channel so a second call is a no-op")
-	}
+	v.loadLifecycle.invalidate() // repeated invalidation must remain safe
 }
 
 // TestStartWindowPosPolling_TestDriverGetsNoopStop pins the stop-func

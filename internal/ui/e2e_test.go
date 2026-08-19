@@ -258,7 +258,7 @@ func TestE2E_EscapeQuitsWhenNothingLoaded(t *testing.T) {
 func TestE2E_EscapeCancelsScanInsteadOfClosing(t *testing.T) {
 	v, _, closed := newTestUI(t)
 
-	v.gen.Add(1)
+	v.scanLifecycle.begin()
 	v.scanning = true
 	v.scanSpinner.Show()
 	v.scanLabel.Show()

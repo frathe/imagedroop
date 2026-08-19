@@ -272,7 +272,7 @@ func TestCloseFiles_NeverClosesTheWindow(t *testing.T) {
 func TestCloseFiles_CancelsScanInProgress(t *testing.T) {
 	v := newTestViewer(t)
 
-	v.gen.Add(1)
+	v.scanLifecycle.begin()
 	v.scanning = true
 	v.scanSpinner.Show()
 	v.scanLabel.Show()

@@ -320,7 +320,6 @@ func buildViewer(application fyne.App) (*viewer, fyne.Window) {
 		keyModifiers:  defaultKeyModifiers,
 	}
 
-	view.vectorStop = make(chan struct{})
 	view.vectorDebounce = defaultVectorDebounce
 	view.vectorRasterize = func(vec *imaging.Vector, w, h int) (image.Image, error) { return vec.RasterAt(w, h) }
 	view.vectorAfter = time.After

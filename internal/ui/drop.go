@@ -14,12 +14,9 @@ import (
 )
 
 // cancelScan aborts a scan in progress (Escape while v.scanning is true).
-// It bumps gen the same way clearToDropzone/ShowImage already do for loads
-// (via invalidateLoad, which also cancels any load/preload context still
-// running), so the background goroutine in handleDrop notices via the gen
-// check in its directory-walk loop and stops touching the filesystem
-// instead of racing a large tree to completion for a result nobody will
-// see.
+// It invalidates the scan's own lifecycle, so the background goroutine in
+// handleDrop stops touching the filesystem without interrupting navigation,
+// preloading, or animation for an already-loaded merge-mode file set.
 //
 // Unlike reset, it never touches v.state.files or v.state.unsortedFiles: a merge-mode
 // scan can be cancelled mid-way through without losing images that were
@@ -31,8 +28,7 @@ func (v *viewer) cancelScan() {
 		return
 	}
 
-	v.invalidateLoad()
-	v.stopAnimation()
+	v.scanLifecycle.invalidate()
 	v.scanning = false
 
 	v.scanSpinner.Hide()
@@ -118,8 +114,8 @@ func (v *viewer) handleDrop(uris []fyne.URI) {
 	// drop gets applied.
 	merging := v.state.MergeMode() && len(v.state.files) > 0
 
-	gen := v.invalidateLoad()
-	v.stopAnimation()
+	v.invalidateLoad()
+	token := v.scanLifecycle.begin()
 	v.scanning = true
 
 	scanDone := make(chan struct{})
@@ -158,7 +154,7 @@ func (v *viewer) handleDrop(uris []fyne.URI) {
 			images = append(images, u)
 		}
 		fyne.Do(func() {
-			v.applyScanResult(gen, merging, uris, images, false, scanDone)
+			v.applyScanResult(token, merging, uris, images, false, scanDone)
 		})
 		return
 	}
@@ -198,7 +194,7 @@ func (v *viewer) handleDrop(uris []fyne.URI) {
 		seenFiles := make(map[string]bool)
 
 		process := func(u fyne.URI) {
-			if truncated {
+			if truncated || !token.current() {
 				return
 			}
 
@@ -229,7 +225,7 @@ func (v *viewer) handleDrop(uris []fyne.URI) {
 				// update counter periodically to avoid flooding the UI thread
 				if n == 1 || n%10 == 0 || truncated {
 					fyne.Do(func() {
-						if v.gen.Load() != gen {
+						if !token.current() {
 							return
 						}
 						v.scanLabel.SetText(fmt.Sprintf(lang.L("Scanning... %d images"), n))
@@ -243,16 +239,17 @@ func (v *viewer) handleDrop(uris []fyne.URI) {
 		}
 
 		for len(dirs) > 0 && !truncated {
-			// A newer drop (or an explicit cancel - see cancelScan) bumped
-			// gen out from under this scan: stop walking the tree instead of
+			// A newer drop (or an explicit cancel - see cancelScan) superseded
+			// this scan's token: stop walking the tree instead of
 			// racing storage.List calls to completion for a result nobody
-			// will see. The trailing fyne.Do below re-checks gen and would
+			// will see. The trailing fyne.Do below re-checks the token and would
 			// discard the result anyway; bailing here just stops the wasted
 			// I/O sooner. scanDone is still closed directly, skipping
 			// fyne.Do, to honor its documented contract of always closing
 			// for a stale generation - even though nothing currently waits
 			// on this particular (already-overwritten) channel value.
-			if v.gen.Load() != gen {
+			if !token.current() {
+				token.cancelContext()
 				close(scanDone)
 				return
 			}
@@ -268,7 +265,7 @@ func (v *viewer) handleDrop(uris []fyne.URI) {
 		}
 
 		fyne.Do(func() {
-			v.applyScanResult(gen, merging, uris, images, truncated, scanDone)
+			v.applyScanResult(token, merging, uris, images, truncated, scanDone)
 		})
 	}()
 }
@@ -278,10 +275,11 @@ func (v *viewer) handleDrop(uris []fyne.URI) {
 // goroutine. It must run on the UI goroutine (both callers wrap it in
 // fyne.Do) and always closes scanDone, honoring that channel's contract
 // even when a newer generation has made this result stale.
-func (v *viewer) applyScanResult(gen uint64, merging bool, uris, images []fyne.URI, truncated bool, scanDone chan struct{}) {
+func (v *viewer) applyScanResult(token requestToken, merging bool, uris, images []fyne.URI, truncated bool, scanDone chan struct{}) {
 	defer close(scanDone)
+	defer token.cancelContext()
 
-	if v.gen.Load() != gen {
+	if !token.current() {
 		return
 	}
 	v.scanning = false
