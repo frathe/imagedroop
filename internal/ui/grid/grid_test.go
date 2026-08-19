@@ -305,6 +305,66 @@ func TestHandleKey_ArrowMovesHighlight(t *testing.T) {
 	}
 }
 
+func TestHandleKey_PageMovesHighlightByOneVisiblePage(t *testing.T) {
+	names := make([]string, 30)
+	for i := range names {
+		names[i] = fmt.Sprintf("image-%02d.jpg", i)
+	}
+	g, _ := openGrid(t, names...)
+	g.wrap.Resize(fyne.NewSize(cellSize*4, cellSize*3))
+
+	// GridWrap lays out rows and columns at a pitch of itemMin+padding, not
+	// itemMin, matching ColumnCount's own arithmetic (see movePage). At the
+	// default 4pt padding and a 480x360 wrap: cols = floor((480+4)/124) = 3,
+	// rows = floor((360+4)/124) = 2, so one page is 3*2 = 6 cells. This is
+	// hardcoded rather than mirroring movePage's formula so the test still
+	// catches a regression to the old, inconsistent Height/cellSize row count
+	// (which gives 3 rows here, an undetected off-by-one page).
+	const step = 6
+	g.HandleKey(&fyne.KeyEvent{Name: fyne.KeyPageUp})
+	if g.Highlight() != 0 {
+		t.Errorf("Highlight() = %d, want 0 - Page Up at the first page must stay put", g.Highlight())
+	}
+
+	g.HandleKey(&fyne.KeyEvent{Name: fyne.KeyPageDown})
+	if want := step; g.Highlight() != want {
+		t.Errorf("Highlight() = %d, want %d after Page Down", g.Highlight(), want)
+	}
+
+	g.HandleKey(&fyne.KeyEvent{Name: fyne.KeyPageUp})
+	if g.Highlight() != 0 {
+		t.Errorf("Highlight() = %d, want 0 after Page Up", g.Highlight())
+	}
+
+	g.setHighlight(len(names) - 2)
+	g.HandleKey(&fyne.KeyEvent{Name: fyne.KeyPageDown})
+	if want := len(names) - 1; g.Highlight() != want {
+		t.Errorf("Highlight() = %d, want %d - Page Down must clamp at the last cell", g.Highlight(), want)
+	}
+}
+
+func TestHandleKey_PageMovesHighlightWhileSearching(t *testing.T) {
+	names := make([]string, 20)
+	for i := range names {
+		names[i] = fmt.Sprintf("match-%02d.jpg", i)
+	}
+	g, _ := openGrid(t, names...)
+	g.wrap.Resize(fyne.NewSize(cellSize*4, cellSize*3))
+	typeQuery(g, "match")
+
+	// Same 480x360 geometry as TestHandleKey_PageMovesHighlightByOneVisiblePage:
+	// 3 columns * 2 rows = 6 cells per page.
+	const step = 6
+	g.HandleKey(&fyne.KeyEvent{Name: fyne.KeyPageDown})
+
+	if want := min(step, len(names)-1); g.Highlight() != want {
+		t.Errorf("Highlight() = %d, want %d after Page Down in search", g.Highlight(), want)
+	}
+	if !g.Searching() || g.Query() != "match" {
+		t.Errorf("page navigation changed search state: Searching() = %v, Query() = %q", g.Searching(), g.Query())
+	}
+}
+
 // hover stands in for the pointer entering the cell at display index id.
 // Fyne's GridWrap gives its items an onHovered that does exactly this call
 // and nothing else, so driving the callback is the whole of a hover as far

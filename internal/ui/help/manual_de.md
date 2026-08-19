@@ -324,18 +324,21 @@ einzeln durchzublättern.
 - Klicken Sie auf eine Miniaturansicht, um direkt zu ihr zu springen und zur
   normalen Ansicht zurückzukehren, oder nutzen Sie die Tastatur: Die
   Pfeiltasten bewegen einen hervorgehobenen Rahmen durch das Raster
-  (beginnend bei dem Bild, das beim Öffnen gerade angezeigt wurde), und
-  **`Return`** öffnet die gerade hervorgehobene Miniaturansicht.
+  (beginnend bei dem Bild, das beim Öffnen gerade angezeigt wurde),
+  **`Page Up`**/**`Page Down`** verschieben ihn gleich um eine ganze
+  Bildschirmseite — praktisch, um in einem großen Stapel schnell viel
+  Strecke zurückzulegen, wobei am ersten bzw. letzten Bild Schluss ist —
+  und **`Return`** öffnet die gerade hervorgehobene Miniaturansicht.
 - Drücken Sie **`G`** erneut, oder **`Esc`**, um das Raster ohne Auswahl zu
   verlassen.
 - Drücken Sie **`/`**, um nach Dateinamen zu suchen: Oben erscheint eine
   Leiste, und Ihre Eingabe filtert das Raster fortlaufend auf die Namen,
   die sie enthalten. Groß- und Kleinschreibung spielt dabei keine Rolle,
   und die Leiste zeigt, wie viel der Auswahl übrig ist (`3 von 847`). Die
-  Rücktaste löscht ein Zeichen, Pfeiltasten und `Return` wirken auf die
-  Treffer genau wie sonst auf das ganze Raster, und **`Esc`** setzt die
-  Suche zurück, sodass wieder alle Bilder erscheinen — ein zweites `Esc`
-  verlässt dann wie gewohnt das Raster.
+  Rücktaste löscht ein Zeichen, Pfeiltasten, `Page Up`/`Page Down` und
+  `Return` wirken auf die Treffer genau wie sonst auf das ganze Raster,
+  und **`Esc`** setzt die Suche zurück, sodass wieder alle Bilder
+  erscheinen — ein zweites `Esc` verlässt dann wie gewohnt das Raster.
 - **Mehrere auf einmal auswählen**, um sie gemeinsam zu bearbeiten:
   **`Cmd/Strg+Klick`** auf eine Miniaturansicht nimmt sie in die Auswahl auf
   (ein erneuter Klick nimmt sie wieder heraus), **`Shift+Klick`** wählt
@@ -489,7 +492,8 @@ tatsächlich verschoben wurden.
   Auswahl, statt sie zu ersetzen); wird in der Titelzeile mit dem Präfix
   **`[Zusammenführen]`** angezeigt
 - **`G`** — Rasteransicht ein-/ausschalten (siehe oben); Pfeiltasten bewegen
-  die Hervorhebung, `Return` oder ein Klick öffnet sie, `G`/`Esc` bricht ab
+  die Hervorhebung, `Page Up`/`Page Down` gleich um eine ganze Seite,
+  `Return` oder ein Klick öffnet sie, `G`/`Esc` bricht ab
 - **`/`** — (nur im Raster) das Raster nach Dateinamen durchsuchen; `Esc`
   setzt die Suche zurück, ein zweites `Esc` verlässt das Raster
 - **`Leertaste`** — (nur im Raster) die hervorgehobene Miniaturansicht zur
@@ -753,8 +757,9 @@ Dinge, die PicFetch absichtlich (noch) nicht tut:
 - **Sortierreihenfolge** — `S` schaltet durch Name → Aufnahmedatum →
   Änderungszeitpunkt → Größe → unsortiert → zurück zu Name
 - **Rasteransicht** — `G` schaltet ein fensterfüllendes Miniaturraster
-  ein/aus; Pfeiltasten bewegen die Hervorhebung, `Return` oder ein Klick
-  öffnet, `G`/`Esc` bricht ohne Auswahl ab
+  ein/aus; Pfeiltasten bewegen die Hervorhebung, `Page Up`/`Page Down`
+  gleich um eine ganze Seite, `Return` oder ein Klick öffnet, `G`/`Esc`
+  bricht ohne Auswahl ab
 - **Suche nach Namen** — `/` im Raster filtert es auf die Dateinamen, die
   Ihre Eingabe enthalten; `Esc` setzt den Filter zurück, ein zweites `Esc`
   verlässt das Raster. Filter und Auswahl überleben einander, sodass `/`,

@@ -468,9 +468,9 @@ func (g *Overview) Close() {
 }
 
 // HandleKey handles a key press while the grid is up: Escape and G back out
-// of it, Space picks the highlighted cell, Return commits it, and the arrow
-// keys move the highlight. Every other key is deliberately swallowed by the
-// caller.
+// of it, Space picks the highlighted cell, Return commits it, arrow keys move
+// the highlight, and Page Up/Page Down move it by one visible page. Every
+// other key is deliberately swallowed by the caller.
 //
 // While a search is open the letter keys stop meaning anything here, since
 // each of them is also arriving at HandleRune as a query character - G
@@ -488,8 +488,12 @@ func (g *Overview) HandleKey(ev *fyne.KeyEvent) {
 			g.backspace()
 		case fyne.KeyReturn, fyne.KeyEnter:
 			g.wrap.Select(g.highlight)
+		case fyne.KeyPageUp:
+			g.movePage(-1)
+		case fyne.KeyPageDown:
+			g.movePage(1)
 		case fyne.KeyUp, fyne.KeyDown, fyne.KeyLeft, fyne.KeyRight,
-			fyne.KeyHome, fyne.KeyEnd, fyne.KeyPageUp, fyne.KeyPageDown:
+			fyne.KeyHome, fyne.KeyEnd:
 			// Listed rather than left to the default branch below: every
 			// other key is a character being typed, and must not reach
 			// GridWrap at all.
@@ -514,11 +518,38 @@ func (g *Overview) HandleKey(ev *fyne.KeyEvent) {
 		g.toggleAt(g.highlight)
 	case fyne.KeyReturn, fyne.KeyEnter:
 		g.wrap.Select(g.highlight)
+	case fyne.KeyPageUp:
+		g.movePage(-1)
+	case fyne.KeyPageDown:
+		g.movePage(1)
 	default:
 		// GridWrap already knows how to move its own highlight across
 		// rows and columns, including the row arithmetic - forward the
 		// event rather than reimplementing it here.
 		g.wrap.TypedKey(ev)
+	}
+}
+
+// movePage moves the ring by one rendered grid page, clamped at either end.
+// GridWrap handles arrows itself but deliberately has no Page Up/Page Down
+// behavior, so keep this movement on the same setHighlight path that keeps
+// its keyboard cursor, the ring, scrolling, and the host notification in
+// sync. A grid that has not yet been laid out still advances by one row.
+// Row count must mirror GridWrap.ColumnCount's own arithmetic (pitch is
+// itemMin+padding, not itemMin) or the two disagree on where a row ends,
+// and Page Down scrolls a partially visible edge row clean out of view.
+func (g *Overview) movePage(direction int) {
+	if g.count() == 0 {
+		return
+	}
+
+	pad := g.wrap.Theme().Size(theme.SizeNamePadding)
+	rows := max(1, int((g.wrap.Size().Height+pad)/(cellSize+pad)))
+	step := g.wrap.ColumnCount() * rows
+	target := g.highlight + direction*step
+	target = max(0, min(target, g.count()-1))
+	if target != g.highlight {
+		g.setHighlight(target)
 	}
 }
 

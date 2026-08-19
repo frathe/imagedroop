@@ -288,17 +288,21 @@ instead of arrowing through them one at a time.
 
 - Click any thumbnail to jump straight to it and return to the normal view,
   or use the keyboard: the arrow keys move a highlighted ring around the
-  grid (starting on whichever image was on screen when you opened it), and
-  **`Return`** opens whichever thumbnail is currently highlighted.
+  grid (starting on whichever image was on screen when you opened it),
+  **`Page Up`**/**`Page Down`** jump it a full screen of rows at a time —
+  handy for covering a lot of ground fast, and clamped so it stops dead at
+  the first or last image — and **`Return`** opens whichever thumbnail is
+  currently highlighted.
 - Press **`G`** again, or **`Esc`**, to leave the grid without picking
   anything.
 - Press **`/`** to search by file name: a bar appears across the top, and
   what you type filters the grid down to the names containing it as you go.
   Matching ignores upper and lower case, and the bar keeps a count of how
   much of the set is left (`3 of 847`). Backspace deletes a character, the
-  arrow keys and `Return` work on the matches exactly as they do on the
-  full grid, and **`Esc`** clears the search so every image is shown
-  again — a second `Esc` then leaves the grid as usual.
+  arrow keys, `Page Up`/`Page Down` and `Return` work on the matches
+  exactly as they do on the full grid, and **`Esc`** clears the search so
+  every image is shown again — a second `Esc` then leaves the grid as
+  usual.
 - **Select several at once** to act on them together:
   **`Cmd/Ctrl+click`** a thumbnail to add it to the selection (or click it
   again to take it back out), **`Shift+click`** to select everything
@@ -433,7 +437,8 @@ many of them actually went.
 - **`M`** — toggle merge mode (next drop adds to the set instead of
   replacing it); shown in the title bar as a **`[merge]`** prefix
 - **`G`** — toggle the grid overview (see above); arrow keys move the
-  highlight, `Return` or a click opens it, `G`/`Esc` backs out
+  highlight and `Page Up`/`Page Down` move it a page at a time, `Return` or
+  a click opens it, `G`/`Esc` backs out
 - **`/`** — (grid only) search the grid by file name; `Esc` clears the
   search, a second `Esc` leaves the grid
 - **`Space`** — (grid only) add the highlighted thumbnail to the selection,
@@ -659,8 +664,8 @@ Things PicFetch deliberately does not do (yet):
 - **Sort order** — `S` cycles name → capture date → modified → size →
   unsorted → back to name
 - **Grid overview** — `G` toggles a full-window thumbnail grid; arrow keys
-  move the highlight, `Return` or a click opens it, `G`/`Esc` backs out
-  without picking one
+  move the highlight and `Page Up`/`Page Down` move it a page at a time,
+  `Return` or a click opens it, `G`/`Esc` backs out without picking one
 - **Search by name** — `/` inside the grid filters it to the file names
   containing what you type; `Esc` clears the filter, a second `Esc` leaves
   the grid. The filter survives a selection and vice versa, so `/`, then
