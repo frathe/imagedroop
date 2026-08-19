@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"fmt"
 	"image"
 	"slices"
 	"sync"
@@ -133,6 +134,14 @@ type viewer struct {
 	// adds while merge mode is on, so toggling M can refresh the title
 	// immediately without recomputing it.
 	baseTitle string
+
+	// gridTitle names the file under the grid overview's highlight while
+	// the overview is up, and is empty otherwise. It *overrides* baseTitle
+	// in applyTitle rather than replacing it, so whatever the image view
+	// last set - or sets while the grid is open, e.g. a drop landing behind
+	// it - is still there to fall back to when the grid closes, without
+	// anyone having to save and restore a string.
+	gridTitle string
 
 	// loading is true while a decode/render is in flight. The key handler
 	// checks it to ignore repeat events instead of piling up decodes for
@@ -430,16 +439,20 @@ func (v *viewer) setTitle(base string) {
 	v.applyTitle()
 }
 
-// applyTitle (re)applies baseTitle to the window with a sort-mode prefix
-// (see filesort.Label - empty, so invisible, for the default by-name sort)
-// and the "[merge]"/"[shuffle]" prefixes when merge mode or the
+// applyTitle (re)applies the current title to the window with a sort-mode
+// prefix (see filesort.Label - empty, so invisible, for the default by-name
+// sort) and the "[merge]"/"[shuffle]" prefixes when merge mode or the
 // slideshow's shuffle order (Shift+P) are on, so the title always makes
 // the active drop/sort/slideshow mode visible at a glance. The separating
 // space is added here rather than baked into either prefix, so neither
 // translation key carries trailing whitespace a translator could silently
-// drop.
+// drop. While the grid overview is up gridTitle takes baseTitle's place -
+// the image behind it isn't what the user is looking at.
 func (v *viewer) applyTitle() {
 	title := v.baseTitle
+	if v.gridTitle != "" {
+		title = v.gridTitle
+	}
 	if v.state.MergeMode() {
 		title = lang.L("[merge]") + " " + title
 	}
@@ -450,6 +463,30 @@ func (v *viewer) applyTitle() {
 		title = p + " " + title
 	}
 	v.win.SetTitle(title)
+}
+
+// HighlightChanged names the grid overview's highlighted file in the window
+// title (internal/ui/grid's Host): with the image view hidden behind the
+// overlay, the title is the only place a thumbnail's file name is spelled
+// out in full. i is -1 when nothing is highlighted - the grid closing, or a
+// search matching no file - which hands the title back to the image view.
+// The dimensions the image view shows alongside the name are deliberately
+// absent: they'd cost a full decode of a file nobody has picked yet.
+func (v *viewer) HighlightChanged(i int) {
+	if i < 0 || i >= len(v.state.files) {
+		v.gridTitle = ""
+		v.applyTitle()
+
+		return
+	}
+
+	title := v.state.files[i].Name()
+	if n := len(v.state.files); n > 1 {
+		title = fmt.Sprintf("%s  (%d/%d)", title, i+1, n)
+	}
+
+	v.gridTitle = title
+	v.applyTitle()
 }
 
 // clearToDropzone drops the loaded file list and returns the viewer to an

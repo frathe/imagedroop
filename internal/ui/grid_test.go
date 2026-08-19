@@ -2,6 +2,7 @@ package ui
 
 import (
 	"image/color"
+	"strings"
 	"testing"
 
 	"fyne.io/fyne/v2"
@@ -206,3 +207,61 @@ func TestHandleDrop_ClosesOpenGrid(t *testing.T) {
 // Shift+Delete while the grid is up used to be ignored outright. It now
 // targets whatever the grid has picked instead - see batch_test.go, which
 // owns that behaviour along with the rest of the batch composition.
+
+// --- window title ----------------------------------------------------------
+
+// TestGridHighlight_NamesTheHighlightedFileInTheTitle is this package's
+// half of the notification internal/ui/grid emits: with the image view
+// hidden behind the overlay, the title is where a thumbnail's file name is
+// spelled out - and it must hand the title back on the way out.
+func TestGridHighlight_NamesTheHighlightedFileInTheTitle(t *testing.T) {
+	v := newTestViewer(t)
+
+	a := uitest.TempJPEGURI(t, "alpha.jpg", 4, 4, color.White)
+	b := uitest.TempJPEGURI(t, "beta.jpg", 4, 4, color.White)
+	dropAndWait(t, v, a, b)
+	warmThumbs(t, v)
+
+	before := v.win.Title()
+
+	v.grid.Toggle()
+	if title := v.win.Title(); !strings.Contains(title, "alpha.jpg") {
+		t.Fatalf("title = %q, want it to name alpha.jpg - the cell the grid opened on", title)
+	}
+
+	v.handleKeyEvent(&fyne.KeyEvent{Name: fyne.KeyRight})
+	title := v.win.Title()
+	if !strings.Contains(title, "beta.jpg") {
+		t.Errorf("title = %q, want it to name beta.jpg after moving the highlight", title)
+	}
+	if !strings.Contains(title, "(2/2)") {
+		t.Errorf("title = %q, want the position counter alongside the name", title)
+	}
+
+	v.grid.Toggle()
+	if got := v.win.Title(); got != before {
+		t.Errorf("title = %q after closing the grid, want the image view's own title %q back", got, before)
+	}
+}
+
+// TestGridHighlight_TitleKeepsTheModePrefixes: the grid's file name takes
+// the *base* title's place, not the whole title - the sort/merge/shuffle
+// prefixes describe modes that are still on behind it.
+func TestGridHighlight_TitleKeepsTheModePrefixes(t *testing.T) {
+	v := newTestViewer(t)
+
+	a := uitest.TempJPEGURI(t, "alpha.jpg", 4, 4, color.White)
+	dropAndWait(t, v, a)
+	warmThumbs(t, v)
+
+	v.SetMergeMode(true)
+	v.grid.Toggle()
+
+	title := v.win.Title()
+	if !strings.HasPrefix(title, "[merge] ") {
+		t.Errorf("title = %q, want the [merge] prefix kept while the grid is up", title)
+	}
+	if !strings.Contains(title, "alpha.jpg") {
+		t.Errorf("title = %q, want it to name the highlighted file", title)
+	}
+}

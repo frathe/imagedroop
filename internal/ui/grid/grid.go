@@ -65,6 +65,13 @@ type Host interface {
 	// ShowImage displays the file at index i.
 	ShowImage(i int)
 
+	// HighlightChanged reports which file the ring is on while the grid is
+	// up, so the app can name it in the window title - the only thing that
+	// identifies a thumbnail once the image view is hidden. i is -1
+	// whenever no file is under the ring: the grid closing, or a search
+	// that matches nothing.
+	HighlightChanged(i int)
+
 	// ForceRepaint redraws the window after a visibility change.
 	ForceRepaint()
 
@@ -366,6 +373,17 @@ func (g *Overview) setHighlight(id int) {
 	}
 	g.wrap.RefreshItem(old)
 	g.wrap.RefreshItem(id)
+
+	// Only while the grid owns the screen: with it closed the title belongs
+	// to the image view, and setHighlight still runs from Toggle (which has
+	// already set visible) and from a filter change.
+	if g.visible {
+		if g.count() == 0 {
+			g.host.HighlightChanged(-1)
+		} else {
+			g.host.HighlightChanged(g.fileIndex(id))
+		}
+	}
 }
 
 // ConsumeMaximized reports whether the window is still sitting maximized
@@ -444,6 +462,7 @@ func (g *Overview) Close() {
 	// applies the next time the grid opens.
 	g.syncTopBar()
 	g.overlay.Hide()
+	g.host.HighlightChanged(-1)
 	g.host.Unfocus()
 	g.host.ForceRepaint()
 }

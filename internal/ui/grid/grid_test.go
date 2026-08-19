@@ -44,15 +44,21 @@ type fakeHost struct {
 	shown     []int
 	repaints  int
 	unfocused int
+
+	// highlighted records every file index the grid reported for the ring
+	// (-1 for "none"), so the window-title notification can be asserted in
+	// order without a real title bar.
+	highlighted []int
 }
 
-func (f *fakeHost) FileCount() int        { return len(f.files) }
-func (f *fakeHost) FileAt(i int) fyne.URI { return f.files[i] }
-func (f *fakeHost) CurrentIndex() int     { return f.index }
-func (f *fakeHost) Generation() uint64    { return f.gen }
-func (f *fakeHost) ShowImage(i int)       { f.shown = append(f.shown, i) }
-func (f *fakeHost) ForceRepaint()         { f.repaints++ }
-func (f *fakeHost) Unfocus()              { f.unfocused++ }
+func (f *fakeHost) FileCount() int         { return len(f.files) }
+func (f *fakeHost) FileAt(i int) fyne.URI  { return f.files[i] }
+func (f *fakeHost) CurrentIndex() int      { return f.index }
+func (f *fakeHost) Generation() uint64     { return f.gen }
+func (f *fakeHost) ShowImage(i int)        { f.shown = append(f.shown, i) }
+func (f *fakeHost) ForceRepaint()          { f.repaints++ }
+func (f *fakeHost) Unfocus()               { f.unfocused++ }
+func (f *fakeHost) HighlightChanged(i int) { f.highlighted = append(f.highlighted, i) }
 
 func (f *fakeHost) Modifiers() fyne.KeyModifier { return f.mods }
 
@@ -156,6 +162,104 @@ func TestClose_UnfocusesCanvas(t *testing.T) {
 
 	if host.unfocused != 1 {
 		t.Errorf("Unfocus calls = %d, want 1 - closing must hand the keyboard back", host.unfocused)
+	}
+}
+
+// --- highlight notification ------------------------------------------------
+
+// last is the most recent index the grid reported for the ring, or -2 when
+// it never reported anything - distinct from the -1 that means "nothing
+// highlighted".
+func (f *fakeHost) last() int {
+	if len(f.highlighted) == 0 {
+		return -2
+	}
+
+	return f.highlighted[len(f.highlighted)-1]
+}
+
+// TestHighlightChanged_ReportsTheFileUnderTheRing covers the whole life of
+// the notification the window title is drawn from: which file the grid
+// opens on, every move of the ring, and the handover back to the image
+// view on close.
+func TestHighlightChanged_ReportsTheFileUnderTheRing(t *testing.T) {
+	host := hostWith(t, "a.jpg", "b.jpg", "c.jpg")
+	host.index = 1
+	g := newOverview(t, host)
+	if err := g.Warm(); err != nil {
+		t.Fatalf("Warm: %v", err)
+	}
+
+	g.Toggle()
+	if got := host.last(); got != 1 {
+		t.Fatalf("reported index on open = %d, want 1 (the image already on screen)", got)
+	}
+
+	g.HandleKey(&fyne.KeyEvent{Name: fyne.KeyRight})
+	if got := host.last(); got != 2 {
+		t.Errorf("reported index after Right = %d, want 2", got)
+	}
+
+	g.HandleKey(&fyne.KeyEvent{Name: fyne.KeyLeft})
+	if got := host.last(); got != 1 {
+		t.Errorf("reported index after Left = %d, want 1", got)
+	}
+
+	g.Close()
+	if got := host.last(); got != -1 {
+		t.Errorf("reported index after Close = %d, want -1 - the title goes back to the image view", got)
+	}
+}
+
+// TestHighlightChanged_ReportsTheHostIndexOfAFilteredCell: with a filter
+// on, the ring's display index and the file's own index are different
+// numbers, and it's the file the title has to name.
+func TestHighlightChanged_ReportsTheHostIndexOfAFilteredCell(t *testing.T) {
+	host := hostWith(t, "a.jpg", "b.jpg", "c.jpg")
+	g := newOverview(t, host)
+	if err := g.Warm(); err != nil {
+		t.Fatalf("Warm: %v", err)
+	}
+
+	g.Toggle()
+	g.HandleRune('/')
+	g.HandleRune('c')
+
+	if got := host.last(); got != 2 {
+		t.Errorf("reported index for the only match = %d, want 2 (its host index, not display index 0)", got)
+	}
+}
+
+// TestHighlightChanged_ReportsNoneWhenNothingMatches: an empty grid has no
+// cell under the ring, so there is no file name to show either.
+func TestHighlightChanged_ReportsNoneWhenNothingMatches(t *testing.T) {
+	host := hostWith(t, "a.jpg", "b.jpg")
+	g := newOverview(t, host)
+	if err := g.Warm(); err != nil {
+		t.Fatalf("Warm: %v", err)
+	}
+
+	g.Toggle()
+	g.HandleRune('/')
+	g.HandleRune('z')
+
+	if got := host.last(); got != -1 {
+		t.Errorf("reported index with no matches = %d, want -1", got)
+	}
+}
+
+// TestHighlightChanged_SilentWhileClosed: setHighlight also runs from a
+// closed grid's reconciliation after a batch delete, and the image view
+// owns the title then.
+func TestHighlightChanged_SilentWhileClosed(t *testing.T) {
+	host := hostWith(t, "a.jpg", "b.jpg", "c.jpg")
+	g := newOverview(t, host)
+
+	host.files = host.files[:1]
+	g.FilesChanged()
+
+	if len(host.highlighted) != 0 {
+		t.Errorf("reported %v while the grid was closed, want nothing", host.highlighted)
 	}
 }
 
