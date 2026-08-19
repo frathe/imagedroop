@@ -11,6 +11,12 @@
   - Reopen and remove saved collections from a startup-populated menu.
   - Move removed collection folders to the OS recycle bin.
 
+- exif window location map
+  - Read the Exif GPS sub-IFD and show a collapsible OpenStreetMap view,
+    pinned at and centered on where the photo was taken.
+  - Collapsed on every open, and hidden entirely for a photo with no GPS
+    tags, so no map tiles are fetched unasked.
+
 ## TODO
 
  - favorites disk thumbnail cache

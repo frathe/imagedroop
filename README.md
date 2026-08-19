@@ -34,9 +34,11 @@ set with the keyboard.
 - EXIF orientation correction for JPEGs (auto-rotate/flip per the file's
   orientation tag)
 - EXIF data window (`E`, or a link in the info overlay) showing camera
-  make/model, lens, exposure, aperture, ISO, focal length, and capture
-  date, for files that carry them — GPS/location is deliberately never
-  read or shown
+  make/model, lens, exposure, aperture, ISO, focal length, capture date,
+  and the capture coordinates, for files that carry them — plus a
+  collapsible OpenStreetMap view pinned at the capture location for photos
+  with GPS tags (collapsed on every open, so no map tiles are fetched
+  unasked)
 - Drop multiple files at once and step through them with the arrow keys
   (wraps around at both ends), or jump to the first/last with `Home`/`End`
 - `G` opens a full-window thumbnail grid for jumping around a large drop by
