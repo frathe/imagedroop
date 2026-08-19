@@ -506,6 +506,40 @@ func (v *viewer) SetMaxWindowHeight(h float32) {
 	v.maxWinH = h
 }
 
+// syncWindowToZoom resizes the main window to track the image at the
+// current zoom level, clamped between startW/startH and maxWinW/maxWinH.
+// A no-op while the slideshow or grid overlay is active, or before any
+// image has been loaded. Called from zoom's onChanged (features.go) so the
+// window grows and shrinks with every user-driven zoom step.
+// undoGridMaximize is called before each resize for the same reason
+// finishLoad and applyRotationLayout call it: a plain Resize on an
+// OS-maximized window is silently ignored on some platforms.
+func (v *viewer) syncWindowToZoom() {
+	if v.slides != nil && v.slides.Active() {
+		return
+	}
+	if v.grid != nil && v.grid.Visible() {
+		return
+	}
+	// displayFrames is set by finishLoad on the UI goroutine; its slice
+	// header (length) is never written by the vector render goroutine, which
+	// only writes displayFrames[0] through the existing pointer. Checking
+	// the length here avoids a race on v.img.Image, which the vector
+	// goroutine may be writing concurrently via rasterizeVector's fyne.Do.
+	if len(v.displayFrames) == 0 {
+		return
+	}
+	w, h := v.displayedDimensions()
+	if v.zoom.Fitting() {
+		v.undoGridMaximize()
+		resizeToImage(v.win, image.Rect(0, 0, w, h), v.maxWinW, v.maxWinH)
+		return
+	}
+	s := v.zoom.Scale()
+	v.undoGridMaximize()
+	resizeToImage(v.win, image.Rect(0, 0, int(float32(w)*s+0.5), int(float32(h)*s+0.5)), v.maxWinW, v.maxWinH)
+}
+
 // resizeToImage resizes w to fit b, scaled down (preserving aspect ratio)
 // so neither dimension exceeds maxW/maxH, and never below startW/startH.
 func resizeToImage(w fyne.Window, b image.Rectangle, maxW, maxH float32) {

@@ -150,6 +150,10 @@ described above. Four keys switch to a manual zoom level:
 The first `+` or `-` press zooms in or out from whatever fit is currently
 showing, rather than jumping to 100% first, so zooming feels continuous.
 Repeated presses keep scaling up or down, clamped between 5% and 1600%.
+The window grows and shrinks with the image as you zoom: never smaller than
+the size PicFetch opens at, and never larger than the maximum window width
+and height in **File → Settings…**. `0` restores both fit-to-window and that
+default image-fit window size.
 
 **Scrolling** the mouse wheel or trackpad over the image zooms too, and
 unlike the keyboard shortcuts it zooms around the point under your cursor
@@ -157,7 +161,8 @@ rather than the image centre, so whatever you're pointed at stays put on
 screen as you zoom in or out.
 
 Once the image is zoomed in far enough that it no longer fits in the
-window, the cursor changes to a hand over it to show it can be dragged;
+window (the window is already at its maximum size), the cursor changes to a
+hand over it to show it can be dragged;
 **click and drag** to pan around it — the drag is clamped so you can't
 pull the image away from the window and leave empty space behind it.
 While fitted to the window, or zoomed to a level that still fits inside
@@ -448,9 +453,10 @@ many of them actually went.
   currently showing (just the matches, while a search narrows it)
 - **`Cmd`/`Ctrl+click`** / **`Shift+click`** — (grid only) add one
   thumbnail to the selection / select the whole range up to it
-- **`+`** / **`-`** — zoom in / out
-- **`1`** — zoom to 100%; **`0`** — back to fit-to-window (and un-rotates, see
-  below)
+- **`+`** / **`-`** — zoom in / out (the window scales with the image, within
+  the open-size minimum and the Settings maximum)
+- **`1`** — zoom to 100%; **`0`** — back to fit-to-window and the default
+  image-fit window size (and un-rotates, see below)
 - scroll (mouse wheel or trackpad) — zoom in/out, anchored at the cursor
 - **Shift** + scroll — pan instead of zoom
 - click and drag — pan around a zoomed-in image
@@ -682,8 +688,9 @@ Things PicFetch deliberately does not do (yet):
   containing what you type; `Esc` clears the filter, a second `Esc` leaves
   the grid. The filter survives a selection and vice versa, so `/`, then
   `Cmd`/`Ctrl+A`, acts on exactly the matches
-- **Zoom** — `+`/`-` zoom in/out, `1` for 100%, `0` for fit-to-window, or
-  scroll to zoom at the cursor; drag, or Shift+scroll, to pan once zoomed in
+- **Zoom** — `+`/`-` zoom in/out (window follows the image, min open size,
+  max from Settings), `1` for 100%, `0` for fit-to-window, or scroll to zoom
+  at the cursor; drag, or Shift+scroll, to pan once the image no longer fits
 - **Rotate** — `R`/`Shift+R` rotate 90° clockwise/counter-clockwise,
   view-only; `0` resets it along with zoom
 - **Info overlay** — `I` toggles a card with the file name, position,

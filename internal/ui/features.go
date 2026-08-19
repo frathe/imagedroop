@@ -30,7 +30,10 @@ func registerFeatures(view *viewer, application fyne.App, window fyne.Window, pr
 	// replace keyModifiers after construction.
 	view.zoom = zoom.New(
 		view.img,
-		func() { view.updateInfoOverlay() },
+		func() {
+			view.syncWindowToZoom()
+			view.updateInfoOverlay()
+		},
 		func() fyne.KeyModifier { return view.keyModifiers() },
 		view.requestVectorRender,
 	)

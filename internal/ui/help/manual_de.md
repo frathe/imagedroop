@@ -167,7 +167,10 @@ beschrieben. Vier Tasten wechseln zu einer manuellen Zoomstufe:
 Der erste Druck auf `+` oder `-` zoomt von der aktuell eingepassten Ansicht
 aus, statt zuerst auf 100 % zu springen, damit sich das Zoomen fließend
 anfühlt. Wiederholtes Drücken skaliert weiter hoch oder herunter, begrenzt
-auf 5 % bis 1600 %.
+auf 5 % bis 1600 %. Das Fenster wächst und schrumpft mit dem Bild: nie
+kleiner als die Größe, mit der PicFetch startet, und nie größer als die
+maximale Fensterbreite und -höhe unter **Datei → Einstellungen…**. `0`
+stellt sowohl die Einpassung als auch diese Standard-Fenstergröße wieder her.
 
 **Scrollen** mit Mausrad oder Trackpad über dem Bild zoomt ebenfalls, und
 anders als die Tastenkürzel zoomt es um den Punkt unter dem Mauszeiger statt
@@ -175,8 +178,9 @@ um die Bildmitte, sodass das, worauf Sie zeigen, beim Zoomen an derselben
 Stelle auf dem Bildschirm bleibt.
 
 Sobald das Bild so weit hineingezoomt ist, dass es nicht mehr ins Fenster
-passt, wird der Mauszeiger zu einer Hand, um anzuzeigen, dass es verschoben
-werden kann; **klicken und ziehen** Sie, um es zu verschieben — die Bewegung
+passt (das Fenster hat bereits seine Maximalgröße), wird der Mauszeiger zu
+einer Hand, um anzuzeigen, dass es verschoben werden kann; **klicken und
+ziehen** Sie, um es zu verschieben — die Bewegung
 ist begrenzt, sodass Sie das Bild nicht so weit ziehen können, dass leerer
 Platz dahinter entsteht. Solange das Bild eingepasst ist oder eine Zoomstufe
 hat, bei der es noch ins Fenster passt, bewirkt Verschieben nichts, und der
@@ -504,9 +508,10 @@ tatsächlich verschoben wurden.
 - **`Cmd`/`Strg+Klick`** / **`Shift+Klick`** — (nur im Raster) eine
   Miniaturansicht zur Auswahl hinzufügen / den ganzen Bereich bis dorthin
   auswählen
-- **`+`** / **`-`** — vergrößern / verkleinern
-- **`1`** — auf 100 % zoomen; **`0`** — zurück zur Fenstereinpassung (und
-  setzt die Rotation zurück, siehe unten)
+- **`+`** / **`-`** — vergrößern / verkleinern (das Fenster skaliert mit dem
+  Bild, zwischen Startgröße und dem Maximum in den Einstellungen)
+- **`1`** — auf 100 % zoomen; **`0`** — zurück zur Fenstereinpassung und zur
+  Standard-Fenstergröße (und setzt die Rotation zurück, siehe unten)
 - Scrollen (Mausrad oder Trackpad) — vergrößern/verkleinern, verankert am
   Mauszeiger
 - **Shift** + Scrollen — verschieben statt zoomen
@@ -777,9 +782,10 @@ Dinge, die PicFetch absichtlich (noch) nicht tut:
   Ihre Eingabe enthalten; `Esc` setzt den Filter zurück, ein zweites `Esc`
   verlässt das Raster. Filter und Auswahl überleben einander, sodass `/`,
   gefolgt von `Cmd`/`Strg+A`, genau auf die Treffer wirkt
-- **Zoom** — `+`/`-` vergrößern/verkleinern, `1` für 100 %, `0` für
-  Fenstereinpassung, oder Scrollen zum Zoomen am Mauszeiger; ziehen, oder
-  Shift+Scrollen, zum Verschieben nach dem Hineinzoomen
+- **Zoom** — `+`/`-` vergrößern/verkleinern (Fenster folgt dem Bild, Minimum
+  ist die Startgröße, Maximum kommt aus den Einstellungen), `1` für 100 %,
+  `0` für Fenstereinpassung, oder Scrollen zum Zoomen am Mauszeiger; ziehen,
+  oder Shift+Scrollen, zum Verschieben, sobald das Bild nicht mehr passt
 - **Drehen** — `R`/`Shift+R` dreht um 90° im/gegen den Uhrzeigersinn, nur
   Ansicht; `0` setzt es zusammen mit dem Zoom zurück
 - **Info-Overlay** — `I` schaltet eine Karte mit Dateiname, Position,

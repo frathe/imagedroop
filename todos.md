@@ -7,13 +7,14 @@
   PNG or JPEG through a keyboard-enabled prompt, the same shape as the delete file confirmation, also reachable via
   the new keyboard shortcut CMD/CTRL + E.
 - The Set as Wallpaper menu item shows its new keybinding CMD/CTRL + SHIFT + E.
+- when zooming in or out the window scales in size with the image. The minimum window size is the default app
+  open size, and the maximum is the user-configurable maximum window size; pan inside the window once the cap
+  is reached.
 
 ## ACTIVE DEVELOPMENT
 
 ## TODO
 
- - when zooming in or out the window scales in size with the image. The minimum windows size should not be smaller 
-   then the default app open window size, and not larger then the user configurable maximum window size. 
  - the manual should have a search bar. searches text should be highlighted in the text and when hitting enter the 
    search should be performed, the window should scroll the first result into view. when hitting enter again on the same
    search term the second result should scroll into view and so on. The search bar has a fixed position on the top of
