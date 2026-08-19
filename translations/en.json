@@ -63,8 +63,6 @@
    "Save Changes": "Save Changes",
    "Saved": "Saved",
    "could not save %q: %v": "could not save %q: %v",
-   "Export as PNG…": "Export as PNG…",
-   "Export as JPEG…": "Export as JPEG…",
    "Export image": "Export image",
    "Export as which format?": "Export as which format?",
    "PNG": "PNG",

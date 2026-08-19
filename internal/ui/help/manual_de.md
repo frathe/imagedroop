@@ -133,10 +133,11 @@ ist zunächst nur eine Ansichtsoption: Sie wird mit **`0`** (zusammen mit dem
 Zoom) wieder auf aufrecht zurückgesetzt und beginnt — wie beim Wechsel zum
 nächsten Bild — beim nächsten betrachteten Foto wieder aufrecht. Um sie zu
 behalten, schreiben Sie sie mit **Datei -> Änderungen speichern**
-(`Cmd/Strg+S`) in die Datei zurück oder legen mit **Datei -> Als PNG/JPEG
-exportieren…** eine gedrehte Kopie an; siehe „Menü“ oben. Beim Drehen wechselt das Fenster zwischen
-Quer- und Hochformat, um sich der neuen Ausrichtung des Bildes anzupassen,
-genau wie beim Laden eines anderen Bildes.
+(`Cmd/Strg+S`) in die Datei zurück oder legen mit **Datei -> Bild
+exportieren** (`Cmd/Strg+E`) eine gedrehte Kopie in einem Format Ihrer Wahl
+an; siehe „Menü“ unten. Beim Drehen wechselt das Fenster zwischen Quer- und
+Hochformat, um sich der neuen Ausrichtung des Bildes anzupassen, genau wie
+beim Laden eines anderen Bildes.
 
 ### Animierte GIFs
 
@@ -519,6 +520,13 @@ tatsächlich verschoben wurden.
   (Kamerahersteller/-modell, Objektiv, Belichtung, Blende, ISO, Brennweite,
   Aufnahmedatum, Koordinaten); auch über den Link **„EXIF-Daten anzeigen“** im
   Info-Overlay erreichbar
+- **`Cmd`/`Strg+E`** — das aktuelle Bild in eine neue Datei exportieren: eine
+  Abfrage fragt nach dem Format (**`←`**/**`→`** wählt zwischen PNG und JPEG,
+  **`Return`** exportiert, **`Esc`** bricht ab), danach benennen Sie die Datei
+  im Speichern-Dialog des Systems (siehe „Menü“ unten). Das einfache `E` oben
+  öffnet weiterhin das EXIF-Fenster — nur die Tastenkombination exportiert
+- **`Cmd`/`Strg+Shift+E`** — das aktuelle Bild als Hintergrundbild des
+  Schreibtischs festlegen (siehe „Menü“ unten)
 - **`Cmd`/`Strg+C`** — das aktuelle Bild in die Systemzwischenablage
   kopieren, als Bilddaten, die Sie in eine andere App einfügen können (keine
   Datei). In der Rasteransicht werden stattdessen die ausgewählten *Dateien*
@@ -567,20 +575,25 @@ benötigen in beiden Fällen nichts Zusätzliches.
   aber nicht schreiben kann (WebP, HEIC, ICO, XPM, SVG). Die Originaldatei wird
   dabei ersetzt und neu kodiert statt bearbeitet, EXIF-Metadaten bleiben
   also nicht erhalten
-- **Datei -> Als PNG exportieren… / Als JPEG exportieren…** — speichert das
-  Bild so, wie es gerade angezeigt wird, Drehung eingeschlossen, in eine
-  neue Datei Ihrer Wahl. Anders als „Änderungen speichern“ funktioniert das
-  für jedes anzeigbare Bild, auch für WebP- und HEIC-Dateien und für ein
-  einzelnes Bild eines animierten GIFs, und die Originaldatei bleibt
-  unangetastet. Endet der von Ihnen eingegebene Name bereits auf ein Format,
-  das PicFetch schreiben kann, hat dieses Vorrang vor dem gewählten
-  Menüeintrag
-- **Datei -> Als Hintergrundbild festlegen** — macht das angezeigte Bild zum
-  Hintergrundbild des Schreibtischs, genau so, wie es gerade aussieht. Image
-  Drop legt dafür eine eigene Kopie im Zwischenspeicher an und verweist den
-  Schreibtisch darauf, das Hintergrundbild bleibt also erhalten, wenn Sie
-  das Original verschieben, umbenennen oder in den Papierkorb legen. Unter
-  Linux wird dafür `gsettings` (GNOME, Cinnamon, Budgie, Unity) oder
+- **Datei -> Bild exportieren** (`Cmd/Strg+E`) — fragt über eine
+  tastaturbedienbare Abfrage nach dem gewünschten Format, in
+  derselben Form wie die Lösch-Bestätigung: **`←`**/**`→`** wählt zwischen
+  **PNG** (standardmäßig ausgewählt) und **JPEG**, **`Return`** exportiert,
+  **`Esc`** bricht ab, ohne einen Speichern-Dialog zu öffnen. Das gewählte
+  Format speichert das Bild dann so, wie es gerade angezeigt wird, Drehung
+  eingeschlossen, in eine neue Datei Ihrer Wahl. Anders als „Änderungen
+  speichern“ funktioniert das für jedes anzeigbare Bild, auch für WebP- und
+  HEIC-Dateien und für ein einzelnes Bild eines animierten GIFs, und die
+  Originaldatei bleibt unangetastet. Endet der von Ihnen eingegebene Name
+  bereits auf ein Format, das PicFetch schreiben kann, hat dieses Vorrang
+  vor dem in der Abfrage gewählten Format
+- **Datei -> Als Hintergrundbild festlegen** (`Cmd/Strg+Shift+E`) — macht
+  das angezeigte Bild zum Hintergrundbild des Schreibtischs, genau so, wie
+  es gerade aussieht. PicFetch legt dafür eine eigene Kopie im
+  Zwischenspeicher an und verweist den Schreibtisch darauf, das
+  Hintergrundbild bleibt also erhalten, wenn Sie das Original verschieben,
+  umbenennen oder in den Papierkorb legen. Unter Linux wird dafür
+  `gsettings` (GNOME, Cinnamon, Budgie, Unity) oder
   `plasma-apply-wallpaperimage` (KDE Plasma ab 5.24) benötigt; ist keines
   von beiden installiert, erscheint ein entsprechender Hinweis
 - **Datei -> Dateien schließen** — zurück zum Ablagebereich, ohne das
@@ -726,9 +739,9 @@ Dinge, die PicFetch absichtlich (noch) nicht tut:
 - Keine Bildbearbeitung über das Drehen hinaus: kein Zuschneiden, keine
   Farb- oder Belichtungskorrektur, keine Größenänderung. Auf die Festplatte
   schreiben lassen sich eine Drehung (**Datei -> Änderungen speichern**),
-  eine Kopie in einem anderen Format (**Datei -> Als PNG/JPEG
-  exportieren…**) und eine Hintergrundbild-Kopie (**Datei -> Als
-  Hintergrundbild festlegen**), alle unter „Menü“ oben beschrieben
+  eine Kopie in einem anderen Format (**Datei -> Bild exportieren**) und
+  eine Hintergrundbild-Kopie (**Datei -> Als Hintergrundbild festlegen**),
+  alle unter „Menü“ oben beschrieben
 - Keine Unterstützung für RAW oder PDF
 - Keine Wiedergabesteuerung (Pause, Einzelschritt, Neustart) für animierte
   GIFs
