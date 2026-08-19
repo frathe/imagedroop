@@ -101,14 +101,14 @@ func TestHandleKeyEvent_GridVisible_SwallowsNavigation(t *testing.T) {
 
 	warmThumbs(t, v)
 	v.grid.Toggle()
-	before := v.index
+	before := v.state.index
 
 	// Right is intercepted by the grid (it moves the highlight) rather
 	// than falling through to normal next-image navigation.
 	v.handleKeyEvent(&fyne.KeyEvent{Name: fyne.KeyRight})
 
-	if v.index != before {
-		t.Errorf("index changed to %d while the grid was up, want unchanged from %d", v.index, before)
+	if v.state.index != before {
+		t.Errorf("index changed to %d while the grid was up, want unchanged from %d", v.state.index, before)
 	}
 	if !v.grid.Visible() {
 		t.Error("Right should not close the grid")
@@ -132,8 +132,8 @@ func TestHandleKeyEvent_GridVisible_ReturnNavigatesAndCloses(t *testing.T) {
 	if v.grid.Visible() {
 		t.Error("committing a cell should close the grid")
 	}
-	if v.index != 1 {
-		t.Errorf("index = %d, want 1 - the highlighted image should now be on screen", v.index)
+	if v.state.index != 1 {
+		t.Errorf("index = %d, want 1 - the highlighted image should now be on screen", v.state.index)
 	}
 }
 

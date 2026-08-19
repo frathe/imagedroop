@@ -2,63 +2,22 @@
 
 ## Done
 
+- grid hover moves the keyboard position
+  - Hovering a thumbnail moves GridWrap's own keyboard cursor with the ring,
+    so the next arrow key steps on from the cell under the pointer.
+
 - favorites menu
   - Save the currently open file list as a named collection.
   - Reopen and remove saved collections from a startup-populated menu.
   - Move removed collection folders to the OS recycle bin.
 
+- exif window location map
+  - Read the Exif GPS sub-IFD and show a collapsible OpenStreetMap view,
+    pinned at and centered on where the photo was taken.
+  - Collapsed on every open, and hidden entirely for a photo with no GPS
+    tags, so no map tiles are fetched unasked.
+
 ## TODO
-
-- hideConsoleWindow is duplicated 4 times across clipboard,
- filepicker, trash, wallpaper. Let's refactor this.
-
-- The viewer struct is a "god struct" (~803 lines)
- Group related fields into small composition types. For example:
- ```golang
-    type menuState struct {
-        saveItem       *fyne.MenuItem
-        exportPNGItem  *fyne.MenuItem
-        exportJPEGItem *fyne.MenuItem
-        wallpaperItem  *fyne.MenuItem
-        closeFilesItem *fyne.MenuItem
-    }
-
-    type navigationState struct {
-        files         []fyne.URI
-        index         int
-        unsortedFiles []fyne.URI
-        sortMode      filesort.Mode
-        mergeMode     bool
-        baseTitle     string
-        gen           atomic.Uint64
-        loadCancel    context.CancelFunc
-    }
- ```
-
-- preferences.go is becoming a config god-type
- Split State into domain-specific sub-types that compose:
- ```golang
-    type State struct {
-        Sort        SortState
-        Merge       bool
-        Slideshow   SlideshowState
-        Scan        ScanState
-        Window      WindowState
-        Cache       CacheState
-        Geometry    GeometryState
-    }
-
-    type SlideshowState struct {
-        Interval   time.Duration
-        Shuffle    bool
-    }
-
-    type CacheState struct {
-        MaxImageCacheMB int
-        MaxThumbCacheMB int
-        MaxFileSizeMB   int
-    }
- ```
 
  - favorites disk thumbnail cache
    Generate preview images in the background under each favorite's cache

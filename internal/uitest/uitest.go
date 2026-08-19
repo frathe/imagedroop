@@ -31,6 +31,7 @@ import (
 	"image/gif"
 	"image/jpeg"
 	"image/png"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
@@ -195,6 +196,121 @@ func CaptureDateJPEG(t *testing.T, w, h int, raw string) []byte {
 	out = append(out, data[2:]...)
 
 	return out
+}
+
+// GPSJPEG builds a minimal encoded JPEG carrying an Exif GPS sub-IFD (the
+// 0x8825 pointer in IFD0, then the latitude/longitude reference and
+// degrees/minutes/seconds tags) for the given signed decimal degrees -
+// enough for imaging.ReadMetadata to read a position back, and so for the
+// EXIF window's map section to have somewhere to point.
+func GPSJPEG(t *testing.T, w, h int, lat, lon float64) []byte {
+	t.Helper()
+
+	data := EncodeJPEG(t, w, h, color.White)
+
+	const (
+		headerSize  = 8 // "II" + magic(2) + IFD0 offset(4)
+		ifd0Size    = 2 + 1*12 + 4
+		gpsEntryCnt = 4
+		gpsSize     = 2 + gpsEntryCnt*12 + 4
+	)
+	gpsOffset := uint32(headerSize + ifd0Size)
+	valueOffset := gpsOffset + gpsSize
+
+	le := binary.LittleEndian
+	u16 := func(v uint16) []byte { b := make([]byte, 2); le.PutUint16(b, v); return b }
+	u32 := func(v uint32) []byte { b := make([]byte, 4); le.PutUint32(b, v); return b }
+
+	// Exif carries the hemisphere in its own tag, so the coordinate itself
+	// is written unsigned.
+	ref := func(v float64, positive, negative string) []byte {
+		b := make([]byte, 4)
+		if v < 0 {
+			copy(b, negative)
+		} else {
+			copy(b, positive)
+		}
+		return b
+	}
+
+	buf := new(bytes.Buffer)
+	buf.WriteString("II")
+	buf.Write(u16(0x002A))
+	buf.Write(u32(headerSize))
+
+	buf.Write(u16(1))
+	buf.Write(u16(0x8825)) // GPSIFDPointer
+	buf.Write(u16(4))      // LONG
+	buf.Write(u32(1))
+	buf.Write(u32(gpsOffset))
+	buf.Write(u32(0)) // next IFD offset
+
+	buf.Write(u16(gpsEntryCnt))
+
+	buf.Write(u16(0x0001)) // GPSLatitudeRef
+	buf.Write(u16(2))      // ASCII
+	buf.Write(u32(2))
+	buf.Write(ref(lat, "N", "S"))
+
+	buf.Write(u16(0x0002)) // GPSLatitude
+	buf.Write(u16(5))      // RATIONAL
+	buf.Write(u32(3))
+	buf.Write(u32(valueOffset))
+
+	buf.Write(u16(0x0003)) // GPSLongitudeRef
+	buf.Write(u16(2))
+	buf.Write(u32(2))
+	buf.Write(ref(lon, "E", "W"))
+
+	buf.Write(u16(0x0004)) // GPSLongitude
+	buf.Write(u16(5))
+	buf.Write(u32(3))
+	buf.Write(u32(valueOffset + 24)) // three rationals past the latitude
+
+	buf.Write(u32(0)) // next IFD offset
+
+	buf.Write(dmsRationals(lat))
+	buf.Write(dmsRationals(lon))
+
+	seg := append([]byte("Exif\x00\x00"), buf.Bytes()...)
+	length := len(seg) + 2
+	app1 := append([]byte{0xFF, 0xE1, byte(length >> 8), byte(length)}, seg...)
+
+	out := append([]byte{}, data[:2]...)
+	out = append(out, app1...)
+	out = append(out, data[2:]...)
+
+	return out
+}
+
+// dmsRationals encodes the magnitude of a decimal-degree coordinate as the
+// three little-endian unsigned rationals Exif stores it in: whole degrees,
+// whole minutes, and seconds to four decimal places (a ten-thousandth of a
+// second is well under a millimeter, so nothing meaningful is lost).
+func dmsRationals(deg float64) []byte {
+	deg = math.Abs(deg)
+
+	d := math.Floor(deg)
+	m := math.Floor((deg - d) * 60)
+	s := ((deg-d)*60 - m) * 60
+
+	b := make([]byte, 0, 24)
+	b = binary.LittleEndian.AppendUint32(b, uint32(d))
+	b = binary.LittleEndian.AppendUint32(b, 1)
+	b = binary.LittleEndian.AppendUint32(b, uint32(m))
+	b = binary.LittleEndian.AppendUint32(b, 1)
+	b = binary.LittleEndian.AppendUint32(b, uint32(math.Round(s*10000)))
+	b = binary.LittleEndian.AppendUint32(b, 10000)
+
+	return b
+}
+
+// TempGPSJPEGURI writes GPSJPEG's output to a temp file and returns its
+// URI, mirroring TempJPEGURI.
+func TempGPSJPEGURI(t *testing.T, name string, w, h int, lat, lon float64) fyne.URI {
+	t.Helper()
+
+	return storage.NewFileURI(WriteTempFile(t, name, GPSJPEG(t, w, h, lat, lon)))
 }
 
 // TruncatedPNGHeader builds a PNG file containing only the 8-byte signature

@@ -24,7 +24,7 @@ import (
 func TestBuildViewer_NoSavedSessionHidesRestoreLink(t *testing.T) {
 	app := test.NewApp()
 
-	v, win := buildViewer(app)
+	v, win := buildStartupViewer(app)
 	defer win.Close()
 
 	if v.restoreLink.Visible() {
@@ -39,7 +39,7 @@ func TestBuildViewer_SavedSessionShowsRestoreLink(t *testing.T) {
 		storage.NewFileURI("/tmp/b.jpg"),
 	})
 
-	v, win := buildViewer(app)
+	v, win := buildStartupViewer(app)
 	defer win.Close()
 
 	if !v.restoreLink.Visible() {
@@ -62,7 +62,7 @@ func TestRestoreSession_LoadsSavedFilesAndHidesLink(t *testing.T) {
 	b := uitest.TempJPEGURI(t, "b.jpg", 4, 4, color.White)
 	session.Save(app, []fyne.URI{a, b})
 
-	v, win := buildViewer(app)
+	v, win := buildStartupViewer(app)
 	defer win.Close()
 
 	if !v.restoreLink.Visible() {
@@ -74,8 +74,8 @@ func TestRestoreSession_LoadsSavedFilesAndHidesLink(t *testing.T) {
 	waitForSort(t, v)
 	waitUntilLoaded(t, v)
 
-	if len(v.files) != 2 {
-		t.Fatalf("len(v.files) = %d, want 2", len(v.files))
+	if len(v.state.files) != 2 {
+		t.Fatalf("len(v.state.files) = %d, want 2", len(v.state.files))
 	}
 	if v.restoreLink.Visible() {
 		t.Error("restoreLink should hide once the saved session has been restored")
@@ -93,7 +93,7 @@ func TestHandleDrop_HidesRestoreLinkEvenWithoutUsingIt(t *testing.T) {
 	saved := uitest.TempJPEGURI(t, "saved.jpg", 4, 4, color.White)
 	session.Save(app, []fyne.URI{saved})
 
-	v, win := buildViewer(app)
+	v, win := buildStartupViewer(app)
 	defer win.Close()
 
 	if !v.restoreLink.Visible() {
@@ -120,7 +120,7 @@ func TestViewerReset_ReshowsRestoreLinkWhenSessionUnconsumed(t *testing.T) {
 	saved := uitest.TempJPEGURI(t, "saved.jpg", 4, 4, color.White)
 	session.Save(app, []fyne.URI{saved})
 
-	v, win := buildViewer(app)
+	v, win := buildStartupViewer(app)
 	defer win.Close()
 
 	dropped := uitest.TempJPEGURI(t, "dropped.jpg", 4, 4, color.White)
@@ -139,7 +139,7 @@ func TestViewerReset_DoesNotReshowRestoreLinkOnceConsumed(t *testing.T) {
 	saved := uitest.TempJPEGURI(t, "saved.jpg", 4, 4, color.White)
 	session.Save(app, []fyne.URI{saved})
 
-	v, win := buildViewer(app)
+	v, win := buildStartupViewer(app)
 	defer win.Close()
 
 	v.restoreSession()

@@ -134,11 +134,10 @@ func parseExifOrientation(seg []byte) int {
 
 // Metadata is the subset of a photo's Exif tags the EXIF window (see
 // internal/ui/exifwin) displays: camera make/model, lens, exposure,
-// aperture, ISO, focal length, and capture date. GPS is deliberately not
-// read at all - it lives in its own sub-IFD (pointer tag 0x8825) that
-// ReadMetadata never follows - so location data never even reaches this
-// struct, let alone the UI. A zero Metadata (every field "") means either
-// the file has no Exif data or none of these particular tags.
+// aperture, ISO, focal length, capture date, and - only where the photo
+// carries one - the GPS position its map view centers on. A zero Metadata
+// (every field "", no position) means either the file has no Exif data or
+// none of these particular tags.
 type Metadata struct {
 	Make         string
 	Model        string
@@ -148,6 +147,15 @@ type Metadata struct {
 	ISO          string
 	FocalLength  string
 	DateTaken    string
+
+	// Latitude and Longitude are the capture position in signed decimal
+	// degrees (north and east positive), read from the GPS sub-IFD that
+	// IFD0's pointer tag 0x8825 locates. Only meaningful when HasGPS is
+	// set: a photo without location tags leaves all three zero, which is
+	// what keeps the EXIF window's map collapsed and hidden.
+	Latitude  float64
+	Longitude float64
+	HasGPS    bool
 
 	// DateTakenTime is DateTaken's underlying value, parsed from the same
 	// raw Exif tag - for callers that need to compare or sort capture
@@ -227,11 +235,11 @@ func ReadMetadata(data []byte) Metadata {
 // GIF, WebP, BMP, TIFF, ICO, XPM).
 func isobmffMetadata(data []byte) Metadata {
 	if ex, err := heic.DecodeExif(bytes.NewReader(data)); err == nil {
-		return metadataFromISOBMFFExif(ex.Make, ex.Model, ex.ExposureTime, ex.FNumber, ex.ISOSpeed, ex.FocalLength, ex.DateTimeOriginal, ex.DateTime)
+		return metadataFromISOBMFFExif(ex.Make, ex.Model, ex.ExposureTime, ex.FNumber, ex.ISOSpeed, ex.FocalLength, ex.DateTimeOriginal, ex.DateTime, ex.GPSLatitude, ex.GPSLongitude)
 	}
 
 	if ex, err := avif.DecodeExif(bytes.NewReader(data)); err == nil {
-		return metadataFromISOBMFFExif(ex.Make, ex.Model, ex.ExposureTime, ex.FNumber, ex.ISOSpeed, ex.FocalLength, ex.DateTimeOriginal, ex.DateTime)
+		return metadataFromISOBMFFExif(ex.Make, ex.Model, ex.ExposureTime, ex.FNumber, ex.ISOSpeed, ex.FocalLength, ex.DateTimeOriginal, ex.DateTime, ex.GPSLatitude, ex.GPSLongitude)
 	}
 
 	return Metadata{}
@@ -242,9 +250,17 @@ func isobmffMetadata(data []byte) Metadata {
 // reusing the same formatting helpers the JPEG APP1 walk uses so a HEIC/AVIF
 // photo's EXIF window reads the same as a JPEG's. LensModel has no
 // equivalent in either struct, so it's left unset, same as a JPEG missing
-// that tag.
-func metadataFromISOBMFFExif(cameraMake, model string, exposureTime, fNumber float64, iso int, focalLength float64, dateTimeOriginal, dateTime string) Metadata {
+// that tag. Both decoders report an absent position as a zero latitude and
+// longitude rather than a flag, so an exact (0, 0) is read as "no
+// location": Null Island is open ocean, and treating that one point as
+// missing is a better trade than showing a map of it for every photo that
+// simply has no GPS tags.
+func metadataFromISOBMFFExif(cameraMake, model string, exposureTime, fNumber float64, iso int, focalLength float64, dateTimeOriginal, dateTime string, lat, lon float64) Metadata {
 	m := Metadata{Make: cameraMake, Model: model}
+
+	if (lat != 0 || lon != 0) && validCoordinates(lat, lon) {
+		m.Latitude, m.Longitude, m.HasGPS = lat, lon, true
+	}
 
 	if exposureTime > 0 {
 		m.ExposureTime = formatExposureTime(exposureTime)
@@ -280,6 +296,10 @@ func metadataFromISOBMFFExif(cameraMake, model string, exposureTime, fNumber flo
 // DateTimeOriginal).
 const exifIFDPointer = 0x8769
 
+// gpsIFDPointer (0x8825) locates the GPS sub-IFD, whose latitude and
+// longitude tags the EXIF window's map view centers on.
+const gpsIFDPointer = 0x8825
+
 // parseExifMetadata reads tiff - the TIFF header and IFDs following the
 // "Exif\x00\x00" marker, same payload parseExifOrientation works from - and
 // walks IFD0 plus the Exif SubIFD it points to for the tags Metadata cares
@@ -311,6 +331,9 @@ func parseExifMetadata(tiff []byte) Metadata {
 	var exifIFDOffset uint32
 	haveExifIFD := false
 
+	var gpsIFDOffset uint32
+	haveGPSIFD := false
+
 	walkIFD(tiff, bo, ifd0Offset, func(tag, typ uint16, val []byte) {
 		switch tag {
 		case 0x010F: // Make
@@ -334,8 +357,19 @@ func parseExifMetadata(tiff []byte) Metadata {
 				exifIFDOffset = v
 				haveExifIFD = true
 			}
+		case gpsIFDPointer:
+			if v, ok := uintValue(bo, typ, val); ok {
+				gpsIFDOffset = v
+				haveGPSIFD = true
+			}
 		}
 	})
+
+	if haveGPSIFD {
+		if lat, lon, ok := parseGPSIFD(tiff, bo, gpsIFDOffset); ok {
+			m.Latitude, m.Longitude, m.HasGPS = lat, lon, true
+		}
+	}
 
 	if !haveExifIFD {
 		return m
@@ -374,6 +408,77 @@ func parseExifMetadata(tiff []byte) Metadata {
 	})
 
 	return m
+}
+
+// parseGPSIFD reads the latitude/longitude pair out of the GPS sub-IFD at
+// gpsOffset within tiff and converts it to signed decimal degrees. ok is
+// false unless all four tags are present and readable and the result lands
+// in valid coordinate ranges - a partial or malformed GPS IFD is treated
+// as no location at all, in keeping with the rest of this reader.
+func parseGPSIFD(tiff []byte, bo binary.ByteOrder, gpsOffset uint32) (lat, lon float64, ok bool) {
+	var latRef, lonRef string
+	var latDMS, lonDMS []float64
+
+	walkIFD(tiff, bo, gpsOffset, func(tag, typ uint16, val []byte) {
+		switch tag {
+		case 0x0001: // GPSLatitudeRef: "N" or "S"
+			if s, ok := asciiValue(typ, val); ok {
+				latRef = strings.ToUpper(s)
+			}
+		case 0x0002: // GPSLatitude: degrees, minutes, seconds
+			if v, ok := rationalsValue(bo, typ, val, 3); ok {
+				latDMS = v
+			}
+		case 0x0003: // GPSLongitudeRef: "E" or "W"
+			if s, ok := asciiValue(typ, val); ok {
+				lonRef = strings.ToUpper(s)
+			}
+		case 0x0004: // GPSLongitude
+			if v, ok := rationalsValue(bo, typ, val, 3); ok {
+				lonDMS = v
+			}
+		}
+	})
+
+	lat, latOK := degreesFromDMS(latDMS, latRef, "N", "S")
+	lon, lonOK := degreesFromDMS(lonDMS, lonRef, "E", "W")
+
+	if !latOK || !lonOK || !validCoordinates(lat, lon) {
+		return 0, 0, false
+	}
+
+	return lat, lon, true
+}
+
+// degreesFromDMS converts one Exif degrees/minutes/seconds triple into
+// signed decimal degrees, negating it for the southern/western hemisphere
+// reference. ok is false for a missing triple or a reference that is
+// neither of the two the axis allows - Exif writes the hemisphere only in
+// that tag, so without it the sign is unknowable and the coordinate is
+// unusable rather than merely ambiguous.
+func degreesFromDMS(dms []float64, ref, positive, negative string) (float64, bool) {
+	if len(dms) != 3 || (ref != positive && ref != negative) {
+		return 0, false
+	}
+
+	deg := dms[0] + dms[1]/60 + dms[2]/3600
+
+	if ref == negative {
+		deg = -deg
+	}
+
+	return deg, true
+}
+
+// validCoordinates reports whether lat/lon are real coordinates: in range
+// and not NaN or infinite, which a rational with an absurd numerator could
+// otherwise produce.
+func validCoordinates(lat, lon float64) bool {
+	if math.IsNaN(lat) || math.IsNaN(lon) || math.IsInf(lat, 0) || math.IsInf(lon, 0) {
+		return false
+	}
+
+	return lat >= -90 && lat <= 90 && lon >= -180 && lon <= 180
 }
 
 // walkIFD calls fn once per readable entry in the IFD at ifdOffset within
@@ -502,6 +607,31 @@ func rationalValue(bo binary.ByteOrder, typ uint16, val []byte) (float64, bool) 
 	}
 
 	return float64(num) / float64(den), true
+}
+
+// rationalsValue decodes val as n consecutive unsigned RATIONALs - the
+// shape Exif uses for a GPS coordinate's degrees/minutes/seconds triple.
+// ok is false for a wrong type, a value holding fewer than n rationals, or
+// any zero denominator among them.
+func rationalsValue(bo binary.ByteOrder, typ uint16, val []byte, n int) ([]float64, bool) {
+	if typ != 5 || len(val) < n*8 {
+		return nil, false
+	}
+
+	out := make([]float64, n)
+
+	for i := range out {
+		num := bo.Uint32(val[i*8 : i*8+4])
+		den := bo.Uint32(val[i*8+4 : i*8+8])
+
+		if den == 0 {
+			return nil, false
+		}
+
+		out[i] = float64(num) / float64(den)
+	}
+
+	return out, true
 }
 
 // formatExposureTime renders a shutter speed in seconds as Exif-style

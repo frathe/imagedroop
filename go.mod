@@ -4,6 +4,7 @@ go 1.26.6
 
 require (
 	fyne.io/fyne/v2 v2.8.0
+	fyne.io/x/fyne v0.0.0-20260712112324-6989f2f174fb
 	github.com/fyne-io/image v0.1.1
 	github.com/fyne-io/oksvg v0.2.0
 	github.com/gen2brain/avif v0.6.0

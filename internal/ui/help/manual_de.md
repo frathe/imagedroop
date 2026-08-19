@@ -219,16 +219,35 @@ leeren Ablegebildschirm zurückkehren.
 Unter dieser Übersicht öffnet ein Link **„EXIF-Daten anzeigen“** ein
 separates Fenster mit den Exif-Metadaten des aktuellen Bildes —
 Kamerahersteller und -modell, Objektiv, Belichtungszeit, Blende, ISO,
-Brennweite und Aufnahmedatum, eine Zeile pro Tag, das tatsächlich in der
+Brennweite und Aufnahmedatum sowie — bei einem Foto mit GPS-Tags —
+**Breitengrad** und **Längengrad** in Dezimalgrad, eine Zeile pro Tag, das
+tatsächlich in der
 Datei vorhanden ist. `E` öffnet dasselbe Fenster direkt, ohne dass das
-Info-Overlay vorher geöffnet sein muss. GPS-Standortdaten werden absichtlich
-nie gelesen oder angezeigt. Das Fenster aktualisiert sich, wenn Sie bei
+Info-Overlay vorher geöffnet sein muss. Das Fenster aktualisiert sich, wenn Sie bei
 geöffnetem Fenster zu einem anderen Bild wechseln, und — wie beim Handbuch-
 und Info-Fenster — schließt `Esc` nur dieses Fenster, und ein erneuter Druck
 auf `E`, während es bereits offen ist, holt es nach vorne, statt eine zweite
 Kopie zu öffnen. Dateien ohne Exif-Daten (die meisten PNGs, GIFs und WebPs
 sowie jedes JPEG ohne von einer Kamera geschriebenes Exif-Segment) zeigen
 stattdessen die Meldung „keine Metadaten gefunden“.
+
+Unterhalb der Tag-Liste erhält ein Foto mit GPS-Koordinaten einen
+ausklappbaren Bereich **„Ort“**: aufgeklappt zeigt er eine Karte, die auf
+die Aufnahmestelle zentriert ist und sie mit einer Nadel markiert. Er ist
+bei jedem Öffnen des Fensters zunächst eingeklappt, und erst im
+aufgeklappten Zustand lädt PicFetch Kartenkacheln — das Öffnen des
+EXIF-Fensters allein schickt den Aufnahmeort also nie ins Netz.
+
+Beim ersten Aufklappen erscheint **„Karte wird geladen…“**, während die
+Kacheln rund um den Aufnahmeort geladen werden; die Karte wird vollständig
+angezeigt, sobald sie da sind, und das Fenster bleibt die ganze Zeit
+bedienbar. Verschieben und Zoomen über den geladenen Bereich hinaus füllt
+sich nach und nach auf, ebenfalls ohne zu blockieren. Die Karte nimmt die
+Höhe ein, die das Fenster ihr lässt — ziehen Sie das EXIF-Fenster größer,
+wird auch die Karte größer. Die Karte besteht aus
+Kacheln von [OpenStreetMap](https://openstreetmap.org)
+(© OpenStreetMap-Mitwirkende); für die große Mehrheit der Dateien, die
+überhaupt keine GPS-Tags tragen, fehlt der Bereich vollständig.
 
 ---
 
@@ -494,7 +513,7 @@ tatsächlich verschoben wurden.
   Dateigröße, Zoomstufe)
 - **`E`** — das EXIF-Datenfenster für das aktuelle Bild öffnen
   (Kamerahersteller/-modell, Objektiv, Belichtung, Blende, ISO, Brennweite,
-  Aufnahmedatum); auch über den Link **„EXIF-Daten anzeigen“** im
+  Aufnahmedatum, Koordinaten); auch über den Link **„EXIF-Daten anzeigen“** im
   Info-Overlay erreichbar
 - **`Cmd`/`Strg+C`** — das aktuelle Bild in die Systemzwischenablage
   kopieren, als Bilddaten, die Sie in eine andere App einfügen können (keine
@@ -709,8 +728,8 @@ Dinge, die PicFetch absichtlich (noch) nicht tut:
 - Keine Unterstützung für RAW oder PDF
 - Keine Wiedergabesteuerung (Pause, Einzelschritt, Neustart) für animierte
   GIFs
-- Keine EXIF-GPS-/Standortanzeige — absichtlich aus dem EXIF-Datenfenster
-  ausgelassen (siehe „Info-Overlay“ oben) zum Schutz der Privatsphäre
+- Keine Offline-Karten: die Ortsansicht im EXIF-Fenster benötigt eine
+  Internetverbindung, da sie OpenStreetMap-Kacheln live lädt
 
 ---
 
@@ -749,8 +768,9 @@ Dinge, die PicFetch absichtlich (noch) nicht tut:
   Abmessungen, Dateigröße und Zoomstufe ein/aus
 - **EXIF-Datenfenster** — `E`, oder der Link „EXIF-Daten anzeigen“ im
   Info-Overlay, öffnet Kamerahersteller/-modell, Objektiv, Belichtung,
-  Blende, ISO, Brennweite und Aufnahmedatum für das aktuelle Bild (kein
-  GPS/Standort)
+  Blende, ISO, Brennweite, Aufnahmedatum und Koordinaten für das aktuelle
+  Bild sowie eine ausklappbare Karte des Aufnahmeorts, wenn das Foto
+  GPS-Tags trägt
 - **Diaschau-Modus** — `P` schaltet eine Vollbild-Diaschau mit Überblendung
   zwischen den Bildern ein/aus; `↑`/`↓` stellen das (standardmäßig 10 s)
   Auto-Weiterschalt-Intervall ein, solange sie aktiv ist; `Shift+P` schaltet

@@ -194,16 +194,34 @@ loads even if you briefly return to the empty drop screen in between.
 
 Below that summary, a **"Show EXIF data"** link opens a separate window with
 the current image's Exif metadata — camera make and model, lens, exposure
-time, aperture, ISO, focal length, and capture date, one line per tag that's
-actually present in the file. `E` opens the same window directly, without
-needing the info overlay open first. Location data (GPS coordinates) is
-deliberately never read or shown. The window updates if you navigate to a
+time, aperture, ISO, focal length, capture date, and — for a photo that was
+geotagged — its **latitude** and **longitude** in decimal degrees, one line
+per tag that's actually present in the file. `E` opens the same window
+directly, without
+needing the info overlay open first. The window updates if you navigate to a
 different image while it's still open, and — like the manual and About
 windows — `Esc` closes just that window, and pressing `E` again while it's
 already open brings it back to the front instead of opening a second copy.
 Files with no Exif data (most PNGs, GIFs, and WebPs, and any JPEG without a
 camera-written Exif segment) show a "no metadata found" message instead of
 an empty window.
+
+Below the tag list, a photo that carries GPS coordinates gets a collapsible
+**Location** section: expand it and a map centred on the spot the photo was
+taken appears, with a pin marking it. It starts collapsed every time the
+window opens, and it is only while it is expanded that PicFetch fetches map
+tiles — so opening the EXIF window never puts your photo's location on the
+network by itself.
+
+The first expand shows **"Loading map…"** while the tiles around the
+location download; the map appears complete once they are in, and the
+window stays responsive throughout. Panning or zooming beyond what was
+downloaded fills in as the new tiles arrive, again without blocking
+anything. The map takes whatever height the window leaves it, so drag the
+EXIF window taller to get a bigger map. The map is drawn from
+[OpenStreetMap](https://openstreetmap.org) tiles (© OpenStreetMap
+contributors); the section is absent entirely for the great majority of
+files, which carry no GPS tags at all.
 
 ---
 
@@ -435,7 +453,8 @@ many of them actually went.
 - **`I`** — toggle the info overlay (file name, position, dimensions, file
   size, zoom level)
 - **`E`** — open the EXIF data window for the current image (camera
-  make/model, lens, exposure, aperture, ISO, focal length, capture date);
+  make/model, lens, exposure, aperture, ISO, focal length, capture date,
+  coordinates);
   also reachable via the **"Show EXIF data"** link in the info overlay
 - **`Cmd`/`Ctrl+C`** — copy the current image to the system clipboard, as
   image data you can paste into another app (not a file). In the grid
@@ -618,8 +637,8 @@ Things PicFetch deliberately does not do (yet):
   (**File -> Set as Wallpaper**), all described in "Menu" below
 - No support for RAW or PDF
 - No playback controls (pause, step, restart) for animated GIFs
-- No EXIF GPS/location display — deliberately left out of the EXIF data
-  window (see "Info overlay" above) for privacy
+- No offline maps: the EXIF window's location view needs a working internet
+  connection, since it draws live OpenStreetMap tiles
 
 ---
 
@@ -653,8 +672,9 @@ Things PicFetch deliberately does not do (yet):
 - **Info overlay** — `I` toggles a card with the file name, position,
   dimensions, file size, and zoom level
 - **EXIF data window** — `E`, or the info overlay's "Show EXIF data" link,
-  opens camera make/model, lens, exposure, aperture, ISO, focal length, and
-  capture date for the current image (no GPS/location)
+  opens camera make/model, lens, exposure, aperture, ISO, focal length,
+  capture date and coordinates for the current image, plus a collapsible map
+  of where it was taken when the photo carries GPS tags
 - **Picture-frame mode** — `P` toggles a full-screen slideshow with a
   crossfade between images; `↑`/`↓` tune the (default 10s) auto-advance
   interval while it's on; `Shift+P` toggles shuffle order (`[shuffle]` in

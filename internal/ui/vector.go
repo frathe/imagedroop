@@ -64,10 +64,10 @@ func (v *viewer) requestVectorRender(scale float32) {
 		return
 	}
 
-	gen := v.vectorGen.Add(1)
+	token := v.vectorLifecycle.begin()
 	v.vectorPending.Add(1)
 
-	go v.rasterizeVector(v.vector, w, h, gen)
+	go v.rasterizeVector(v.vector, w, h, token)
 }
 
 // vectorNeedsRender is the hysteresis band described on the two ratio
@@ -95,18 +95,19 @@ func vectorNeedsRender(have, want image.Point) bool {
 // Every early return costs nothing: a burst of twenty scale changes spawns
 // twenty of these and rasterizes once, because the other nineteen find the
 // generation moved on before allocating anything.
-func (v *viewer) rasterizeVector(vec *imaging.Vector, w, h int, gen uint64) {
+func (v *viewer) rasterizeVector(vec *imaging.Vector, w, h int, token requestToken) {
 	defer v.vectorPending.Done()
+	defer token.cancelContext()
 
 	if v.vectorDebounce > 0 {
 		select {
 		case <-v.vectorAfter(v.vectorDebounce):
-		case <-v.vectorStop:
+		case <-token.context().Done():
 			return
 		}
 	}
 
-	if v.vectorGen.Load() != gen {
+	if !token.current() {
 		return
 	}
 
@@ -122,7 +123,7 @@ func (v *viewer) rasterizeVector(vec *imaging.Vector, w, h int, gen uint64) {
 	fyne.Do(func() {
 		// Re-checked on this side too: the generation can move between the
 		// check above and this callback running.
-		if v.vectorGen.Load() != gen || v.vector != vec || len(v.displayFrames) == 0 {
+		if !token.current() || v.vector != vec || len(v.displayFrames) == 0 {
 			return
 		}
 
@@ -147,6 +148,6 @@ func (v *viewer) clearVector() {
 	v.vector = nil
 	v.vectorLogical = fyne.Size{}
 	v.vectorRaster = image.Point{}
-	v.vectorGen.Add(1)
+	v.vectorLifecycle.invalidate()
 	v.zoom.SetLogicalSize(fyne.Size{})
 }

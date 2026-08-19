@@ -27,8 +27,9 @@ const (
 // file set to open on startup (command-line arguments, resolved to URIs by
 // the caller); empty for a plain launch.
 func Run(application fyne.App, initial []fyne.URI) {
-	view, window := buildViewer(application)
-	view.favorites.SetDir(favstore.DefaultDir())
+	view, window := buildStartupViewer(application)
+	startViewerRuntime(view, window, favstore.DefaultDir())
+	registerShutdown(application, view)
 
 	// Deferred to SetOnStarted rather than called right away: it ends up
 	// calling handleDrop, which touches widgets directly (no fyne.Do) the
@@ -40,6 +41,20 @@ func Run(application fyne.App, initial []fyne.URI) {
 		})
 	}
 
+	window.ShowAndRun()
+}
+
+// Runtime side effects start only after feature construction and geometry
+// restoration, so polling cannot observe a nil slideshow or replace a saved
+// position before it has been applied.
+func startViewerRuntime(view *viewer, window fyne.Window, favoritesDir string) {
+	view.favorites.SetDir(favoritesDir)
+	view.stopWinPosPoll = startWindowPosPolling(view, window)
+}
+
+// registerShutdown installs the save while the Fyne event loop is still
+// available to synchronously flush preferences.
+func registerShutdown(application fyne.App, view *viewer) {
 	// Wired via SetOnStopped, not run after ShowAndRun returns: Fyne's own
 	// app.Preferences() schedules its on-disk flush through a debounced
 	// change listener (app.newPreferences in fyne itself) that, once
@@ -62,13 +77,14 @@ func Run(application fyne.App, initial []fyne.URI) {
 		view.stopWinPosPoll()
 		view.settings.StopTracking()
 		view.exif.StopTracking()
-		close(view.vectorStop)
+		view.scanLifecycle.invalidate()
+		view.loadLifecycle.invalidate()
+		view.sortLifecycle.invalidate()
+		view.vectorLifecycle.invalidate()
 
-		session.Save(application, view.unsortedFiles)
+		session.Save(application, view.state.unsortedFiles)
 		preferences.Save(application, view.currentPreferences())
 	})
-
-	window.ShowAndRun()
 }
 
 // currentPreferences is everything worth remembering about this run, ready
@@ -88,8 +104,8 @@ func (v *viewer) currentPreferences() preferences.State {
 	posX, posY, posSet := v.winPos.Get()
 
 	return preferences.State{
-		SortMode:          v.sortMode.PrefValue(),
-		MergeMode:         v.mergeMode,
+		SortMode:          v.state.SortMode().PrefValue(),
+		MergeMode:         v.state.MergeMode(),
 		SlideInterval:     v.slides.Interval(),
 		SlideShuffle:      v.slides.Shuffle(),
 		MaxScanFiles:      v.maxScan,

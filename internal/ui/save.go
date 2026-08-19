@@ -18,7 +18,7 @@ import (
 // saveRotation so the item is never offered for an action guaranteed to
 // fail or do nothing.
 //
-//   - !v.loading.Load(): attemptLoad sets v.index to the file being
+//   - !v.loading.Load(): attemptLoad sets v.state.index to the file being
 //     navigated to before that file's pixels have finished decoding, so
 //     mid-load, CurrentFile() already names the new file while
 //     v.displayFrames/v.img.Image still hold the old one's - saving then
@@ -38,7 +38,7 @@ func (v *viewer) canSaveRotation() bool {
 }
 
 // saveRotation is the File menu's "Save Changes" action (also Cmd/Ctrl+S,
-// see wireSaveShortcut in build.go): it writes the currently displayed,
+// see wireSaveShortcut in shortcuts.go): it writes the currently displayed,
 // already-rotated frame back to the file it came from, in that file's own
 // format. A no-op unless canSaveRotation() is currently true - re-checked
 // here rather than trusted from the menu item's Disabled state, since the

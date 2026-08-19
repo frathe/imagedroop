@@ -4,11 +4,20 @@ import (
 	"bytes"
 	"encoding/binary"
 	"image/color"
+	"math"
 	"os"
 	"path/filepath"
 	"testing"
 	"time"
 )
+
+// approx reports whether two decimal degrees are equal to within a
+// millionth of a degree (about 10 cm) - the DMS-to-degrees conversion is
+// exact only for whole seconds, so coordinate assertions compare with a
+// tolerance rather than for equality.
+func approx(a, b float64) bool {
+	return math.Abs(a-b) < 1e-6
+}
 
 // buildExifSegment builds the payload of an APP1 Exif segment (starting with
 // the "Exif\0\0" marker) that declares a single orientation tag.
@@ -273,6 +282,370 @@ func TestReadMetadata_FullTagSet(t *testing.T) {
 	if m != want {
 		t.Errorf("ReadMetadata() = %+v, want %+v", m, want)
 	}
+}
+
+// gpsFields is the raw GPS sub-IFD content buildGPSExifTIFF writes: the two
+// hemisphere reference strings and the two degrees/minutes/seconds triples,
+// each component a numerator/denominator pair so a test can write a
+// fractional (or deliberately broken, zero-denominator) value.
+type gpsFields struct {
+	latRef, lonRef string
+	lat, lon       [3][2]uint32
+
+	// omitLatRef and omitLon drop a tag entirely, for the partial-IFD cases
+	// where the coordinate can't be resolved.
+	omitLatRef, omitLon bool
+}
+
+// buildGPSExifTIFF builds a little-endian TIFF payload whose IFD0 holds
+// nothing but the GPS sub-IFD pointer (0x8825), plus that sub-IFD. Refs are
+// two bytes and so live inline in their entries; the DMS triples are 24
+// bytes each and need the trailing value area.
+func buildGPSExifTIFF(t *testing.T, f gpsFields) []byte {
+	t.Helper()
+
+	bo := binary.LittleEndian
+
+	u16 := func(v uint16) []byte { b := make([]byte, 2); bo.PutUint16(b, v); return b }
+	u32 := func(v uint32) []byte { b := make([]byte, 4); bo.PutUint32(b, v); return b }
+
+	dms := func(v [3][2]uint32) []byte {
+		var b []byte
+		for _, pair := range v {
+			b = append(b, u32(pair[0])...)
+			b = append(b, u32(pair[1])...)
+		}
+		return b
+	}
+
+	gpsEntryCount := 4
+	if f.omitLatRef {
+		gpsEntryCount--
+	}
+	if f.omitLon {
+		gpsEntryCount -= 2
+	}
+
+	const headerSize = 8
+	ifd0Offset := uint32(headerSize)
+	ifd0Size := 2 + 1*12 + 4
+	gpsOffset := ifd0Offset + uint32(ifd0Size)
+	gpsSize := 2 + gpsEntryCount*12 + 4
+	valueAreaStart := gpsOffset + uint32(gpsSize)
+
+	var valueArea []byte
+	place := func(b []byte) uint32 {
+		offset := valueAreaStart + uint32(len(valueArea))
+		valueArea = append(valueArea, b...)
+		return offset
+	}
+
+	latOffset := place(dms(f.lat))
+	lonOffset := place(dms(f.lon))
+
+	inlineASCII := func(s string) []byte {
+		b := make([]byte, 4)
+		copy(b, s)
+		return b
+	}
+
+	buf := new(bytes.Buffer)
+	buf.WriteString("II")
+	buf.Write(u16(0x002A))
+	buf.Write(u32(ifd0Offset))
+
+	buf.Write(u16(1))
+	buf.Write(u16(0x8825)) // GPSIFDPointer
+	buf.Write(u16(4))      // LONG
+	buf.Write(u32(1))
+	buf.Write(u32(gpsOffset))
+	buf.Write(u32(0))
+
+	if buf.Len() != int(gpsOffset) {
+		t.Fatalf("IFD0 layout mismatch: wrote %d bytes, want %d", buf.Len(), gpsOffset)
+	}
+
+	buf.Write(u16(uint16(gpsEntryCount)))
+
+	if !f.omitLatRef {
+		buf.Write(u16(0x0001)) // GPSLatitudeRef
+		buf.Write(u16(2))      // ASCII
+		buf.Write(u32(2))
+		buf.Write(inlineASCII(f.latRef))
+	}
+
+	buf.Write(u16(0x0002)) // GPSLatitude
+	buf.Write(u16(5))      // RATIONAL
+	buf.Write(u32(3))
+	buf.Write(u32(latOffset))
+
+	if !f.omitLon {
+		buf.Write(u16(0x0003)) // GPSLongitudeRef
+		buf.Write(u16(2))
+		buf.Write(u32(2))
+		buf.Write(inlineASCII(f.lonRef))
+
+		buf.Write(u16(0x0004)) // GPSLongitude
+		buf.Write(u16(5))
+		buf.Write(u32(3))
+		buf.Write(u32(lonOffset))
+	}
+
+	buf.Write(u32(0))
+
+	if buf.Len() != int(valueAreaStart) {
+		t.Fatalf("GPS IFD layout mismatch: wrote %d bytes, want %d", buf.Len(), valueAreaStart)
+	}
+
+	buf.Write(valueArea)
+
+	return buf.Bytes()
+}
+
+// gpsJPEG wraps a GPS TIFF payload in the APP1 segment and JPEG SOI marker
+// ReadMetadata expects to walk.
+func gpsJPEG(t *testing.T, f gpsFields) []byte {
+	t.Helper()
+
+	seg := append([]byte("Exif\x00\x00"), buildGPSExifTIFF(t, f)...)
+
+	return append([]byte{0xFF, 0xD8}, wrapAsAPP1(seg)...)
+}
+
+func TestReadMetadata_GPS(t *testing.T) {
+	// 48° 51' 29.6" N, 2° 17' 40.2" E - the Eiffel Tower, with the seconds
+	// written as hundredths so the rational denominators aren't all 1.
+	m := ReadMetadata(gpsJPEG(t, gpsFields{
+		latRef: "N", lat: [3][2]uint32{{48, 1}, {51, 1}, {2960, 100}},
+		lonRef: "E", lon: [3][2]uint32{{2, 1}, {17, 1}, {4020, 100}},
+	}))
+
+	if !m.HasGPS {
+		t.Fatalf("ReadMetadata() = %+v, want a GPS position", m)
+	}
+
+	if !approx(m.Latitude, 48.858222) || !approx(m.Longitude, 2.294500) {
+		t.Errorf("position = (%v, %v), want approximately (48.858222, 2.294500)", m.Latitude, m.Longitude)
+	}
+}
+
+func TestReadMetadata_GPSSouthWestIsNegative(t *testing.T) {
+	m := ReadMetadata(gpsJPEG(t, gpsFields{
+		latRef: "S", lat: [3][2]uint32{{33, 1}, {51, 1}, {31, 1}},
+		lonRef: "W", lon: [3][2]uint32{{70, 1}, {39, 1}, {0, 1}},
+	}))
+
+	if !m.HasGPS {
+		t.Fatalf("ReadMetadata() = %+v, want a GPS position", m)
+	}
+
+	if m.Latitude >= 0 || m.Longitude >= 0 {
+		t.Errorf("position = (%v, %v), want both negative for S/W", m.Latitude, m.Longitude)
+	}
+
+	if !approx(m.Latitude, -33.858611) || !approx(m.Longitude, -70.650000) {
+		t.Errorf("position = (%v, %v), want approximately (-33.858611, -70.650000)", m.Latitude, m.Longitude)
+	}
+}
+
+func TestReadMetadata_GPSLowercaseRef(t *testing.T) {
+	// Some writers emit a lowercase hemisphere ref; it means the same thing.
+	m := ReadMetadata(gpsJPEG(t, gpsFields{
+		latRef: "s", lat: [3][2]uint32{{10, 1}, {0, 1}, {0, 1}},
+		lonRef: "w", lon: [3][2]uint32{{20, 1}, {0, 1}, {0, 1}},
+	}))
+
+	if !m.HasGPS || m.Latitude != -10 || m.Longitude != -20 {
+		t.Errorf("ReadMetadata() = %+v, want (-10, -20) with HasGPS", m)
+	}
+}
+
+func TestReadMetadata_GPSZeroIslandIsStillAPosition(t *testing.T) {
+	// Unlike the HEIC/AVIF path, which can't tell (0, 0) from "no tags", an
+	// explicit all-zero JPEG GPS IFD is a real - if unlikely - position.
+	m := ReadMetadata(gpsJPEG(t, gpsFields{
+		latRef: "N", lat: [3][2]uint32{{0, 1}, {0, 1}, {0, 1}},
+		lonRef: "E", lon: [3][2]uint32{{0, 1}, {0, 1}, {0, 1}},
+	}))
+
+	if !m.HasGPS || m.Latitude != 0 || m.Longitude != 0 {
+		t.Errorf("ReadMetadata() = %+v, want (0, 0) with HasGPS", m)
+	}
+}
+
+func TestReadMetadata_GPSRejected(t *testing.T) {
+	cases := []struct {
+		name string
+		f    gpsFields
+	}{
+		{"missing latitude ref", gpsFields{
+			lonRef: "E", lon: [3][2]uint32{{2, 1}, {0, 1}, {0, 1}},
+			lat: [3][2]uint32{{48, 1}, {0, 1}, {0, 1}}, omitLatRef: true,
+		}},
+		{"missing longitude", gpsFields{
+			latRef: "N", lat: [3][2]uint32{{48, 1}, {0, 1}, {0, 1}}, omitLon: true,
+		}},
+		{"unknown hemisphere ref", gpsFields{
+			latRef: "X", lat: [3][2]uint32{{48, 1}, {0, 1}, {0, 1}},
+			lonRef: "E", lon: [3][2]uint32{{2, 1}, {0, 1}, {0, 1}},
+		}},
+		{"latitude ref on the longitude axis", gpsFields{
+			latRef: "N", lat: [3][2]uint32{{48, 1}, {0, 1}, {0, 1}},
+			lonRef: "N", lon: [3][2]uint32{{2, 1}, {0, 1}, {0, 1}},
+		}},
+		{"zero denominator", gpsFields{
+			latRef: "N", lat: [3][2]uint32{{48, 0}, {0, 1}, {0, 1}},
+			lonRef: "E", lon: [3][2]uint32{{2, 1}, {0, 1}, {0, 1}},
+		}},
+		{"latitude out of range", gpsFields{
+			latRef: "N", lat: [3][2]uint32{{91, 1}, {0, 1}, {0, 1}},
+			lonRef: "E", lon: [3][2]uint32{{2, 1}, {0, 1}, {0, 1}},
+		}},
+		{"longitude out of range", gpsFields{
+			latRef: "N", lat: [3][2]uint32{{48, 1}, {0, 1}, {0, 1}},
+			lonRef: "E", lon: [3][2]uint32{{181, 1}, {0, 1}, {0, 1}},
+		}},
+		{"minutes push latitude past the pole", gpsFields{
+			latRef: "N", lat: [3][2]uint32{{90, 1}, {1, 1}, {0, 1}},
+			lonRef: "E", lon: [3][2]uint32{{2, 1}, {0, 1}, {0, 1}},
+		}},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			m := ReadMetadata(gpsJPEG(t, c.f))
+
+			if m.HasGPS {
+				t.Errorf("ReadMetadata() = %+v, want no GPS position", m)
+			}
+		})
+	}
+}
+
+func TestReadMetadata_GPSExactlyAtTheRangeEdges(t *testing.T) {
+	m := ReadMetadata(gpsJPEG(t, gpsFields{
+		latRef: "S", lat: [3][2]uint32{{90, 1}, {0, 1}, {0, 1}},
+		lonRef: "W", lon: [3][2]uint32{{180, 1}, {0, 1}, {0, 1}},
+	}))
+
+	if !m.HasGPS || m.Latitude != -90 || m.Longitude != -180 {
+		t.Errorf("ReadMetadata() = %+v, want the in-range edge (-90, -180)", m)
+	}
+}
+
+func TestReadMetadata_NoGPSIFDLeavesThePositionUnset(t *testing.T) {
+	tiff := buildFullExifTIFF(t, fullExifFields{
+		make: "Canon", model: "EOS 90D", lensModel: "EF50mm f/1.8",
+		dateTimeOriginal: "2024:08:12 14:33:02",
+		exposureNum:      1, exposureDen: 200,
+		fNumberNum: 28, fNumberDen: 10,
+		iso:      400,
+		focalNum: 50, focalDen: 1,
+	})
+
+	seg := append([]byte("Exif\x00\x00"), tiff...)
+
+	if m := ReadMetadata(append([]byte{0xFF, 0xD8}, wrapAsAPP1(seg)...)); m.HasGPS {
+		t.Errorf("ReadMetadata() = %+v, want no GPS position", m)
+	}
+}
+
+func TestDegreesFromDMS(t *testing.T) {
+	cases := []struct {
+		name   string
+		dms    []float64
+		ref    string
+		want   float64
+		wantOK bool
+	}{
+		{name: "north", dms: []float64{48, 30, 36}, ref: "N", want: 48.51, wantOK: true},
+		{name: "south negates", dms: []float64{48, 30, 36}, ref: "S", want: -48.51, wantOK: true},
+		{name: "zero", dms: []float64{0, 0, 0}, ref: "N", want: 0, wantOK: true},
+		{name: "nil triple", dms: nil, ref: "N"},
+		{name: "short triple", dms: []float64{48, 30}, ref: "N"},
+		{name: "long triple", dms: []float64{48, 30, 36, 1}, ref: "N"},
+		{name: "empty ref", dms: []float64{48, 30, 36}, ref: ""},
+		{name: "wrong axis ref", dms: []float64{48, 30, 36}, ref: "E"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, ok := degreesFromDMS(c.dms, c.ref, "N", "S")
+
+			if ok != c.wantOK {
+				t.Fatalf("degreesFromDMS() ok = %v, want %v", ok, c.wantOK)
+			}
+
+			if ok && !approx(got, c.want) {
+				t.Errorf("degreesFromDMS() = %v, want %v", got, c.want)
+			}
+		})
+	}
+}
+
+func TestValidCoordinates(t *testing.T) {
+	cases := []struct {
+		name     string
+		lat, lon float64
+		want     bool
+	}{
+		{"origin", 0, 0, true},
+		{"north-east edge", 90, 180, true},
+		{"south-west edge", -90, -180, true},
+		{"just past the pole", 90.000001, 0, false},
+		{"just past the antimeridian", 0, 180.000001, false},
+		{"just inside the pole", 89.999999, 0, true},
+		{"NaN latitude", math.NaN(), 0, false},
+		{"NaN longitude", 0, math.NaN(), false},
+		{"infinite latitude", math.Inf(1), 0, false},
+		{"negative infinite longitude", 0, math.Inf(-1), false},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := validCoordinates(c.lat, c.lon); got != c.want {
+				t.Errorf("validCoordinates(%v, %v) = %v, want %v", c.lat, c.lon, got, c.want)
+			}
+		})
+	}
+}
+
+func TestRationalsValue(t *testing.T) {
+	bo := binary.LittleEndian
+
+	rationals := func(pairs ...uint32) []byte {
+		b := make([]byte, 0, len(pairs)*4)
+		for _, v := range pairs {
+			b = binary.LittleEndian.AppendUint32(b, v)
+		}
+		return b
+	}
+
+	t.Run("three rationals", func(t *testing.T) {
+		got, ok := rationalsValue(bo, 5, rationals(1, 2, 3, 4, 10, 4), 3)
+
+		if !ok || len(got) != 3 || got[0] != 0.5 || got[1] != 0.75 || got[2] != 2.5 {
+			t.Errorf("rationalsValue() = %v, %v, want [0.5 0.75 2.5], true", got, ok)
+		}
+	})
+
+	t.Run("wrong type", func(t *testing.T) {
+		if _, ok := rationalsValue(bo, 4, rationals(1, 2, 3, 4, 5, 6), 3); ok {
+			t.Error("rationalsValue() ok = true for a LONG entry, want false")
+		}
+	})
+
+	t.Run("truncated", func(t *testing.T) {
+		if _, ok := rationalsValue(bo, 5, rationals(1, 2, 3, 4), 3); ok {
+			t.Error("rationalsValue() ok = true for two rationals, want false")
+		}
+	})
+
+	t.Run("zero denominator", func(t *testing.T) {
+		if _, ok := rationalsValue(bo, 5, rationals(1, 0, 3, 4, 5, 6), 3); ok {
+			t.Error("rationalsValue() ok = true for a zero denominator, want false")
+		}
+	})
 }
 
 func TestReadMetadata_NoExifData(t *testing.T) {

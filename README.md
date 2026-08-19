@@ -34,9 +34,11 @@ set with the keyboard.
 - EXIF orientation correction for JPEGs (auto-rotate/flip per the file's
   orientation tag)
 - EXIF data window (`E`, or a link in the info overlay) showing camera
-  make/model, lens, exposure, aperture, ISO, focal length, and capture
-  date, for files that carry them — GPS/location is deliberately never
-  read or shown
+  make/model, lens, exposure, aperture, ISO, focal length, capture date,
+  and the capture coordinates, for files that carry them — plus a
+  collapsible OpenStreetMap view pinned at the capture location for photos
+  with GPS tags (collapsed on every open, so no map tiles are fetched
+  unasked)
 - Drop multiple files at once and step through them with the arrow keys
   (wraps around at both ends), or jump to the first/last with `Home`/`End`
 - `G` opens a full-window thumbnail grid for jumping around a large drop by
@@ -173,6 +175,7 @@ packaged build.
 | `make fmt`                  | `gofmt` all Go source files                                         |
 | `make vet`                  | `go vet ./...`                                                      |
 | `make test`                 | `go test ./...`                                                     |
+| `make verify`               | The same gate CI runs: `gofmt` check, `go vet`, `go build`, `go test -race` |
 | `make tidy`                 | `go mod tidy` — tidy go.mod / go.sum                                |
 | `make security`             | Run all security checks (govulncheck + GitHub Dependabot alerts)    |
 | `make security-govulncheck` | Scan dependencies for known Go vulnerabilities with `govulncheck`   |
@@ -182,6 +185,31 @@ packaged build.
 > **Note:** `make security-github` requires the [GitHub CLI](https://cli.github.com/)
 > (`gh`) to be installed and authenticated (`gh auth login`), and it must be run
 > from a checkout with a GitHub `origin` remote.
+
+### Releasing
+
+```sh
+make release              # patch bump, e.g. 0.1.7 -> 0.1.8
+make release PART=minor   # or PART=major
+```
+
+`make release` is the whole flow. It refuses to start unless you're on `main`
+(override with `RELEASE_BRANCH=`), the working tree is clean, and `HEAD`
+matches `origin/main`; it also refuses if the tag it would create already
+exists locally or on the remote. After a confirmation prompt (`YES=1` skips
+it) it runs `make verify`, bumps `Version`/`Build` in
+[FyneApp.toml](FyneApp.toml), commits that as `Release vX.Y.Z`, tags the
+commit, and pushes the branch and the tag.
+
+Pushing the tag is what publishes: [`.github/workflows/release.yml`](.github/workflows/release.yml)
+re-runs the full CI suite as a gate, then packages macOS, Windows, and Linux
+artifacts and attaches them to a GitHub release. Nothing is published if that
+run goes red — the tag just sits there, and you can delete it and try again.
+The download links on the [website](https://frathe.github.io/picfetch/) point
+at `releases/latest`, so they need no edit per release.
+
+`make bump-version` does only the FyneApp.toml edit (no commit, no tag, no
+push) for the rare case where you want the version bumped by itself.
 
 ## Testing
 
@@ -194,12 +222,14 @@ seams — live in `internal/uitest`.
 ### End-to-end suite (`internal/ui/e2e_test.go`)
 
 Rather than a hand-copied replica of the UI that could drift out of sync,
-the e2e tests drive the *real* app: `buildViewer(application fyne.App)` in
-[internal/ui/build.go](internal/ui/build.go) is the exact widget/handler
-wiring `main()` runs live, factored out so tests can call it too. Every
-test in the package builds a fresh window through it (`newTestUI`), drives
-it the way a user would — `handleDrop` for a drop, `handleKeyEvent` for a
-key press — and checks two things:
+the e2e tests drive the *real* app: `buildViewer(application fyne.App,
+startup startupState)` in [internal/ui/build.go](internal/ui/build.go) is
+the exact top-level widget/handler wiring `Run` uses, including the ordered
+feature construction in [internal/ui/features.go](internal/ui/features.go), after
+[internal/ui/startup.go](internal/ui/startup.go) loads startup state. Every
+test in the package mirrors that load/build/geometry-restoration path
+through `newTestUI`, then drives it the way a user would — `handleDrop` for
+a drop, `handleKeyEvent` for a key press — and checks two things:
 
 - **State** — `v.files`, `v.index`, and widget visibility (`.Visible()`).
   Fast, exact, and portable; this is the real regression guard.
@@ -250,11 +280,16 @@ for a drop. Add the matching wait if you add a scenario that starts one.
 ```sh
 main.go               Entry point: app setup, translations, CLI arguments
 internal/ui/          The application - the viewer core and the key dispatcher
-  run.go              Run(): builds the window, wires startup/shutdown
-  build.go            buildViewer(): the whole widget tree, in one place
+  run.go              Run(): explicit startup/runtime/shutdown lifecycle
+  startup.go          Loads startup state, normalizes defaults, restores geometry
+  build.go            buildViewer(): top-level window/overlay composition
+  components.go       App-owned widget clusters and fixed-height layout
+  features.go         Explicit ordered construction of all eight feature modules
+  shortcuts.go        Ordered global modified-key shortcut registration
   zoom/ grid/         One package per feature that owns its own state,
   slideshow/ help/    each declaring only what it needs from the app
   deletion/ exifwin/
+  settingswin/ favorites/
   widgets/            Shared viewer-free UI mechanics
   assets/             Placeholder/welcome art, embedded at build time
   help/manual.md      End-user manual, embedded at build time

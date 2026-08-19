@@ -14,14 +14,11 @@ import (
 )
 
 // cancelScan aborts a scan in progress (Escape while v.scanning is true).
-// It bumps gen the same way clearToDropzone/ShowImage already do for loads
-// (via invalidateLoad, which also cancels any load/preload context still
-// running), so the background goroutine in handleDrop notices via the gen
-// check in its directory-walk loop and stops touching the filesystem
-// instead of racing a large tree to completion for a result nobody will
-// see.
+// It invalidates the scan's own lifecycle, so the background goroutine in
+// handleDrop stops touching the filesystem without interrupting navigation,
+// preloading, or animation for an already-loaded merge-mode file set.
 //
-// Unlike reset, it never touches v.files or v.unsortedFiles: a merge-mode
+// Unlike reset, it never touches v.state.files or v.state.unsortedFiles: a merge-mode
 // scan can be cancelled mid-way through without losing images that were
 // already loaded before it started. Only a scan that had nothing loaded yet
 // (the first-ever drop) needs the drop zone put back the way handleDrop
@@ -31,14 +28,13 @@ func (v *viewer) cancelScan() {
 		return
 	}
 
-	v.invalidateLoad()
-	v.stopAnimation()
+	v.scanLifecycle.invalidate()
 	v.scanning = false
 
 	v.scanSpinner.Hide()
 	v.scanLabel.Hide()
 
-	if len(v.files) == 0 {
+	if len(v.state.files) == 0 {
 		v.showWelcomeState()
 		v.dropzone.Show()
 	}
@@ -65,7 +61,7 @@ func realPathOf(u fyne.URI) string {
 // exercise the cap). It's a safety valve for pathological trees (a runaway
 // symlink cycle EvalSymlinks doesn't resolve to a repeat, or a genuinely
 // enormous archive) - past this, stat-ing and holding URIs would stall the
-// scan goroutine and bloat v.files well past anything the viewer or its
+// scan goroutine and bloat v.state.files well past anything the viewer or its
 // sort/preload paths are meant to handle.
 const defaultMaxScannedFiles = 200_000
 
@@ -116,10 +112,10 @@ func (v *viewer) handleDrop(uris []fyne.URI) {
 	// a folder scan can take seconds, and toggling M while one is still
 	// running shouldn't retroactively change how this already-in-flight
 	// drop gets applied.
-	merging := v.mergeMode && len(v.files) > 0
+	merging := v.state.MergeMode() && len(v.state.files) > 0
 
-	gen := v.invalidateLoad()
-	v.stopAnimation()
+	v.invalidateLoad()
+	token := v.scanLifecycle.begin()
 	v.scanning = true
 
 	scanDone := make(chan struct{})
@@ -158,7 +154,7 @@ func (v *viewer) handleDrop(uris []fyne.URI) {
 			images = append(images, u)
 		}
 		fyne.Do(func() {
-			v.applyScanResult(gen, merging, uris, images, false, scanDone)
+			v.applyScanResult(token, merging, uris, images, false, scanDone)
 		})
 		return
 	}
@@ -190,7 +186,7 @@ func (v *viewer) handleDrop(uris []fyne.URI) {
 		// seenFiles dedupes images within this one scan, keyed the same way
 		// as visitedDirs: dropping a folder together with one of its own
 		// subfolders, or a symlinked file reachable via two different
-		// directory paths, would otherwise add the same picture to v.files
+		// directory paths, would otherwise add the same picture to v.state.files
 		// twice. This is scoped to a single handleDrop call, not across
 		// drops - merge mode has always allowed re-merging a file that's
 		// already loaded (see RemoveFile's comment on why it removes by
@@ -198,7 +194,7 @@ func (v *viewer) handleDrop(uris []fyne.URI) {
 		seenFiles := make(map[string]bool)
 
 		process := func(u fyne.URI) {
-			if truncated {
+			if truncated || !token.current() {
 				return
 			}
 
@@ -229,7 +225,7 @@ func (v *viewer) handleDrop(uris []fyne.URI) {
 				// update counter periodically to avoid flooding the UI thread
 				if n == 1 || n%10 == 0 || truncated {
 					fyne.Do(func() {
-						if v.gen.Load() != gen {
+						if !token.current() {
 							return
 						}
 						v.scanLabel.SetText(fmt.Sprintf(lang.L("Scanning... %d images"), n))
@@ -243,16 +239,17 @@ func (v *viewer) handleDrop(uris []fyne.URI) {
 		}
 
 		for len(dirs) > 0 && !truncated {
-			// A newer drop (or an explicit cancel - see cancelScan) bumped
-			// gen out from under this scan: stop walking the tree instead of
+			// A newer drop (or an explicit cancel - see cancelScan) superseded
+			// this scan's token: stop walking the tree instead of
 			// racing storage.List calls to completion for a result nobody
-			// will see. The trailing fyne.Do below re-checks gen and would
+			// will see. The trailing fyne.Do below re-checks the token and would
 			// discard the result anyway; bailing here just stops the wasted
 			// I/O sooner. scanDone is still closed directly, skipping
 			// fyne.Do, to honor its documented contract of always closing
 			// for a stale generation - even though nothing currently waits
 			// on this particular (already-overwritten) channel value.
-			if v.gen.Load() != gen {
+			if !token.current() {
+				token.cancelContext()
 				close(scanDone)
 				return
 			}
@@ -268,7 +265,7 @@ func (v *viewer) handleDrop(uris []fyne.URI) {
 		}
 
 		fyne.Do(func() {
-			v.applyScanResult(gen, merging, uris, images, truncated, scanDone)
+			v.applyScanResult(token, merging, uris, images, truncated, scanDone)
 		})
 	}()
 }
@@ -278,10 +275,11 @@ func (v *viewer) handleDrop(uris []fyne.URI) {
 // goroutine. It must run on the UI goroutine (both callers wrap it in
 // fyne.Do) and always closes scanDone, honoring that channel's contract
 // even when a newer generation has made this result stale.
-func (v *viewer) applyScanResult(gen uint64, merging bool, uris, images []fyne.URI, truncated bool, scanDone chan struct{}) {
+func (v *viewer) applyScanResult(token requestToken, merging bool, uris, images []fyne.URI, truncated bool, scanDone chan struct{}) {
 	defer close(scanDone)
+	defer token.cancelContext()
 
-	if v.gen.Load() != gen {
+	if !token.current() {
 		return
 	}
 	v.scanning = false
@@ -328,20 +326,21 @@ func (v *viewer) applyScanResult(gen uint64, merging bool, uris, images []fyne.U
 }
 
 // applyScannedFiles merges or replaces the file set with images, then
-// reorders v.unsortedFiles/v.files under the current sort mode in the
+// reorders v.state.unsortedFiles/v.state.files under the current sort mode in the
 // background via startSort (sort.go) - same reason SetSortMode does: the
 // capture-date/modified/size modes stat or Exif-read every file, which would
 // otherwise freeze the UI for as long as this scan just took to gather them,
 // right as it finishes.
 //
-// v.unsortedFiles and v.files are deliberately only ever written together,
-// atomically, once the reorder lands - never one without the other. This
+// v.state.unsortedFiles and v.state.files are deliberately only ever written together,
+// once the reorder lands - never one without the other. A replacement also
+// resets index in that same callback. This
 // matters because RemoveFile's own comment documents them as required to
 // always hold the same set of files (just possibly different order) so a
 // later sort toggle doesn't resurrect a removed file; updating
-// v.unsortedFiles synchronously here but leaving v.files to catch up later
+// v.state.unsortedFiles synchronously here but leaving v.state.files to catch up later
 // would violate that invariant for as long as the background reorder is
-// still running, and could leave v.index pointing past the end of a v.files
+// still running, and could leave v.state.index pointing past the end of a v.state.files
 // a *different*, later-landing reorder (a concurrent SetSortMode call, say)
 // has already replaced out from under it. Keeping both deferred to the same
 // onDone callback means that can't happen: whichever reorder's generation is
@@ -350,20 +349,23 @@ func (v *viewer) applyScanResult(gen uint64, merging bool, uris, images []fyne.U
 func (v *viewer) applyScannedFiles(merging bool, images []fyne.URI) {
 	var unsorted []fyne.URI
 	if merging {
-		// Copied rather than appended onto v.unsortedFiles directly - same
+		// Copied rather than appended onto v.state.unsortedFiles directly - same
 		// reason SetSortMode's own snapshot is a copy: this slice is about to
 		// be read by a background goroutine, and appending onto
-		// v.unsortedFiles's existing backing array (when it has spare
+		// v.state.unsortedFiles's existing backing array (when it has spare
 		// capacity) would let a concurrent RemoveFile mutate the same memory
 		// the goroutine is reading.
-		unsorted = append(append([]fyne.URI(nil), v.unsortedFiles...), images...)
+		unsorted = append(append([]fyne.URI(nil), v.state.unsortedFiles...), images...)
 	} else {
 		unsorted = images
 	}
 
-	v.startSort(v.sortMode, unsorted, func(ordered []fyne.URI) {
-		v.unsortedFiles = unsorted
-		v.files = ordered
+	v.startSort(v.state.SortMode(), unsorted, func(ordered []fyne.URI) {
+		if !merging {
+			v.state.replaceFiles(unsorted, ordered)
+		} else {
+			v.state.setFiles(unsorted, ordered)
+		}
 		v.ForceRepaint()
 
 		if merging {

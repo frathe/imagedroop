@@ -103,7 +103,7 @@ func TestCanSaveRotation_FalseWhileLoading(t *testing.T) {
 	t.Cleanup(func() { v.loading.Store(false) })
 
 	if v.canSaveRotation() {
-		t.Error("canSaveRotation should be false while a load is in flight - v.index may already point at a file whose pixels haven't finished decoding")
+		t.Error("canSaveRotation should be false while a load is in flight - v.state.index may already point at a file whose pixels haven't finished decoding")
 	}
 }
 

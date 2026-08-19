@@ -56,9 +56,10 @@ type Host interface {
 	// starts when the grid opens.
 	CurrentIndex() int
 
-	// Generation is the app's load generation. A decode captures it when
-	// it starts and discards its result if it no longer matches, so a
-	// fresh drop can't have a stale thumbnail painted into it.
+	// Generation is the app's index-to-URI file-set revision. A decode
+	// captures it when it starts and discards its result if it no longer
+	// matches, so replacement, reorder, or removal cannot paint a stale
+	// thumbnail. Navigation alone leaves it unchanged.
 	Generation() uint64
 
 	// ShowImage displays the file at index i.
@@ -290,16 +291,15 @@ func New(host Host, win fyne.Window) *Overview {
 	// Fired both by keyboard highlight movement (HandleKey forwards the
 	// arrow keys to wrap.TypedKey, see below) and by mouse hover (GridWrap
 	// wires its own onHovered to the same callback) - either way, move the
-	// ring to match. GridWrap's own TypedKey already calls RefreshItem on
-	// the old and new positions before this fires, but at that point
-	// g.highlight still holds the *old* value, so those calls redraw both
-	// cells as "still old" - these two RefreshItem calls are the ones that
-	// actually apply the moved ring, now that g.highlight has been updated.
+	// ring to match.
+	//
+	// The guard is what stops setHighlight's own re-entry through here from
+	// recursing: it re-enters with g.highlight already equal to id.
 	g.wrap.OnHighlighted = func(id widget.GridWrapItemID) {
-		old := g.highlight
-		g.highlight = id
-		g.wrap.RefreshItem(old)
-		g.wrap.RefreshItem(id)
+		if id == g.highlight {
+			return
+		}
+		g.setHighlight(id)
 	}
 
 	g.searchLabel = widget.NewLabelWithStyle("", fyne.TextAlignLeading, fyne.TextStyle{Bold: true})
@@ -341,6 +341,33 @@ func (g *Overview) Highlight() int {
 	return g.highlight
 }
 
+// setHighlight moves the ring to display index id and keeps GridWrap's own
+// keyboard cursor on the same cell.
+//
+// The two are separate positions: GridWrap advances its cursor only for the
+// arrow keys it handles itself, so a mouse hover - or the grid opening on
+// the file currently on screen - used to move the ring without it. The next
+// arrow key then resumed from wherever the keyboard had last been, jumping
+// the ring away from the cell the user was pointing at.
+//
+// wrap.Highlight re-enters OnHighlighted, which returns immediately because
+// g.highlight is already set. GridWrap's own TypedKey does call RefreshItem
+// on the old and new positions before this runs, but at that point
+// g.highlight still holds the *old* value, so those calls redraw both cells
+// as "still old" - the two RefreshItem calls here are the ones that actually
+// apply the moved ring.
+func (g *Overview) setHighlight(id int) {
+	old := g.highlight
+	g.highlight = id
+	// Highlight is a no-op on an empty grid, which would leave the cursor
+	// pointing into the set the filter just emptied.
+	if g.count() > 0 {
+		g.wrap.Highlight(id)
+	}
+	g.wrap.RefreshItem(old)
+	g.wrap.RefreshItem(id)
+}
+
 // ConsumeMaximized reports whether the window is still sitting maximized
 // from an earlier Toggle and hasn't been undone since, clearing the flag
 // either way - a one-shot check for whoever is about to resize the window
@@ -378,10 +405,9 @@ func (g *Overview) Toggle() {
 	g.maximized = true
 
 	// Start the highlight on whichever image is currently on screen, and
-	// scroll it into view - ScrollTo also refreshes the grid, which is
-	// what actually paints the ring now that highlight is set.
-	g.highlight = g.host.CurrentIndex()
-	g.wrap.ScrollTo(g.highlight)
+	// scroll it into view - setHighlight also refreshes the grid, which is
+	// what actually paints the ring.
+	g.setHighlight(g.host.CurrentIndex())
 	g.overlay.Show()
 	g.host.ForceRepaint()
 }
@@ -603,11 +629,11 @@ func (g *Overview) applyFilter() {
 
 	g.filterGen.Add(1)
 
-	// The highlight is a display index, so a filter that shortens the grid
-	// under it would leave it pointing past the last cell.
-	g.highlight = 0
-
 	g.wrap.Refresh()
+	// The highlight is a display index, so a filter that shortens the grid
+	// under it would leave it pointing past the last cell. After the
+	// refresh, so GridWrap's cursor is moved against the new length.
+	g.setHighlight(0)
 	if g.count() > 0 {
 		g.wrap.ScrollTo(0)
 	}

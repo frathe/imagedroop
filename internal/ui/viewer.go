@@ -1,7 +1,6 @@
 package ui
 
 import (
-	"context"
 	"image"
 	"slices"
 	"sync"
@@ -75,7 +74,7 @@ type viewer struct {
 
 	// exif is the EXIF metadata panel - see internal/ui/exifwin, which
 	// reaches back only through the "which file is on screen" accessor
-	// buildViewer hands it. finishLoad calls its Refresh so navigating
+	// registerFeatures hands it. finishLoad calls its Refresh so navigating
 	// while it's open keeps it in sync.
 	exif *exifwin.Window
 
@@ -112,45 +111,27 @@ type viewer struct {
 	// is nothing to restore.
 	savedSession []fyne.URI
 
-	files []fyne.URI
-	index int
+	state appState
 
-	// gen is the load generation: it guards against out-of-order async
-	// loads. It's an atomic rather than a plain uint64 because animate's
-	// background goroutine reads it outside of fyne.Do's synchronization -
-	// under the test driver, fyne.Do runs its closure synchronously on the
-	// calling goroutine instead of handing it off to the UI goroutine, so
-	// that read would otherwise race ShowImage()'s write from a different
-	// goroutine.
-	gen atomic.Uint64
+	// fileSetRevision is the identity of the index-to-URI mapping exposed to
+	// feature packages. Grid thumbnail and deletion work capture it through
+	// Generation and discard results after a drop, reorder, removal, or clear.
+	// It is deliberately independent of loadLifecycle: navigation changes the
+	// displayed index but not what any index means.
+	fileSetRevision revision
 
-	// loadCancel cancels the context.Context behind whichever decode/preload
-	// work v.gen's current generation owns - attemptLoad's own
-	// ReadAndProbe/DecodeLoaded calls and preloadOne's copies of the same,
-	// for both of ShowImage's neighbors. Set by ShowImage alongside gen's
-	// bump, mirroring sortCancel/sortGen (sort.go) for the load generation
-	// instead of the sort one; nil until the first ShowImage call.
-	// Cancelling it is what makes ReadAndProbe's read and DecodeLoaded's
-	// entry check notice and stop promptly instead of running to completion
-	// for a result invalidateLoad's gen bump has already guaranteed will be
-	// discarded - see invalidateLoad (load.go), the one place this is
-	// called.
-	loadCancel context.CancelFunc
+	// loadLifecycle owns a logical navigation and all of its descendants:
+	// probe/decode retries, neighbor preloads, and GIF animation. A newer
+	// navigation, drop, clear, or shutdown cancels and supersedes the token.
+	loadLifecycle requestLifecycle
 
-	// unsortedFiles is the raw scan/drop order, kept alongside files so the
-	// S key can cycle back to it without rescanning. sortMode picks which
-	// ordering files currently holds (see sort.go); it persists across
-	// drops instead of resetting, since it's a standing display preference.
-	unsortedFiles []fyne.URI
-	sortMode      filesort.Mode
+	// scanLifecycle is independent of navigation, so browsing the existing
+	// set during a merge-mode folder scan cannot strand scan UI state.
+	scanLifecycle requestLifecycle
 
-	// mergeMode is a standing preference, toggled by M, that makes
-	// handleDrop merge newly dropped files into the existing set instead
-	// of replacing it; it defaults to false (replace) and persists across
-	// drops like sortMode. baseTitle is the window title without the
-	// "[merge] " prefix applyTitle adds while mergeMode is on, so toggling
-	// M can refresh the title immediately without recomputing it.
-	mergeMode bool
+	// baseTitle is the window title without the "[merge] " prefix applyTitle
+	// adds while merge mode is on, so toggling M can refresh the title
+	// immediately without recomputing it.
 	baseTitle string
 
 	// loading is true while a decode/render is in flight. The key handler
@@ -169,11 +150,10 @@ type viewer struct {
 	winPos winpos.Tracker
 
 	// stopWinPosPoll stops startWindowPosPolling's background ticker
-	// goroutine; wired by buildViewer and called from Run's SetOnStopped
-	// just before the final preferences save (winPos keeps its last
-	// reading, so the save still has a value). Always non-nil after
-	// buildViewer - a no-op func when the window isn't a
-	// driver.NativeWindow and no poller ever started.
+	// goroutine; initialized to noPollerStop by buildViewer, replaced by
+	// Run after startup geometry is restored, and called from SetOnStopped
+	// just before the final preferences save (winPos keeps its last reading,
+	// so the save still has a value).
 	stopWinPosPoll func()
 
 	scanSpinner *widget.ProgressBarInfinite
@@ -194,7 +174,7 @@ type viewer struct {
 	// polling widget state, which otherwise races with the fyne test
 	// driver's synchronous fyne.Do under -race. Each call replaces the
 	// field with a fresh channel before starting its async work; a stale
-	// generation's own channel still gets closed, it just leaves the
+	// request's own channel still gets closed, it just leaves the
 	// shared state untouched.
 	scanDone chan struct{}
 	loadDone chan struct{}
@@ -202,52 +182,34 @@ type viewer struct {
 	sortSpinner *widget.ProgressBarInfinite
 	sortLabel   *widget.Label
 
-	// sorting is true while the current sortGen's reorder is still
+	// sorting is true while the current sortLifecycle request is still
 	// meaningfully pending, set by startSort and cleared by whichever of
 	// invalidateSort (a newer sort, Escape via cancelSort, RemoveFile,
-	// clearToDropzone) or finishSort landing that same generation notices
+	// clearToDropzone) or finishSort landing that same token notices
 	// first - see sort.go's invalidateSort, which every one of those but
 	// finishSort itself goes through - so it never gets stuck true once
 	// whatever it was tracking has been superseded, cancelled, or
 	// discarded. Used for two things: gating cancelSort (nothing to cancel
 	// if nothing's in flight) and handleKeyEvent's Escape case (keys.go) -
 	// a first-ever drop clears v.scanning before startSort has actually
-	// populated v.files, so without this Escape would see len(v.files) ==
+	// populated v.state.files, so without this Escape would see len(v.state.files) ==
 	// 0 and quit the window instead of cancelling the still-computing
 	// reorder.
 	sorting bool
 
-	// sortCancel cancels the context.Context behind the reorder v.sorting
-	// is currently tracking - always non-nil whenever v.sorting is true,
-	// since startSort sets both together. Cancelling it is what makes
-	// filesort.Order's per-file stat/Exif loop notice and stop promptly
-	// instead of running to completion in the background for a result
-	// that's already guaranteed to be discarded - see invalidateSort
-	// (sort.go), the one place this is called.
-	sortCancel context.CancelFunc
+	// sortLifecycle owns the cancellable filesort.Order request. It stays
+	// separate from loadLifecycle so reordering cannot stop an unrelated
+	// decode, preload, or playing GIF.
+	sortLifecycle requestLifecycle
 
-	// sortGen is a staleness counter dedicated to sort operations, kept
-	// separate from v.gen (the load/decode generation ShowImage/animate/
-	// preload use). Bumping v.gen for a sort would call for pairing with
-	// stopAnimation() the way every other v.gen.Add(1) call site does, which
-	// would spuriously interrupt an unrelated playing GIF or in-flight
-	// preload for no reason connected to sorting - so this feature owns its
-	// own counter instead, the same way toast.gen (toast.go) does. Bumped
-	// by invalidateSort (sort.go) - every startSort call (a sort-mode
-	// change or a drop landing, which supersedes whatever it might still be
-	// computing) and everything else that reassigns v.files/v.unsortedFiles
-	// while a sort could be in flight (Escape, RemoveFile, clearToDropzone)
-	// - so a stale sort result can never clobber newer state.
-	sortGen atomic.Uint64
-
-	// sortDone is closed by finishSort once that generation's reorder has
+	// sortDone is closed by finishSort once that request's reorder has
 	// finished applying (or been discarded as stale), mirroring
 	// scanDone/loadDone so tests can wait on it deterministically.
 	sortDone chan struct{}
 
 	// animFrame counts every write to v.img.Image - attemptLoad's initial
 	// frame plus each one animate cycles to afterwards - and animStopped is
-	// closed by animate once it notices its generation is stale and
+	// closed by animate once its load token is cancelled or stale and
 	// returns. Both exist so tests can synchronize on frame changes and
 	// animation shutdown via atomics and channel-close instead of reading
 	// v.img.Image directly from another goroutine, which would race with
@@ -257,15 +219,9 @@ type viewer struct {
 	// closes has no happens-before edge against a concurrently running
 	// animate call - only observing animFrame's new value does. Each
 	// animate call gets its own captured animStopped (see attemptLoad), so
-	// a superseded generation's close can't be mistaken for a newer one's.
-	// animStop is the other direction: closing it (stopAnimation, called
-	// wherever gen bumps with an animation possibly running) wakes animate
-	// out of its frame-delay sleep so it exits immediately instead of up
-	// to one full frame delay later; the gen check stays as belt and
-	// braces. Only ever swapped on the UI goroutine.
+	// a superseded request's close can't be mistaken for a newer one's.
 	animFrame   atomic.Uint64
 	animStopped chan struct{}
-	animStop    chan struct{}
 
 	// displayFrames is the current image's decoded, EXIF-corrected frames
 	// (loaded.Frames - unrotated), and displayFrameIdx which one of them is
@@ -314,7 +270,7 @@ type viewer struct {
 	// container" layout. It needs no Host: the app and that package share
 	// img on a single-writer-per-field contract (the app owns img.Image,
 	// zoom owns img's size and position), and the only reach back is the
-	// updateInfoOverlay callback buildViewer hands it.
+	// updateInfoOverlay callback registerFeatures hands it.
 	zoom *zoom.Zoom
 
 	// infoVisible is a standing preference toggled by I, mirroring
@@ -326,13 +282,14 @@ type viewer struct {
 	// tracks the undecoded size.
 	infoVisible bool
 	infoText    *widget.Label
-	// exifLink is the "Show EXIF data" link inside infoCard - see build.go's
-	// wiring. Kept as its own field only so tests can trigger it directly
-	// (OnTapped) the same way e2e_test.go does for restoreLink, without a
-	// real click through the widget tree. It is only shown for a file that
-	// actually has metadata to show (currentHasEXIF, carried the same way
-	// currentFileSize is): the link is a promise, and offering it for a file
-	// with no Exif at all can only ever open a panel saying so.
+	// exifLink is the "Show EXIF data" link inside infoCard - see
+	// components.go's construction and build.go's callback wiring. Kept as
+	// its own field only so tests can trigger it directly (OnTapped) the
+	// same way e2e_test.go does for restoreLink, without a real click through
+	// the widget tree. It is only shown for a file that actually has metadata
+	// to show (currentHasEXIF, carried the same way currentFileSize is): the
+	// link is a promise, and offering it for a file with no Exif at all can
+	// only ever open a panel saying so.
 	exifLink        *widget.Hyperlink
 	infoCard        *fyne.Container
 	currentFileSize int64
@@ -410,7 +367,7 @@ type viewer struct {
 	// defaultKeyModifiers (keys.go) in production, stubbed by tests (the
 	// fyne test driver can't synthesize modifier state at all). Read by
 	// handleKeyEvent's Shift+R, and by the zoom view's Shift+scroll pan
-	// through the closure buildViewer hands it.
+	// through the closure registerFeatures hands it.
 	keyModifiers func() fyne.KeyModifier
 
 	// vector is the parsed SVG behind the image on screen, nil for every
@@ -426,21 +383,14 @@ type viewer struct {
 	// which requestVectorRender compares a new target against.
 	vectorRaster image.Point
 
-	// vectorGen is the staleness guard for re-render goroutines: every
-	// request bumps it, and a goroutine that finds it moved on rasterizes
-	// nothing. Also bumped by clearVector, so work in flight when the
-	// image changes is discarded rather than landing on the new one.
-	vectorGen atomic.Uint64
+	// vectorLifecycle owns debounce and rasterization for the latest SVG
+	// render request. A newer scale, image change, clear, or shutdown cancels
+	// the previous token and wakes it out of the debounce immediately.
+	vectorLifecycle requestLifecycle
 
 	// vectorPending is waited on by the test suite's drain, per the
 	// module's concurrency invariant.
 	vectorPending sync.WaitGroup
-
-	// vectorStop is closed once, at shutdown, to release a goroutine
-	// parked on its debounce. Deliberately not closed by clearVector,
-	// which runs on every reset - closing a closed channel panics, and
-	// abandoning in-flight work is vectorGen's job.
-	vectorStop chan struct{}
 
 	// vectorDebounce coalesces a burst of scroll-driven scale changes into
 	// one rasterization. A per-viewer field rather than a package var
@@ -490,13 +440,13 @@ func (v *viewer) setTitle(base string) {
 // drop.
 func (v *viewer) applyTitle() {
 	title := v.baseTitle
-	if v.mergeMode {
+	if v.state.MergeMode() {
 		title = lang.L("[merge]") + " " + title
 	}
 	if v.slides.Shuffle() {
 		title = lang.L("[shuffle]") + " " + title
 	}
-	if p := filesort.Label(v.sortMode); p != "" {
+	if p := filesort.Label(v.state.SortMode()); p != "" {
 		title = p + " " + title
 	}
 	v.win.SetTitle(title)
@@ -513,12 +463,11 @@ func (v *viewer) clearToDropzone() {
 	v.resetFade()
 
 	v.invalidateLoad() // invalidate any decode/preload or animation still in flight
-	v.stopAnimation()
-	v.invalidateSort() // cancel a sort still in flight - see sortGen's field comment
+	v.invalidateSort() // cancel a sort still in flight - see sortLifecycle's field comment
+	v.scanLifecycle.invalidate()
 
-	v.files = nil
-	v.unsortedFiles = nil
-	v.index = 0
+	v.state.clearFiles()
+	v.fileSetRevision.advance()
 
 	// Purged, not left to age out: with no files open, every decode the
 	// cache holds is of something unreachable, so keeping them just spends
@@ -568,29 +517,29 @@ func (v *viewer) undoGridMaximize() {
 // instead of replacing it - see SetMergeMode below, which does the actual
 // work.
 func (v *viewer) toggleMergeMode() {
-	v.SetMergeMode(!v.mergeMode)
+	v.SetMergeMode(!v.state.MergeMode())
 }
 
 // SetMergeMode sets merge mode directly - the settings window's binding for
 // the toggle above - and immediately reflects it in the window title via
 // the "[merge] " prefix so it doesn't wait for a drop to become visible.
 func (v *viewer) SetMergeMode(on bool) {
-	v.mergeMode = on
+	v.state.SetMergeMode(on)
 	v.applyTitle()
 }
 
 // MergeMode reports whether merge mode is on - the settings window's
 // getter.
 func (v *viewer) MergeMode() bool {
-	return v.mergeMode
+	return v.state.MergeMode()
 }
 
-// showFileIfPresent looks up target in v.files by URI identity and shows it
+// showFileIfPresent looks up target in v.state.files by URI identity and shows it
 // if found, reporting whether it was. Used to keep the same file in view
 // across an operation - a sort toggle or a merge - that reorders or extends
-// v.files without changing what's currently on screen.
+// v.state.files without changing what's currently on screen.
 func (v *viewer) showFileIfPresent(target fyne.URI) bool {
-	for i, u := range v.files {
+	for i, u := range v.state.files {
 		if u.String() == target.String() {
 			v.ShowImage(i)
 			return true
@@ -664,16 +613,16 @@ func (v *viewer) ShowEmptyStateError(msg string) {
 // CurrentFile returns the file currently displayed and its index, or
 // ok=false when nothing is loaded.
 func (v *viewer) CurrentFile() (u fyne.URI, index int, ok bool) {
-	if len(v.files) == 0 {
+	if len(v.state.files) == 0 {
 		return nil, 0, false
 	}
 
-	return v.files[v.index], v.index, true
+	return v.state.files[v.state.index], v.state.index, true
 }
 
 // displayedFile is CurrentFile narrowed to what the EXIF panel needs: a
 // file that is not merely selected but actually decoded and on screen.
-// The distinction matters during a failed or in-flight load, when v.files
+// The distinction matters during a failed or in-flight load, when v.state.files
 // is non-empty but there is no image to describe.
 func (v *viewer) displayedFile() (fyne.URI, bool) {
 	if v.img.Image == nil {
@@ -685,34 +634,19 @@ func (v *viewer) displayedFile() (fyne.URI, bool) {
 	return u, ok
 }
 
-// RemoveFile drops the file at v.files[i] from both v.files and
-// v.unsortedFiles, keeping them in sync so a later sort toggle doesn't
-// resurrect a file that failed to load. v.files is trimmed by index rather
+// RemoveFile drops the file at v.state.files[i] from both v.state.files and
+// v.state.unsortedFiles, keeping them in sync so a later sort toggle doesn't
+// resurrect a file that failed to load. v.state.files is trimmed by index rather
 // than by URI match, since merge mode allows dropping the same file twice
 // and a match would risk removing the wrong duplicate; unsortedFiles has
 // no equivalent index to use, but any matching duplicate there is an
 // equally valid one to drop.
 func (v *viewer) RemoveFile(i int) {
-	v.invalidateSort() // cancel a sort still in flight - see sortGen's field comment
+	v.invalidateSort() // cancel a sort still in flight - see sortLifecycle's field comment
 
-	target := v.files[i]
-	v.files = append(v.files[:i], v.files[i+1:]...)
+	target := v.state.removeFile(i)
+	v.fileSetRevision.advance()
 	v.imgCache.Remove(target.String())
-
-	// Callers always remove the file currently at v.index, so once it's
-	// gone v.index may point past the new end (e.g. deleting the last
-	// image) - clamp it back onto the shrunk slice, same as attemptLoad's
-	// wraparound does for the retry path.
-	if v.index >= len(v.files) {
-		v.index = len(v.files) - 1
-	}
-
-	for j, u := range v.unsortedFiles {
-		if u.String() == target.String() {
-			v.unsortedFiles = append(v.unsortedFiles[:j], v.unsortedFiles[j+1:]...)
-			break
-		}
-	}
 }
 
 // RemoveFiles drops every named index in one pass - what internal/ui/deletion
@@ -732,7 +666,7 @@ func (v *viewer) RemoveFile(i int) {
 func (v *viewer) RemoveFiles(indices []int) {
 	prev := -1
 	for _, i := range slices.Backward(slices.Sorted(slices.Values(indices))) {
-		if i == prev || i < 0 || i >= len(v.files) {
+		if i == prev || i < 0 || i >= len(v.state.files) {
 			continue
 		}
 		prev = i
@@ -741,7 +675,7 @@ func (v *viewer) RemoveFiles(indices []int) {
 	}
 
 	v.grid.FilesChanged()
-	if len(v.files) == 0 {
+	if len(v.state.files) == 0 {
 		v.grid.Close()
 	}
 }
@@ -767,12 +701,12 @@ func (v *viewer) Modifiers() fyne.KeyModifier {
 
 // FileCount is how many files are currently loaded.
 func (v *viewer) FileCount() int {
-	return len(v.files)
+	return len(v.state.files)
 }
 
 // FileAt returns the file at index i.
 func (v *viewer) FileAt(i int) fyne.URI {
-	return v.files[i]
+	return v.state.files[i]
 }
 
 // OpenFiles sends a file list through the same scan, merge, sort, and display
@@ -783,12 +717,13 @@ func (v *viewer) OpenFiles(files []fyne.URI) {
 
 // CurrentIndex is the index of the file on screen.
 func (v *viewer) CurrentIndex() int {
-	return v.index
+	return v.state.index
 }
 
-// Generation is the current load generation - see the gen field.
+// Generation is the current index-to-URI file-set revision. Navigation does
+// not change it; replacement, reorder, removal, and clear operations do.
 func (v *viewer) Generation() uint64 {
-	return v.gen.Load()
+	return v.fileSetRevision.current()
 }
 
 // Unfocus releases Fyne's canvas focus.
@@ -806,8 +741,8 @@ func (v *viewer) Unfocus() {
 // navigation applies here too.
 func (v *viewer) Advance() {
 	if v.slides.Shuffle() {
-		v.ShowImage(randomOtherIndex(len(v.files), v.index))
+		v.ShowImage(randomOtherIndex(len(v.state.files), v.state.index))
 		return
 	}
-	v.ShowImage(v.index + 1)
+	v.ShowImage(v.state.index + 1)
 }

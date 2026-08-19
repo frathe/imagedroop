@@ -16,10 +16,10 @@ import (
 // text clipboard. No shell-out needed here, unlike copyImageToClipboard
 // below - fyne.Clipboard already handles text on every platform.
 func (v *viewer) copyPathToClipboard() {
-	if len(v.files) == 0 {
+	if len(v.state.files) == 0 {
 		return
 	}
-	v.app.Clipboard().SetContent(v.files[v.index].Path())
+	v.app.Clipboard().SetContent(v.state.files[v.state.index].Path())
 }
 
 // copyImageToClipboard puts the currently displayed frame onto the system

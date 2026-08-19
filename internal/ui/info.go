@@ -33,7 +33,7 @@ func (v *viewer) toggleInfoOverlay() {
 // changes, while updateInfoOverlay also runs on every zoom change - and a
 // zoom can't add or remove a file's metadata.
 func (v *viewer) syncInfoOverlayVisibility() {
-	if v.infoVisible && len(v.files) > 0 && v.img.Image != nil {
+	if v.infoVisible && len(v.state.files) > 0 && v.img.Image != nil {
 		v.updateInfoOverlay()
 		if v.currentHasEXIF {
 			v.exifLink.Show()
@@ -52,14 +52,14 @@ func (v *viewer) syncInfoOverlayVisibility() {
 // onChanged callback after every zoom change, unconditionally, without
 // checking visibility itself first.
 func (v *viewer) updateInfoOverlay() {
-	if !v.infoVisible || len(v.files) == 0 || v.img.Image == nil {
+	if !v.infoVisible || len(v.state.files) == 0 || v.img.Image == nil {
 		return
 	}
 
 	w, h := v.displayedDimensions()
-	name := v.files[v.index].Name()
-	if n := len(v.files); n > 1 {
-		name = fmt.Sprintf("%s  (%d/%d)", name, v.index+1, n)
+	name := v.state.files[v.state.index].Name()
+	if n := len(v.state.files); n > 1 {
+		name = fmt.Sprintf("%s  (%d/%d)", name, v.state.index+1, n)
 	}
 
 	lines := []string{

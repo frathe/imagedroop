@@ -18,10 +18,16 @@ import (
 // internal/imaging cannot import internal/ui to say so. This is what stops
 // the two copies of that value from drifting apart silently.
 func TestVectorFloorMatchesStartWindowSize(t *testing.T) {
-	if startW != imaging.MinVectorWidth {
+	// Both sides are untyped constants, so comparing them directly lets the
+	// compiler (and the IDE) constant-fold the condition to a literal
+	// false/true - defeating the point of a test meant to catch a future
+	// drift. Assigning to a var first forces a real runtime comparison.
+	gotW, wantW := startW, float64(imaging.MinVectorWidth)
+	if gotW != wantW {
 		t.Fatalf("startW = %v, imaging.MinVectorWidth = %v", startW, imaging.MinVectorWidth)
 	}
-	if startH != imaging.MinVectorHeight {
+	gotH, wantH := startH, float64(imaging.MinVectorHeight)
+	if gotH != wantH {
 		t.Fatalf("startH = %v, imaging.MinVectorHeight = %v", startH, imaging.MinVectorHeight)
 	}
 }
@@ -120,13 +126,13 @@ func TestZoomKeysDriveVectorRerenders(t *testing.T) {
 	// could run concurrently with the earlier goroutine's write under the
 	// fake test driver, which (unlike production) never marshals fyne.Do
 	// onto a single goroutine, so nothing here would order the two.
-	before := v.vectorGen.Load()
+	before := v.vectorLifecycle.currentRevision()
 	for range 12 {
 		v.zoom.In()
 	}
 	v.vectorPending.Wait()
 
-	if v.vectorGen.Load() <= before {
+	if v.vectorLifecycle.currentRevision() <= before {
 		t.Fatal("zooming must request re-renders")
 	}
 	if b := v.img.Image.Bounds(); b.Dx() != v.vectorRaster.X {
@@ -175,10 +181,9 @@ func TestRasterizeVectorCoalescesABurst(t *testing.T) {
 	}
 }
 
-// TestRasterizeVectorStopsOnShutdownSignal exercises the vectorStop arm of
-// rasterizeVector's debounce select: the close that cuts a parked goroutine
-// out of its wait at shutdown - the one piece of this task that panics on
-// misuse (a second close), so it must actually run. Most tests here leave
+// TestRasterizeVectorStopsOnShutdownSignal exercises the lifecycle-context arm
+// of rasterizeVector's debounce select: shutdown invalidation cuts a parked
+// goroutine out of its wait. Most tests here leave
 // vectorDebounce at the zero newTestUI sets it to and skip the select
 // entirely; TestRasterizeVectorCoalescesABurst enters it too, but through
 // the vectorAfter seam rather than a real timer, and never touches the
@@ -206,11 +211,11 @@ func TestRasterizeVectorStopsOnShutdownSignal(t *testing.T) {
 	// goroutine actually exited: a sleep here would itself be racing the
 	// 20ms debounce instead of deterministically observing the goroutine's
 	// own exit.
-	close(v.vectorStop)
+	v.vectorLifecycle.invalidate()
 	v.vectorPending.Wait()
 
 	if v.vectorRaster != before {
-		t.Fatal("closing vectorStop must not let a rasterization land")
+		t.Fatal("invalidating vectorLifecycle must not let a rasterization land")
 	}
 }
 
