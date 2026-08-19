@@ -89,7 +89,7 @@ func TestShow_ResetsZoomOnNavigation(t *testing.T) {
 		t.Fatal("setup: expected zoom to be off before navigating")
 	}
 
-	v.ShowImage(v.index + 1)
+	v.ShowImage(v.state.index + 1)
 	waitUntilLoaded(t, v)
 
 	if !v.zoom.Fitting() {

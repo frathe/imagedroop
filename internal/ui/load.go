@@ -19,9 +19,9 @@ import (
 // ShowImage loads and displays the file at index i, wrapping around at
 // both ends. A file that fails to decode is dropped from the set and the
 // next one is tried automatically - see attemptLoad - so a bad file never
-// gets stuck on screen or left inconsistent with v.index.
+// gets stuck on screen or left inconsistent with v.state.index.
 func (v *viewer) ShowImage(i int) {
-	if len(v.files) == 0 {
+	if len(v.state.files) == 0 {
 		return
 	}
 
@@ -93,7 +93,7 @@ func (v *viewer) invalidateLoad() uint64 {
 	return gen
 }
 
-// attemptLoad decodes and displays v.files[i] (wrapped into range), sharing
+// attemptLoad decodes and displays v.state.files[i] (wrapped into range), sharing
 // gen, done, and ctx with the rest of its retry chain - see ShowImage's
 // comment. It first reads the file and probes just its header
 // (imaging.ReadAndProbe), which is enough to reject an invalid file
@@ -104,10 +104,10 @@ func (v *viewer) invalidateLoad() uint64 {
 // to be the next file (or wraps around to the first, if i was the last);
 // once nothing is left it falls back to the empty-state error screen.
 func (v *viewer) attemptLoad(ctx context.Context, i int, gen uint64, done chan struct{}) {
-	n := len(v.files)
+	n := len(v.state.files)
 	i = ((i % n) + n) % n
-	v.index = i
-	u := v.files[i]
+	v.state.index = i
+	u := v.state.files[i]
 
 	// A cache hit - either a file already viewed this session, or one
 	// preloadNeighbors decoded speculatively ahead of time - skips the disk
@@ -199,7 +199,7 @@ func (v *viewer) attemptLoad(ctx context.Context, i int, gen uint64, done chan s
 }
 
 // finishLoad displays loaded - already decoded, either just now or earlier
-// and pulled from imgCache - as v.files[i], updates the window title/size
+// and pulled from imgCache - as v.state.files[i], updates the window title/size
 // and animation state, kicks off speculative preloading of its neighbors,
 // and closes done last. Shared by attemptLoad's disk-decode path (called
 // from inside its completion fyne.Do, which - like every fyne.Do callback
@@ -284,8 +284,8 @@ func (v *viewer) finishLoad(ctx context.Context, _ int, u fyne.URI, loaded *imag
 	}
 	v.slides.SetAnimDuration(animDuration)
 
-	if n := len(v.files); n > 1 {
-		title = fmt.Sprintf("%s  (%d/%d)", title, v.index+1, n)
+	if n := len(v.state.files); n > 1 {
+		title = fmt.Sprintf("%s  (%d/%d)", title, v.state.index+1, n)
 	}
 
 	v.setTitle(title)
@@ -311,13 +311,13 @@ func (v *viewer) finishLoad(ctx context.Context, _ int, u fyne.URI, loaded *imag
 		go v.animate(gen, loaded.Frames, loaded.Delays, stop, stopped)
 	}
 
-	// Must run - and finish reading v.files/v.index - before done closes
+	// Must run - and finish reading v.state.files/v.state.index - before done closes
 	// below: done's close is what a waiter (a test's waitUntilLoaded, or a
 	// future navigation) synchronizes on to know this call is finished
 	// touching viewer state. Under the fyne test driver, this whole
 	// function already runs on whatever goroutine called fyne.Do rather
 	// than a dedicated UI goroutine (see attemptLoad's comment on gen), so
-	// closing done first would let a waiter go on to mutate v.files - via
+	// closing done first would let a waiter go on to mutate v.state.files - via
 	// reset() or a fresh drop - concurrently with this read.
 	v.preloadNeighbors(ctx, gen)
 
@@ -325,26 +325,26 @@ func (v *viewer) finishLoad(ctx context.Context, _ int, u fyne.URI, loaded *imag
 }
 
 // preloadNeighbors speculatively decodes the files immediately before and
-// after v.index in the background, so stepping to either one next is a
+// after v.state.index in the background, so stepping to either one next is a
 // cache hit instead of a fresh disk read + decode. Always called from
 // finishLoad before done closes - see its comment - so reading
-// v.files/v.index here can't race a waiter that's about to mutate them.
+// v.state.files/v.state.index here can't race a waiter that's about to mutate them.
 // ctx is the same one ShowImage created for this generation - the
 // preloads it starts belong to the generation that's now on screen, so
 // they get cancelled alongside its own decode the moment a newer
 // navigation or drop supersedes it (see invalidateLoad).
 func (v *viewer) preloadNeighbors(ctx context.Context, gen uint64) {
-	n := len(v.files)
+	n := len(v.state.files)
 	if n < 2 {
 		return
 	}
 
-	next := ((v.index+1)%n + n) % n
-	prev := ((v.index-1)%n + n) % n
+	next := ((v.state.index+1)%n + n) % n
+	prev := ((v.state.index-1)%n + n) % n
 
-	v.preloadOne(ctx, v.files[next], gen)
+	v.preloadOne(ctx, v.state.files[next], gen)
 	if prev != next {
-		v.preloadOne(ctx, v.files[prev], gen)
+		v.preloadOne(ctx, v.state.files[prev], gen)
 	}
 }
 
@@ -444,7 +444,7 @@ func (v *viewer) stopAnimation() {
 	}
 }
 
-// retryAfterLoadFailure reports msg, drops v.files[i], and either continues
+// retryAfterLoadFailure reports msg, drops v.state.files[i], and either continues
 // the retry chain via attemptLoad or, if that emptied the set, falls back
 // to the empty-state error screen and finalizes done. See show/attemptLoad
 // for why gen, done, and ctx are threaded through unchanged rather than
@@ -452,7 +452,7 @@ func (v *viewer) stopAnimation() {
 func (v *viewer) retryAfterLoadFailure(ctx context.Context, msg string, i int, gen uint64, done chan struct{}) {
 	v.RemoveFile(i)
 
-	if len(v.files) == 0 {
+	if len(v.state.files) == 0 {
 		v.ShowEmptyStateError(msg)
 		close(done)
 		return

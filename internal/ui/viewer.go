@@ -112,8 +112,7 @@ type viewer struct {
 	// is nothing to restore.
 	savedSession []fyne.URI
 
-	files []fyne.URI
-	index int
+	state appState
 
 	// gen is the load generation: it guards against out-of-order async
 	// loads. It's an atomic rather than a plain uint64 because animate's
@@ -137,20 +136,9 @@ type viewer struct {
 	// called.
 	loadCancel context.CancelFunc
 
-	// unsortedFiles is the raw scan/drop order, kept alongside files so the
-	// S key can cycle back to it without rescanning. sortMode picks which
-	// ordering files currently holds (see sort.go); it persists across
-	// drops instead of resetting, since it's a standing display preference.
-	unsortedFiles []fyne.URI
-	sortMode      filesort.Mode
-
-	// mergeMode is a standing preference, toggled by M, that makes
-	// handleDrop merge newly dropped files into the existing set instead
-	// of replacing it; it defaults to false (replace) and persists across
-	// drops like sortMode. baseTitle is the window title without the
-	// "[merge] " prefix applyTitle adds while mergeMode is on, so toggling
-	// M can refresh the title immediately without recomputing it.
-	mergeMode bool
+	// baseTitle is the window title without the "[merge] " prefix applyTitle
+	// adds while merge mode is on, so toggling M can refresh the title
+	// immediately without recomputing it.
 	baseTitle string
 
 	// loading is true while a decode/render is in flight. The key handler
@@ -212,7 +200,7 @@ type viewer struct {
 	// discarded. Used for two things: gating cancelSort (nothing to cancel
 	// if nothing's in flight) and handleKeyEvent's Escape case (keys.go) -
 	// a first-ever drop clears v.scanning before startSort has actually
-	// populated v.files, so without this Escape would see len(v.files) ==
+	// populated v.state.files, so without this Escape would see len(v.state.files) ==
 	// 0 and quit the window instead of cancelling the still-computing
 	// reorder.
 	sorting bool
@@ -235,7 +223,7 @@ type viewer struct {
 	// own counter instead, the same way toast.gen (toast.go) does. Bumped
 	// by invalidateSort (sort.go) - every startSort call (a sort-mode
 	// change or a drop landing, which supersedes whatever it might still be
-	// computing) and everything else that reassigns v.files/v.unsortedFiles
+	// computing) and everything else that reassigns v.state.files/v.state.unsortedFiles
 	// while a sort could be in flight (Escape, RemoveFile, clearToDropzone)
 	// - so a stale sort result can never clobber newer state.
 	sortGen atomic.Uint64
@@ -490,13 +478,13 @@ func (v *viewer) setTitle(base string) {
 // drop.
 func (v *viewer) applyTitle() {
 	title := v.baseTitle
-	if v.mergeMode {
+	if v.state.MergeMode() {
 		title = lang.L("[merge]") + " " + title
 	}
 	if v.slides.Shuffle() {
 		title = lang.L("[shuffle]") + " " + title
 	}
-	if p := filesort.Label(v.sortMode); p != "" {
+	if p := filesort.Label(v.state.SortMode()); p != "" {
 		title = p + " " + title
 	}
 	v.win.SetTitle(title)
@@ -516,9 +504,7 @@ func (v *viewer) clearToDropzone() {
 	v.stopAnimation()
 	v.invalidateSort() // cancel a sort still in flight - see sortGen's field comment
 
-	v.files = nil
-	v.unsortedFiles = nil
-	v.index = 0
+	v.state.clearFiles()
 
 	// Purged, not left to age out: with no files open, every decode the
 	// cache holds is of something unreachable, so keeping them just spends
@@ -568,29 +554,29 @@ func (v *viewer) undoGridMaximize() {
 // instead of replacing it - see SetMergeMode below, which does the actual
 // work.
 func (v *viewer) toggleMergeMode() {
-	v.SetMergeMode(!v.mergeMode)
+	v.SetMergeMode(!v.state.MergeMode())
 }
 
 // SetMergeMode sets merge mode directly - the settings window's binding for
 // the toggle above - and immediately reflects it in the window title via
 // the "[merge] " prefix so it doesn't wait for a drop to become visible.
 func (v *viewer) SetMergeMode(on bool) {
-	v.mergeMode = on
+	v.state.SetMergeMode(on)
 	v.applyTitle()
 }
 
 // MergeMode reports whether merge mode is on - the settings window's
 // getter.
 func (v *viewer) MergeMode() bool {
-	return v.mergeMode
+	return v.state.MergeMode()
 }
 
-// showFileIfPresent looks up target in v.files by URI identity and shows it
+// showFileIfPresent looks up target in v.state.files by URI identity and shows it
 // if found, reporting whether it was. Used to keep the same file in view
 // across an operation - a sort toggle or a merge - that reorders or extends
-// v.files without changing what's currently on screen.
+// v.state.files without changing what's currently on screen.
 func (v *viewer) showFileIfPresent(target fyne.URI) bool {
-	for i, u := range v.files {
+	for i, u := range v.state.files {
 		if u.String() == target.String() {
 			v.ShowImage(i)
 			return true
@@ -664,16 +650,16 @@ func (v *viewer) ShowEmptyStateError(msg string) {
 // CurrentFile returns the file currently displayed and its index, or
 // ok=false when nothing is loaded.
 func (v *viewer) CurrentFile() (u fyne.URI, index int, ok bool) {
-	if len(v.files) == 0 {
+	if len(v.state.files) == 0 {
 		return nil, 0, false
 	}
 
-	return v.files[v.index], v.index, true
+	return v.state.files[v.state.index], v.state.index, true
 }
 
 // displayedFile is CurrentFile narrowed to what the EXIF panel needs: a
 // file that is not merely selected but actually decoded and on screen.
-// The distinction matters during a failed or in-flight load, when v.files
+// The distinction matters during a failed or in-flight load, when v.state.files
 // is non-empty but there is no image to describe.
 func (v *viewer) displayedFile() (fyne.URI, bool) {
 	if v.img.Image == nil {
@@ -685,9 +671,9 @@ func (v *viewer) displayedFile() (fyne.URI, bool) {
 	return u, ok
 }
 
-// RemoveFile drops the file at v.files[i] from both v.files and
-// v.unsortedFiles, keeping them in sync so a later sort toggle doesn't
-// resurrect a file that failed to load. v.files is trimmed by index rather
+// RemoveFile drops the file at v.state.files[i] from both v.state.files and
+// v.state.unsortedFiles, keeping them in sync so a later sort toggle doesn't
+// resurrect a file that failed to load. v.state.files is trimmed by index rather
 // than by URI match, since merge mode allows dropping the same file twice
 // and a match would risk removing the wrong duplicate; unsortedFiles has
 // no equivalent index to use, but any matching duplicate there is an
@@ -695,24 +681,8 @@ func (v *viewer) displayedFile() (fyne.URI, bool) {
 func (v *viewer) RemoveFile(i int) {
 	v.invalidateSort() // cancel a sort still in flight - see sortGen's field comment
 
-	target := v.files[i]
-	v.files = append(v.files[:i], v.files[i+1:]...)
+	target := v.state.removeFile(i)
 	v.imgCache.Remove(target.String())
-
-	// Callers always remove the file currently at v.index, so once it's
-	// gone v.index may point past the new end (e.g. deleting the last
-	// image) - clamp it back onto the shrunk slice, same as attemptLoad's
-	// wraparound does for the retry path.
-	if v.index >= len(v.files) {
-		v.index = len(v.files) - 1
-	}
-
-	for j, u := range v.unsortedFiles {
-		if u.String() == target.String() {
-			v.unsortedFiles = append(v.unsortedFiles[:j], v.unsortedFiles[j+1:]...)
-			break
-		}
-	}
 }
 
 // RemoveFiles drops every named index in one pass - what internal/ui/deletion
@@ -732,7 +702,7 @@ func (v *viewer) RemoveFile(i int) {
 func (v *viewer) RemoveFiles(indices []int) {
 	prev := -1
 	for _, i := range slices.Backward(slices.Sorted(slices.Values(indices))) {
-		if i == prev || i < 0 || i >= len(v.files) {
+		if i == prev || i < 0 || i >= len(v.state.files) {
 			continue
 		}
 		prev = i
@@ -741,7 +711,7 @@ func (v *viewer) RemoveFiles(indices []int) {
 	}
 
 	v.grid.FilesChanged()
-	if len(v.files) == 0 {
+	if len(v.state.files) == 0 {
 		v.grid.Close()
 	}
 }
@@ -767,12 +737,12 @@ func (v *viewer) Modifiers() fyne.KeyModifier {
 
 // FileCount is how many files are currently loaded.
 func (v *viewer) FileCount() int {
-	return len(v.files)
+	return len(v.state.files)
 }
 
 // FileAt returns the file at index i.
 func (v *viewer) FileAt(i int) fyne.URI {
-	return v.files[i]
+	return v.state.files[i]
 }
 
 // OpenFiles sends a file list through the same scan, merge, sort, and display
@@ -783,7 +753,7 @@ func (v *viewer) OpenFiles(files []fyne.URI) {
 
 // CurrentIndex is the index of the file on screen.
 func (v *viewer) CurrentIndex() int {
-	return v.index
+	return v.state.index
 }
 
 // Generation is the current load generation - see the gen field.
@@ -806,8 +776,8 @@ func (v *viewer) Unfocus() {
 // navigation applies here too.
 func (v *viewer) Advance() {
 	if v.slides.Shuffle() {
-		v.ShowImage(randomOtherIndex(len(v.files), v.index))
+		v.ShowImage(randomOtherIndex(len(v.state.files), v.state.index))
 		return
 	}
-	v.ShowImage(v.index + 1)
+	v.ShowImage(v.state.index + 1)
 }

@@ -110,8 +110,8 @@ func TestBuildMainMenu_CloseFilesItemResetsToWelcomeState(t *testing.T) {
 	menu := buildMainMenu(v)
 	menu.Items[0].Items[5].Action()
 
-	if v.files != nil {
-		t.Errorf("files = %v, want nil after the Close Files action", v.files)
+	if v.state.files != nil {
+		t.Errorf("files = %v, want nil after the Close Files action", v.state.files)
 	}
 	if !v.welcomeArt.Visible() {
 		t.Error("expected the welcome drop zone back after the Close Files action")
@@ -147,8 +147,8 @@ func TestFavoritesMenuItemOpensStoredFilesThroughViewer(t *testing.T) {
 	waitForSort(t, v)
 	waitUntilLoaded(t, v)
 
-	if len(v.files) != 1 || v.files[0].Path() != image.Path() {
-		t.Errorf("files = %v, want favorite image %q", v.files, image.Path())
+	if len(v.state.files) != 1 || v.state.files[0].Path() != image.Path() {
+		t.Errorf("files = %v, want favorite image %q", v.state.files, image.Path())
 	}
 }
 
@@ -185,8 +185,8 @@ func TestFavoriteShortcutOpensStoredFilesThroughViewer(t *testing.T) {
 	waitForSort(t, v)
 	waitUntilLoaded(t, v)
 
-	if len(v.files) != 1 || v.files[0].Path() != image.Path() {
-		t.Errorf("files = %v, want shortcut favorite %q", v.files, image.Path())
+	if len(v.state.files) != 1 || v.state.files[0].Path() != image.Path() {
+		t.Errorf("files = %v, want shortcut favorite %q", v.state.files, image.Path())
 	}
 }
 
@@ -243,8 +243,8 @@ func TestCloseFiles_ResetsLoadedFilesToWelcomeState(t *testing.T) {
 
 	v.closeFiles()
 
-	if v.files != nil {
-		t.Errorf("files = %v, want nil after closeFiles", v.files)
+	if v.state.files != nil {
+		t.Errorf("files = %v, want nil after closeFiles", v.state.files)
 	}
 	if !v.welcomeArt.Visible() || !v.dropzone.Visible() {
 		t.Error("expected the welcome drop zone back after closeFiles")

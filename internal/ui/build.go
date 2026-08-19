@@ -159,7 +159,7 @@ func newScanUI() scanUI {
 // hands over. A dedicated pair rather than reusing scanUI's - a background
 // scan (a merge-mode drop) can still be in flight when a sort-mode change is
 // requested, since handleKeyEvent's S-key guard only checks
-// len(v.files)<2/v.loading, not v.scanning, and the two would otherwise
+// len(v.state.files)<2/v.loading, not v.scanning, and the two would otherwise
 // fight over one pair of widgets. Unlike scanUI's label, this one's text
 // never changes: the ask is only to show that a sort is running, not to
 // track its progress the way the scan counter does.
@@ -306,8 +306,7 @@ func buildViewer(application fyne.App) (*viewer, fyne.Window) {
 		infoText:      info.text,
 		infoCard:      info.card,
 		exifLink:      info.exifLink,
-		sortMode:      filesort.FromPref(prefs.SortMode),
-		mergeMode:     prefs.MergeMode,
+		state:         newAppState(filesort.FromPref(prefs.SortMode), prefs.MergeMode),
 		baseTitle:     appTitle,
 		help:          help.New(application, appTitle, assets.WelcomeWebP),
 		exif:          exifwin.New(application, func() (fyne.URI, bool) { return view.displayedFile() }),
@@ -530,7 +529,7 @@ func wireFavoriteShortcuts(c shortcutAdder, open func(index int)) {
 // AddShortcut rather than handleKeyEvent's plain SetOnTypedKey dispatch, for
 // the same reason wireOpenShortcuts does: modified key combos never reach
 // TypedKey at all. Deliberately not gated behind handleKeyEvent's
-// len(v.files)<2 navigation guard - both work fine with a single file
+// len(v.state.files)<2 navigation guard - both work fine with a single file
 // loaded, and copyImageToClipboard/copyPathToClipboard already no-op safely
 // when nothing is loaded yet.
 //

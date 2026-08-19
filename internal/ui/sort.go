@@ -9,48 +9,48 @@ import (
 	"github.com/frathe/picfetch/internal/filesort"
 )
 
-// toggleSort is the S key: it cycles v.sortMode to the next mode - see
+// toggleSort is the S key: it cycles the state sort mode to the next mode - see
 // SetSortMode below, which does the actual work.
 func (v *viewer) toggleSort() {
-	v.SetSortMode(v.sortMode.Next())
+	v.SetSortMode(v.state.SortMode().Next())
 }
 
 // SetSortMode sets the sort order directly - the settings window's binding
-// for the cycle above. Re-derives v.files from v.unsortedFiles under the
+// for the cycle above. Re-derives v.state.files from v.state.unsortedFiles under the
 // new mode in the background (see filesort.Order's own doc comment: the
 // capture-date/modified/size modes each stat or Exif-read every file, which
 // visibly pauses a large recursive folder scan if done inline on the UI
 // goroutine), keeping whichever file is currently on screen in view across
 // the switch instead of jumping to wherever position 0 lands. Safe to call
 // before any files are ever loaded, unlike toggleSort's own S-key call
-// site, which is gated behind handleKeyEvent's len(v.files)<2 guard.
+// site, which is gated behind handleKeyEvent's len(v.state.files)<2 guard.
 func (v *viewer) SetSortMode(m filesort.Mode) {
-	if len(v.files) == 0 {
-		v.sortMode = m
+	if len(v.state.files) == 0 {
+		v.state.SetSortMode(m)
 		v.applyTitle()
 
 		return
 	}
 
-	current := v.files[v.index]
+	current := v.state.files[v.state.index]
 
-	// Defensively copied rather than aliased: v.unsortedFiles's backing
+	// Defensively copied rather than aliased: v.state.unsortedFiles's backing
 	// array can be mutated in place by RemoveFile (a failed-decode retry
 	// dropping a file, or a Shift+Delete) while this snapshot is still
 	// being read by startSort's background goroutine - a concurrent
 	// read/write on the same backing array that filesort.Order's own copy
 	// of its argument doesn't protect against, since that copy only happens
 	// after this handoff.
-	unsorted := append([]fyne.URI(nil), v.unsortedFiles...)
+	unsorted := append([]fyne.URI(nil), v.state.unsortedFiles...)
 
 	// The title's sort-mode prefix updates immediately, even before the
 	// reorder itself finishes - there's no reason to make the user wait for
 	// a large sort just to see that their choice registered.
-	v.sortMode = m
+	v.state.SetSortMode(m)
 	v.applyTitle()
 
 	v.startSort(m, unsorted, func(ordered []fyne.URI) {
-		v.files = ordered
+		v.state.files = ordered
 		v.ForceRepaint()
 		v.showFileIfPresent(current)
 	})
@@ -129,7 +129,7 @@ func (v *viewer) finishSort(gen uint64, ordered []fyne.URI, sortDone chan struct
 
 	// Superseded either by a newer sort (another startSort call bumped
 	// sortGen again) or by something else that changed
-	// v.files/v.unsortedFiles while this one was still computing
+	// v.state.files/v.state.unsortedFiles while this one was still computing
 	// (Shift+Delete, or Escape/File>Close - see those call sites' own
 	// invalidateSort call). Applying ordered in either case would silently
 	// clobber newer state, so just drop it.
@@ -156,7 +156,7 @@ func (v *viewer) finishSort(gen uint64, ordered []fyne.URI, sortDone chan struct
 // stat/Exif loop notice and stop promptly instead of running to completion
 // in the background for a result nobody will see.
 //
-// Unlike cancelScan, there's nothing to put back: v.files/v.unsortedFiles
+// Unlike cancelScan, there's nothing to put back: v.state.files/v.state.unsortedFiles
 // are never touched until a reorder's own onDone callback runs (see
 // applyScannedFiles's and SetSortMode's own comments on why the pairing is
 // atomic), so cancelling before that lands leaves them exactly as they
@@ -173,7 +173,7 @@ func (v *viewer) cancelSort() {
 	v.sortSpinner.Hide()
 	v.sortLabel.Hide()
 
-	if len(v.files) == 0 {
+	if len(v.state.files) == 0 {
 		v.showWelcomeState()
 		v.dropzone.Show()
 	}
@@ -184,5 +184,5 @@ func (v *viewer) cancelSort() {
 
 // SortMode reports the current sort order - the settings window's getter.
 func (v *viewer) SortMode() filesort.Mode {
-	return v.sortMode
+	return v.state.SortMode()
 }

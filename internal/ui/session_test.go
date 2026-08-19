@@ -74,8 +74,8 @@ func TestRestoreSession_LoadsSavedFilesAndHidesLink(t *testing.T) {
 	waitForSort(t, v)
 	waitUntilLoaded(t, v)
 
-	if len(v.files) != 2 {
-		t.Fatalf("len(v.files) = %d, want 2", len(v.files))
+	if len(v.state.files) != 2 {
+		t.Fatalf("len(v.state.files) = %d, want 2", len(v.state.files))
 	}
 	if v.restoreLink.Visible() {
 		t.Error("restoreLink should hide once the saved session has been restored")

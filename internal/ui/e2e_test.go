@@ -110,7 +110,7 @@ func TestE2E_BadDropWithNothingLoadedShowsPlaceholder(t *testing.T) {
 // something unsupported after images were already loaded used to leave the
 // last image visible behind the error toast and placeholder art, because
 // the empty-image branches showed the placeholder without ever clearing
-// the previous v.img/v.files. ShowEmptyStateError (viewer.go) fixes this
+// the previous v.img/v.state.files. ShowEmptyStateError (viewer.go) fixes this
 // by fully resetting the display before showing the error.
 func TestE2E_BadDropAfterImagesClearsDisplay(t *testing.T) {
 	v, win, _ := newTestUI(t)
@@ -123,8 +123,8 @@ func TestE2E_BadDropAfterImagesClearsDisplay(t *testing.T) {
 	if v.img.Visible() || v.img.Image != nil {
 		t.Error("the previous image must not linger behind the error")
 	}
-	if v.files != nil {
-		t.Errorf("files = %v, want nil after a drop with nothing supported", v.files)
+	if v.state.files != nil {
+		t.Errorf("files = %v, want nil after a drop with nothing supported", v.state.files)
 	}
 	if !v.emptyStateArt.Visible() {
 		t.Error("expected the error placeholder art in place of the cleared image")
@@ -145,8 +145,8 @@ func TestE2E_EscapeResetsAfterImagesLoaded(t *testing.T) {
 
 	v.handleKeyEvent(&fyne.KeyEvent{Name: fyne.KeyEscape})
 
-	if v.files != nil {
-		t.Errorf("files = %v, want nil after Escape resets", v.files)
+	if v.state.files != nil {
+		t.Errorf("files = %v, want nil after Escape resets", v.state.files)
 	}
 	if v.img.Visible() {
 		t.Error("image should be hidden after Escape resets")
@@ -249,7 +249,7 @@ func TestE2E_EscapeQuitsWhenNothingLoaded(t *testing.T) {
 }
 
 // TestE2E_EscapeCancelsScanInsteadOfClosing checks the priority handleKeyEvent
-// gives Escape while a scan is in flight: len(v.files) == 0 is exactly the
+// gives Escape while a scan is in flight: len(v.state.files) == 0 is exactly the
 // state a first-ever drop's scan runs in, so without the v.scanning check
 // ahead of it, this would otherwise hit the "nothing loaded" branch above
 // and close the window out from under a scan the user meant to cancel.

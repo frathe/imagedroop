@@ -51,10 +51,10 @@ func TestHandleKeyEvent_DeleteConfirmSwallowsNavigationButRespondsToItsOwnKeys(t
 	dropAndWait(t, v, a, b)
 
 	v.deletion.Request()
-	startIndex := v.index
+	startIndex := v.state.index
 
 	v.handleKeyEvent(&fyne.KeyEvent{Name: fyne.KeyRight})
-	if v.index != startIndex {
+	if v.state.index != startIndex {
 		t.Error("arrow-key navigation should be swallowed while the delete confirmation is up")
 	}
 
@@ -62,7 +62,7 @@ func TestHandleKeyEvent_DeleteConfirmSwallowsNavigationButRespondsToItsOwnKeys(t
 	if v.deletion.Visible() {
 		t.Error("Escape should dismiss the confirmation instead of falling through to its usual meaning")
 	}
-	if len(v.files) != 2 {
+	if len(v.state.files) != 2 {
 		t.Error("Escape on the confirmation must not also reset the loaded file set")
 	}
 }
@@ -84,11 +84,11 @@ func TestPerformDelete_RemovesCurrentFileAndAdvancesToTheNextOne(t *testing.T) {
 	if _, err := os.Stat(a.Path()); !os.IsNotExist(err) {
 		t.Errorf("a.jpg should no longer exist on disk, stat = %v", err)
 	}
-	if len(v.files) != 1 || v.files[0].String() != b.String() {
-		t.Fatalf("files = %v, want just b.jpg left", v.files)
+	if len(v.state.files) != 1 || v.state.files[0].String() != b.String() {
+		t.Fatalf("files = %v, want just b.jpg left", v.state.files)
 	}
-	if v.index != 0 {
-		t.Errorf("index = %d, want 0 (b.jpg took a.jpg's slot)", v.index)
+	if v.state.index != 0 {
+		t.Errorf("index = %d, want 0 (b.jpg took a.jpg's slot)", v.state.index)
 	}
 	if !v.toast.card.Visible() {
 		t.Error("expected a toast confirming the deletion")
@@ -98,9 +98,9 @@ func TestPerformDelete_RemovesCurrentFileAndAdvancesToTheNextOne(t *testing.T) {
 
 // TestPerformDelete_OnLastImageOfMultipleAdvancesWithoutPanicking is a
 // regression test: deleting while positioned on the last image of a
-// multi-file set left v.index equal to the new (shrunk) length, so the very
+// multi-file set left v.state.index equal to the new (shrunk) length, so the very
 // next CurrentFile() call - performDelete's own "did that empty the set?"
-// check - indexed v.files out of range and crashed the whole app.
+// check - indexed v.state.files out of range and crashed the whole app.
 func TestPerformDelete_OnLastImageOfMultipleAdvancesWithoutPanicking(t *testing.T) {
 	uitest.StubTrashMove(t, func(path string) error { return os.Remove(path) })
 	v := newTestViewer(t)
@@ -110,18 +110,18 @@ func TestPerformDelete_OnLastImageOfMultipleAdvancesWithoutPanicking(t *testing.
 
 	v.handleKeyEvent(&fyne.KeyEvent{Name: fyne.KeyRight})
 	waitUntilLoaded(t, v)
-	if v.index != 1 {
-		t.Fatalf("setup: index = %d, want 1 (on b.jpg, the last image)", v.index)
+	if v.state.index != 1 {
+		t.Fatalf("setup: index = %d, want 1 (on b.jpg, the last image)", v.state.index)
 	}
 
 	confirmDelete(t, v)
 	waitUntilLoaded(t, v)
 
-	if len(v.files) != 1 || v.files[0].String() != a.String() {
-		t.Fatalf("files = %v, want just a.jpg left", v.files)
+	if len(v.state.files) != 1 || v.state.files[0].String() != a.String() {
+		t.Fatalf("files = %v, want just a.jpg left", v.state.files)
 	}
-	if v.index != 0 {
-		t.Errorf("index = %d, want 0 (a.jpg took b.jpg's slot)", v.index)
+	if v.state.index != 0 {
+		t.Errorf("index = %d, want 0 (a.jpg took b.jpg's slot)", v.state.index)
 	}
 	settleToast(t, v)
 }
@@ -137,8 +137,8 @@ func TestPerformDelete_LastFileReturnsToEmptyDropzone(t *testing.T) {
 
 	confirmDelete(t, v)
 
-	if len(v.files) != 0 {
-		t.Error("v.files should be empty after deleting the last file")
+	if len(v.state.files) != 0 {
+		t.Error("v.state.files should be empty after deleting the last file")
 	}
 	if v.dropzone == nil || !v.dropzone.Visible() {
 		t.Error("expected the drop zone to reappear once nothing is left")
@@ -151,7 +151,7 @@ func TestPerformDelete_LastFileReturnsToEmptyDropzone(t *testing.T) {
 
 // TestPerformDelete_OSFailureKeepsTheFileAndToastsAnError guards the
 // trash.Move error path through the real viewer: if the move fails, the
-// file must stay in v.files (nothing silently dropped from the set for a
+// file must stay in v.state.files (nothing silently dropped from the set for a
 // file that's actually still there) and the user must be told.
 func TestPerformDelete_OSFailureKeepsTheFileAndToastsAnError(t *testing.T) {
 	uitest.StubTrashMove(t, func(path string) error { return os.Remove(path) })
@@ -168,8 +168,8 @@ func TestPerformDelete_OSFailureKeepsTheFileAndToastsAnError(t *testing.T) {
 
 	confirmDelete(t, v)
 
-	if len(v.files) != 1 {
-		t.Error("a file that failed to delete must stay in v.files")
+	if len(v.state.files) != 1 {
+		t.Error("a file that failed to delete must stay in v.state.files")
 	}
 	if !v.toast.card.Visible() {
 		t.Error("expected a toast reporting the deletion failure")

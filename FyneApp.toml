@@ -2,7 +2,7 @@
 Name = "PicFetch"
 ID = "io.github.frathe.picfetch"
 Version = "0.1.7"
-Build = 310
+Build = 315
 
 [Migrations]
 fyneDo = true

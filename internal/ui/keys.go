@@ -88,13 +88,13 @@ func (v *viewer) handleKeyEvent(ev *fyne.KeyEvent) {
 		// picture-frame mode is on, Escape leaves it (like any other
 		// full-screen app) instead of resetting the session - press it
 		// again afterwards for that. A scan in progress takes priority over
-		// both the close and reset branches below: len(v.files) == 0 is
+		// both the close and reset branches below: len(v.state.files) == 0 is
 		// exactly the state a first-ever drop's scan runs in, so without
 		// this check Escape would close the window out from under a scan
 		// the user meant to cancel instead. v.sorting takes the same
-		// priority for the same reason, and for the same len(v.files) == 0
+		// priority for the same reason, and for the same len(v.state.files) == 0
 		// risk during a first-ever drop's reorder - but unlike cancelScan,
-		// cancelSort (sort.go) never touches v.files/v.unsortedFiles at
+		// cancelSort (sort.go) never touches v.state.files/v.state.unsortedFiles at
 		// all (they're never written until the reorder's own onDone runs),
 		// so cancelling a resort of an already-loaded set just stops the
 		// background work and leaves what's on screen exactly as it was,
@@ -107,7 +107,7 @@ func (v *viewer) handleKeyEvent(ev *fyne.KeyEvent) {
 			v.cancelScan()
 		} else if v.sorting {
 			v.cancelSort()
-		} else if len(v.files) == 0 {
+		} else if len(v.state.files) == 0 {
 			v.win.Close()
 		} else {
 			v.reset()
@@ -221,19 +221,19 @@ func (v *viewer) handleKeyEvent(ev *fyne.KeyEvent) {
 	// Ignore repeat events fired while the previous image is still
 	// decoding/rendering, instead of piling up decodes for images the
 	// user has already navigated past.
-	if len(v.files) < 2 || v.loading.Load() {
+	if len(v.state.files) < 2 || v.loading.Load() {
 		return
 	}
 
 	switch ev.Name {
 	case fyne.KeyRight, fyne.KeyDown:
-		v.ShowImage(v.index + 1)
+		v.ShowImage(v.state.index + 1)
 	case fyne.KeyLeft, fyne.KeyUp:
-		v.ShowImage(v.index - 1)
+		v.ShowImage(v.state.index - 1)
 	case fyne.KeyHome:
 		v.ShowImage(0)
 	case fyne.KeyEnd:
-		v.ShowImage(len(v.files) - 1)
+		v.ShowImage(len(v.state.files) - 1)
 	case fyne.KeyS:
 		v.toggleSort()
 	default:

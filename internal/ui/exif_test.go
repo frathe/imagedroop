@@ -83,7 +83,7 @@ func TestShowExifWindow_ContentAndRefreshOnNavigation(t *testing.T) {
 		t.Errorf("exifText = %q, want %q", got, want)
 	}
 
-	v.ShowImage(v.index + 1)
+	v.ShowImage(v.state.index + 1)
 	waitUntilLoaded(t, v)
 
 	if got := v.exif.Text().Text; got != want {
@@ -172,14 +172,14 @@ func TestExifLink_VisibilityFollowsNavigation(t *testing.T) {
 		t.Fatal("the EXIF link should be shown for the first file, which has EXIF metadata")
 	}
 
-	v.ShowImage(v.index + 1)
+	v.ShowImage(v.state.index + 1)
 	waitUntilLoaded(t, v)
 
 	if v.exifLink.Visible() {
 		t.Error("the EXIF link should hide again after navigating to a file with no EXIF metadata")
 	}
 
-	v.ShowImage(v.index - 1)
+	v.ShowImage(v.state.index - 1)
 	waitUntilLoaded(t, v)
 
 	if !v.exifLink.Visible() {

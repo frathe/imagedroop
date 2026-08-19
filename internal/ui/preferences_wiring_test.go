@@ -38,10 +38,10 @@ func TestBuildViewer_LoadsSavedPreferences(t *testing.T) {
 	defer win.Close()
 	t.Cleanup(func() { imaging.SetMaxEncodedBytes(0) }) // process-wide - see memlimits.go
 
-	if v.sortMode != filesort.BySize {
-		t.Errorf("sortMode = %v, want filesort.BySize (from saved preferences)", v.sortMode)
+	if v.state.SortMode() != filesort.BySize {
+		t.Errorf("sortMode = %v, want filesort.BySize (from saved preferences)", v.state.SortMode())
 	}
-	if !v.mergeMode {
+	if !v.state.MergeMode() {
 		t.Error("mergeMode = false, want true (from saved preferences)")
 	}
 	if got, want := v.slides.Interval(), 7*time.Second; got != want {
@@ -142,10 +142,10 @@ func TestBuildViewer_NoSavedPreferencesUsesShippedDefaults(t *testing.T) {
 	v, win := buildViewer(application)
 	defer win.Close()
 
-	if v.sortMode != filesort.ByName {
-		t.Errorf("sortMode = %v, want filesort.ByName (the shipped default)", v.sortMode)
+	if v.state.SortMode() != filesort.ByName {
+		t.Errorf("sortMode = %v, want filesort.ByName (the shipped default)", v.state.SortMode())
 	}
-	if v.mergeMode {
+	if v.state.MergeMode() {
 		t.Error("mergeMode = true, want false (the shipped default)")
 	}
 	if got := v.slides.Interval(); got != 0 {

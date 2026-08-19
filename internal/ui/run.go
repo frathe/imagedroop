@@ -64,7 +64,7 @@ func Run(application fyne.App, initial []fyne.URI) {
 		view.exif.StopTracking()
 		close(view.vectorStop)
 
-		session.Save(application, view.unsortedFiles)
+		session.Save(application, view.state.unsortedFiles)
 		preferences.Save(application, view.currentPreferences())
 	})
 
@@ -88,8 +88,8 @@ func (v *viewer) currentPreferences() preferences.State {
 	posX, posY, posSet := v.winPos.Get()
 
 	return preferences.State{
-		SortMode:          v.sortMode.PrefValue(),
-		MergeMode:         v.mergeMode,
+		SortMode:          v.state.SortMode().PrefValue(),
+		MergeMode:         v.state.MergeMode(),
 		SlideInterval:     v.slides.Interval(),
 		SlideShuffle:      v.slides.Shuffle(),
 		MaxScanFiles:      v.maxScan,

@@ -18,7 +18,7 @@ import (
 // saveRotation so the item is never offered for an action guaranteed to
 // fail or do nothing.
 //
-//   - !v.loading.Load(): attemptLoad sets v.index to the file being
+//   - !v.loading.Load(): attemptLoad sets v.state.index to the file being
 //     navigated to before that file's pixels have finished decoding, so
 //     mid-load, CurrentFile() already names the new file while
 //     v.displayFrames/v.img.Image still hold the old one's - saving then

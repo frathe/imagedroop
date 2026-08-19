@@ -271,8 +271,8 @@ func TestHandleDrop_EmptyDrop(t *testing.T) {
 
 	v.handleDrop(nil)
 
-	if v.files != nil {
-		t.Errorf("files = %v, want nil after an empty drop", v.files)
+	if v.state.files != nil {
+		t.Errorf("files = %v, want nil after an empty drop", v.state.files)
 	}
 
 	if n := len(v.win.Canvas().Overlays().List()); n != 0 {
@@ -289,8 +289,8 @@ func TestHandleDrop_NoSupportedImages(t *testing.T) {
 	})
 	waitForScan(t, v)
 
-	if v.files != nil {
-		t.Errorf("files = %v, want nil when nothing dropped is a supported image", v.files)
+	if v.state.files != nil {
+		t.Errorf("files = %v, want nil when nothing dropped is a supported image", v.state.files)
 	}
 
 	if !v.toast.card.Visible() {
@@ -317,8 +317,8 @@ func TestHandleDrop_ErrorAfterImagesClearsDisplay(t *testing.T) {
 	// previous image sitting behind the error toast and placeholder art.
 	dropAndWaitScan(t, v, uitest.FakeURI{FileName: "notes.txt", Ext: ".txt"})
 
-	if v.files != nil {
-		t.Errorf("files = %v, want nil after a drop with nothing supported", v.files)
+	if v.state.files != nil {
+		t.Errorf("files = %v, want nil after a drop with nothing supported", v.state.files)
 	}
 	if v.img.Image != nil {
 		t.Error("the previous image should be cleared, not left showing behind the error")
@@ -351,8 +351,8 @@ func TestHandleDrop_FiltersUnsupportedFiles(t *testing.T) {
 	waitForSort(t, v)
 	waitUntilLoaded(t, v)
 
-	if len(v.files) != 1 || v.files[0].Name() != jpegURI.Name() {
-		t.Errorf("files = %v, want only %q kept", v.files, jpegURI.Name())
+	if len(v.state.files) != 1 || v.state.files[0].Name() != jpegURI.Name() {
+		t.Errorf("files = %v, want only %q kept", v.state.files, jpegURI.Name())
 	}
 }
 
@@ -364,8 +364,8 @@ func TestHandleDrop_AcceptsPNGAndGIF(t *testing.T) {
 
 	dropAndWait(t, v, storage.NewFileURI(pngPath), storage.NewFileURI(gifPath))
 
-	if len(v.files) != 2 {
-		t.Fatalf("files = %v, want both the PNG and the GIF kept", v.files)
+	if len(v.state.files) != 2 {
+		t.Fatalf("files = %v, want both the PNG and the GIF kept", v.state.files)
 	}
 }
 
@@ -383,8 +383,8 @@ func TestHandleDrop_SecondDropWithoutMergeModeReplaces(t *testing.T) {
 	waitForSort(t, v)
 	waitUntilLoaded(t, v)
 
-	if len(v.files) != 1 || v.files[0].Name() != "b.jpg" {
-		t.Errorf("files = %v, want only %q - the second drop should replace the first", v.files, "b.jpg")
+	if len(v.state.files) != 1 || v.state.files[0].Name() != "b.jpg" {
+		t.Errorf("files = %v, want only %q - the second drop should replace the first", v.state.files, "b.jpg")
 	}
 }
 
@@ -395,15 +395,15 @@ func TestHandleDrop_MergeModeMergesIntoExistingSet(t *testing.T) {
 	dropAndWait(t, v, a)
 
 	b := uitest.TempJPEGURI(t, "b.jpg", 4, 4, color.White)
-	v.mergeMode = true
+	v.state.SetMergeMode(true)
 	dropAndWait(t, v, b)
 
-	if len(v.files) != 2 {
-		t.Fatalf("files = %v, want both a.jpg and b.jpg after a merge-mode drop", v.files)
+	if len(v.state.files) != 2 {
+		t.Fatalf("files = %v, want both a.jpg and b.jpg after a merge-mode drop", v.state.files)
 	}
 
 	// The merge should have jumped to the file just added, not stayed on a.jpg.
-	if got := v.files[v.index].Name(); got != "b.jpg" {
+	if got := v.state.files[v.state.index].Name(); got != "b.jpg" {
 		t.Errorf("displayed file = %q, want b.jpg (the just-merged file) in view", got)
 	}
 }
@@ -414,11 +414,11 @@ func TestHandleDrop_MergeModeDropWithNothingSupportedKeepsExistingSet(t *testing
 	a := uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White)
 	dropAndWait(t, v, a)
 
-	v.mergeMode = true
+	v.state.SetMergeMode(true)
 	dropAndWaitScan(t, v, uitest.FakeURI{FileName: "notes.txt", Ext: ".txt"})
 
-	if len(v.files) != 1 || v.files[0].Name() != "a.jpg" {
-		t.Errorf("files = %v, want the existing a.jpg untouched by a merge-mode drop with nothing supported", v.files)
+	if len(v.state.files) != 1 || v.state.files[0].Name() != "a.jpg" {
+		t.Errorf("files = %v, want the existing a.jpg untouched by a merge-mode drop with nothing supported", v.state.files)
 	}
 	if v.img.Image == nil {
 		t.Error("the existing image should stay displayed, not cleared, when a merge-mode drop finds nothing new")
@@ -563,7 +563,7 @@ func TestToggleInfoOverlay_ContentAndPersistenceAcrossNavigation(t *testing.T) {
 
 	// Step to the second file: the card must refresh, not keep showing a's
 	// info.
-	v.ShowImage(v.index + 1)
+	v.ShowImage(v.state.index + 1)
 	waitUntilLoaded(t, v)
 	v.updateInfoOverlay()
 
@@ -678,8 +678,8 @@ func TestHandleDrop_RecursesIntoNestedDirectories(t *testing.T) {
 
 	dropAndWait(t, v, storage.NewFileURI(root))
 
-	if len(v.files) != 3 {
-		t.Fatalf("files = %v, want the 3 nested photos, none of the .DS_Store junk", v.files)
+	if len(v.state.files) != 3 {
+		t.Fatalf("files = %v, want the 3 nested photos, none of the .DS_Store junk", v.state.files)
 	}
 
 	if v.dropzone.Visible() {
@@ -705,8 +705,8 @@ func TestHandleDrop_SymlinkCycleDoesNotHang(t *testing.T) {
 
 	dropAndWait(t, v, storage.NewFileURI(root))
 
-	if len(v.files) != 1 {
-		t.Fatalf("files = %v, want the 1 real photo, not one entry per pass through the symlink cycle", v.files)
+	if len(v.state.files) != 1 {
+		t.Fatalf("files = %v, want the 1 real photo, not one entry per pass through the symlink cycle", v.state.files)
 	}
 }
 
@@ -728,8 +728,8 @@ func TestHandleDrop_CapsFileCountForLargeTrees(t *testing.T) {
 
 	dropAndWait(t, v, storage.NewFileURI(root))
 
-	if len(v.files) != 3 {
-		t.Fatalf("files = %d, want the scan to stop at maxScan (3)", len(v.files))
+	if len(v.state.files) != 3 {
+		t.Fatalf("files = %d, want the scan to stop at maxScan (3)", len(v.state.files))
 	}
 
 	if !v.toast.card.Visible() {
@@ -894,8 +894,8 @@ func TestCancelScan_PreservesExistingFilesInMergeMode(t *testing.T) {
 	v := newTestViewer(t)
 
 	existing := uitest.TempJPEGURI(t, "existing.jpg", 4, 4, color.White)
-	v.files = []fyne.URI{existing}
-	v.unsortedFiles = []fyne.URI{existing}
+	v.state.files = []fyne.URI{existing}
+	v.state.unsortedFiles = []fyne.URI{existing}
 	v.dropzone.Hide()
 
 	v.scanning = true
@@ -904,8 +904,8 @@ func TestCancelScan_PreservesExistingFilesInMergeMode(t *testing.T) {
 
 	v.cancelScan()
 
-	if len(v.files) != 1 || v.files[0].String() != existing.String() {
-		t.Errorf("files = %v, want the pre-existing file untouched by cancelling a merge-mode scan", v.files)
+	if len(v.state.files) != 1 || v.state.files[0].String() != existing.String() {
+		t.Errorf("files = %v, want the pre-existing file untouched by cancelling a merge-mode scan", v.state.files)
 	}
 	if v.dropzone.Visible() {
 		t.Error("drop zone should stay hidden - an image was already loaded before the cancelled scan started")
@@ -953,8 +953,8 @@ func TestHandleDrop_SupersededScanGoroutineExits(t *testing.T) {
 		t.Fatal("superseded scan's goroutine never exited - scanDone was never closed")
 	}
 
-	if len(v.files) != 1 || v.files[0].String() != jpegB.String() {
-		t.Errorf("files = %v, want only the second drop's file applied", v.files)
+	if len(v.state.files) != 1 || v.state.files[0].String() != jpegB.String() {
+		t.Errorf("files = %v, want only the second drop's file applied", v.state.files)
 	}
 }
 
@@ -979,15 +979,15 @@ func TestHandleDrop_DedupesOverlappingDirectories(t *testing.T) {
 
 	dropAndWait(t, v, storage.NewFileURI(root), storage.NewFileURI(sub))
 
-	if len(v.files) != 2 {
-		t.Fatalf("files = %v, want top.jpg and nested.jpg once each, not nested.jpg twice from the overlapping drop", v.files)
+	if len(v.state.files) != 2 {
+		t.Fatalf("files = %v, want top.jpg and nested.jpg once each, not nested.jpg twice from the overlapping drop", v.state.files)
 	}
 }
 
 // TestHandleDrop_DedupesDuplicateURIsInDirectDrop covers the fast (no
 // directories) path in handleDrop: passing the same file twice in one drop -
 // which os.Args launch or a native chooser's output could in principle
-// produce - should not add it to v.files twice.
+// produce - should not add it to v.state.files twice.
 func TestHandleDrop_DedupesDuplicateURIsInDirectDrop(t *testing.T) {
 	v := newTestViewer(t)
 
@@ -995,8 +995,8 @@ func TestHandleDrop_DedupesDuplicateURIsInDirectDrop(t *testing.T) {
 
 	dropAndWait(t, v, photo, photo)
 
-	if len(v.files) != 1 {
-		t.Fatalf("files = %v, want the duplicate URI collapsed to a single entry", v.files)
+	if len(v.state.files) != 1 {
+		t.Fatalf("files = %v, want the duplicate URI collapsed to a single entry", v.state.files)
 	}
 }
 
@@ -1228,8 +1228,8 @@ func TestViewerShow_LoadsAndNavigates(t *testing.T) {
 
 	dropAndWait(t, v, first, second, third)
 
-	if v.index != 0 {
-		t.Fatalf("index = %d, want 0 after the initial drop", v.index)
+	if v.state.index != 0 {
+		t.Fatalf("index = %d, want 0 after the initial drop", v.state.index)
 	}
 	if v.img.Image == nil {
 		t.Fatal("expected an image to be loaded")
@@ -1242,32 +1242,32 @@ func TestViewerShow_LoadsAndNavigates(t *testing.T) {
 	}
 
 	// Step forward to the second image.
-	v.ShowImage(v.index + 1)
+	v.ShowImage(v.state.index + 1)
 	waitUntilLoaded(t, v)
 
-	if v.index != 1 {
-		t.Fatalf("index = %d, want 1 after stepping forward", v.index)
+	if v.state.index != 1 {
+		t.Fatalf("index = %d, want 1 after stepping forward", v.state.index)
 	}
 	if b := v.img.Image.Bounds(); b.Dx() != 20 || b.Dy() != 10 {
 		t.Errorf("loaded image size = %dx%d, want 20x10", b.Dx(), b.Dy())
 	}
 
 	// Right at the end wraps around to the first image.
-	v.ShowImage(v.index + 1)
+	v.ShowImage(v.state.index + 1)
 	waitUntilLoaded(t, v)
-	v.ShowImage(v.index + 1)
+	v.ShowImage(v.state.index + 1)
 	waitUntilLoaded(t, v)
 
-	if v.index != 0 {
-		t.Fatalf("index = %d, want wraparound to 0", v.index)
+	if v.state.index != 0 {
+		t.Fatalf("index = %d, want wraparound to 0", v.state.index)
 	}
 
 	// Left from the first image wraps around to the last one.
-	v.ShowImage(v.index - 1)
+	v.ShowImage(v.state.index - 1)
 	waitUntilLoaded(t, v)
 
-	if v.index != 2 {
-		t.Fatalf("index = %d, want wraparound to the last index (2)", v.index)
+	if v.state.index != 2 {
+		t.Fatalf("index = %d, want wraparound to the last index (2)", v.state.index)
 	}
 	if b := v.img.Image.Bounds(); b.Dx() != 15 || b.Dy() != 25 {
 		t.Errorf("loaded image size = %dx%d, want 15x25", b.Dx(), b.Dy())
@@ -1288,7 +1288,7 @@ func TestHandleDrop_NaturalSortsByDefault(t *testing.T) {
 	dropAndWait(t, v, img10, img1, img2)
 
 	var got []string
-	for _, u := range v.files {
+	for _, u := range v.state.files {
 		got = append(got, u.Name())
 	}
 	want := []string{"IMG_1.jpg", "IMG_2.jpg", "IMG_10.jpg"}
@@ -1333,11 +1333,11 @@ func TestToggleSort_CyclesThroughAllModesAndBackToName(t *testing.T) {
 	natural := []string{"IMG_1.jpg", "IMG_2.jpg", "IMG_10.jpg"}
 	scanOrder := namesOf(dropOrder) // IMG_10.jpg, IMG_1.jpg, IMG_2.jpg
 
-	if got := namesOf(v.files); !slices.Equal(got, natural) {
+	if got := namesOf(v.state.files); !slices.Equal(got, natural) {
 		t.Fatalf("files = %v, want natural-sorted %v before any toggle", got, natural)
 	}
-	if v.sortMode != filesort.ByName {
-		t.Fatalf("sortMode = %v, want filesort.ByName before any toggle", v.sortMode)
+	if v.state.SortMode() != filesort.ByName {
+		t.Fatalf("sortMode = %v, want filesort.ByName before any toggle", v.state.SortMode())
 	}
 
 	// Step onto IMG_2.jpg (index 1 in natural order, i.e. position 2/3)
@@ -1345,7 +1345,7 @@ func TestToggleSort_CyclesThroughAllModesAndBackToName(t *testing.T) {
 	// throughout.
 	v.ShowImage(1)
 	waitUntilLoaded(t, v)
-	if got := v.files[v.index].Name(); got != "IMG_2.jpg" {
+	if got := v.state.files[v.state.index].Name(); got != "IMG_2.jpg" {
 		t.Fatalf("displayed file = %q, want IMG_2.jpg before cycling", got)
 	}
 	if title := v.win.Title(); !strings.Contains(title, "(2/3)") {
@@ -1369,13 +1369,13 @@ func TestToggleSort_CyclesThroughAllModesAndBackToName(t *testing.T) {
 		waitForSort(t, v)
 		waitUntilLoaded(t, v)
 
-		if v.sortMode != step.mode {
-			t.Fatalf("sortMode = %v, want %v", v.sortMode, step.mode)
+		if v.state.SortMode() != step.mode {
+			t.Fatalf("sortMode = %v, want %v", v.state.SortMode(), step.mode)
 		}
-		if got := namesOf(v.files); !slices.Equal(got, scanOrder) {
+		if got := namesOf(v.state.files); !slices.Equal(got, scanOrder) {
 			t.Errorf("[mode %v] files = %v, want %v", step.mode, got, scanOrder)
 		}
-		if got := v.files[v.index].Name(); got != "IMG_2.jpg" {
+		if got := v.state.files[v.state.index].Name(); got != "IMG_2.jpg" {
 			t.Errorf("[mode %v] displayed file = %q, want IMG_2.jpg to stay in view", step.mode, got)
 		}
 
@@ -1393,13 +1393,13 @@ func TestToggleSort_CyclesThroughAllModesAndBackToName(t *testing.T) {
 	waitForSort(t, v)
 	waitUntilLoaded(t, v)
 
-	if v.sortMode != filesort.ByName {
-		t.Fatalf("sortMode = %v, want filesort.ByName after wrapping around", v.sortMode)
+	if v.state.SortMode() != filesort.ByName {
+		t.Fatalf("sortMode = %v, want filesort.ByName after wrapping around", v.state.SortMode())
 	}
-	if got := namesOf(v.files); !slices.Equal(got, natural) {
+	if got := namesOf(v.state.files); !slices.Equal(got, natural) {
 		t.Errorf("files = %v, want natural-sorted %v after wrapping around", got, natural)
 	}
-	if got := v.files[v.index].Name(); got != "IMG_2.jpg" {
+	if got := v.state.files[v.state.index].Name(); got != "IMG_2.jpg" {
 		t.Errorf("displayed file = %q, want IMG_2.jpg to stay in view", got)
 	}
 
@@ -1423,39 +1423,212 @@ func TestSetSortMode_JumpsDirectlyRatherThanCycling(t *testing.T) {
 	img1 := uitest.TempJPEGURI(t, "IMG_1.jpg", 4, 4, color.White)
 	dropAndWait(t, v, img10, img1) // natural sort: IMG_1.jpg, IMG_10.jpg
 
-	current := v.files[v.index].Name()
+	current := v.state.files[v.state.index].Name()
 
 	v.SetSortMode(filesort.ByDropOrder)
 
-	if v.sortMode != filesort.ByDropOrder {
-		t.Errorf("sortMode = %v, want ByDropOrder straight after one SetSortMode call", v.sortMode)
+	if v.state.SortMode() != filesort.ByDropOrder {
+		t.Errorf("sortMode = %v, want ByDropOrder straight after one SetSortMode call", v.state.SortMode())
 	}
 
 	waitForSort(t, v)
 	waitUntilLoaded(t, v)
 
-	if got := v.files[v.index].Name(); got != current {
+	if got := v.state.files[v.state.index].Name(); got != current {
 		t.Errorf("displayed file = %q, want it to stay on %q across the sort-mode change", got, current)
 	}
 }
 
 // TestSetSortMode_SafeWithNoFilesLoaded guards the settings window's own
 // call site: unlike toggleSort's S key (gated behind handleKeyEvent's
-// len(v.files)<2 guard), the settings window can change the sort order
+// len(v.state.files)<2 guard), the settings window can change the sort order
 // before anything has ever been dropped.
 func TestSetSortMode_SafeWithNoFilesLoaded(t *testing.T) {
 	v := newTestViewer(t)
 
 	v.SetSortMode(filesort.BySize)
 
-	if v.sortMode != filesort.BySize {
-		t.Errorf("sortMode = %v, want BySize", v.sortMode)
+	if v.state.SortMode() != filesort.BySize {
+		t.Errorf("sortMode = %v, want BySize", v.state.SortMode())
 	}
+}
+
+func TestViewerFileStateSlicesRemainEquivalentAcrossTransitions(t *testing.T) {
+	v := newTestViewer(t)
+
+	a := uitest.TempJPEGURI(t, "2.jpg", 4, 4, color.White)
+	b := uitest.TempJPEGURI(t, "1.jpg", 4, 4, color.White)
+	c := uitest.TempJPEGURI(t, "3.jpg", 4, 4, color.White)
+
+	dropAndWait(t, v, a, c)
+	assertEquivalentFileSlices(t, v)
+
+	v.SetSortMode(filesort.ByDropOrder)
+	waitForSort(t, v)
+	waitUntilLoaded(t, v)
+	assertEquivalentFileSlices(t, v)
+
+	v.SetMergeMode(true)
+	dropAndWait(t, v, b)
+	assertEquivalentFileSlices(t, v)
+
+	v.RemoveFile(v.state.index)
+	assertEquivalentFileSlices(t, v)
+
+	v.SetMergeMode(false)
+	dropAndWait(t, v, a)
+	assertEquivalentFileSlices(t, v)
+}
+
+func TestViewerIndexStaysValidAcrossFileStateTransitions(t *testing.T) {
+	v := newTestViewer(t)
+
+	a := uitest.TempJPEGURI(t, "2.jpg", 4, 4, color.White)
+	b := uitest.TempJPEGURI(t, "1.jpg", 4, 4, color.White)
+	c := uitest.TempJPEGURI(t, "3.jpg", 4, 4, color.White)
+
+	assertValidFileIndex(t, v)
+
+	dropAndWait(t, v, a, c)
+	assertValidFileIndex(t, v)
+
+	v.ShowImage(len(v.state.files) - 1)
+	waitUntilLoaded(t, v)
+	assertValidFileIndex(t, v)
+
+	v.SetSortMode(filesort.ByDropOrder)
+	waitForSort(t, v)
+	waitUntilLoaded(t, v)
+	assertValidFileIndex(t, v)
+
+	v.SetMergeMode(true)
+	dropAndWait(t, v, b)
+	assertValidFileIndex(t, v)
+
+	v.RemoveFile(v.state.index)
+	assertValidFileIndex(t, v)
+
+	v.SetMergeMode(false)
+	dropAndWait(t, v, a)
+	assertValidFileIndex(t, v)
+
+	v.reset()
+	assertValidFileIndex(t, v)
+}
+
+func TestViewerModesApplyBeforeAndAfterLoadingFiles(t *testing.T) {
+	v := newTestViewer(t)
+
+	v.SetSortMode(filesort.ByDropOrder)
+	v.SetMergeMode(true)
+
+	if v.SortMode() != filesort.ByDropOrder || !v.MergeMode() {
+		t.Fatal("modes set before a drop were not retained")
+	}
+
+	a := uitest.TempJPEGURI(t, "2.jpg", 4, 4, color.White)
+	b := uitest.TempJPEGURI(t, "1.jpg", 4, 4, color.White)
+	dropAndWait(t, v, a)
+	dropAndWait(t, v, b)
+
+	if got := namesOfURIs(v.state.files); !slices.Equal(got, []string{"2.jpg", "1.jpg"}) {
+		t.Errorf("files = %v, want merge mode and drop-order mode applied", got)
+	}
+
+	v.SetSortMode(filesort.ByName)
+	waitForSort(t, v)
+	waitUntilLoaded(t, v)
+	v.SetMergeMode(false)
+
+	if got := namesOfURIs(v.state.files); !slices.Equal(got, []string{"1.jpg", "2.jpg"}) {
+		t.Errorf("files = %v, want name sort applied after loading", got)
+	}
+	if v.MergeMode() {
+		t.Error("merge mode should be disabled after loading")
+	}
+}
+
+func TestStaleFileStateCompletionsDoNotOverwriteNewerState(t *testing.T) {
+	v := newTestViewer(t)
+
+	current := []fyne.URI{
+		uitest.FakeURI{FileName: "current.jpg", Ext: ".jpg"},
+	}
+	stale := []fyne.URI{
+		uitest.FakeURI{FileName: "stale.jpg", Ext: ".jpg"},
+	}
+	v.state.files = append([]fyne.URI(nil), current...)
+	v.state.unsortedFiles = append([]fyne.URI(nil), current...)
+
+	staleScanGen := v.gen.Load()
+	v.gen.Add(1)
+	scanDone := make(chan struct{})
+	v.applyScanResult(staleScanGen, false, stale, stale, false, scanDone)
+	<-scanDone
+	assertEquivalentFileSlices(t, v)
+	if got := namesOfURIs(v.state.files); !slices.Equal(got, []string{"current.jpg"}) {
+		t.Errorf("files = %v, want newer scan state retained", got)
+	}
+
+	staleSortGen := v.sortGen.Load()
+	v.sortGen.Add(1)
+	v.sorting = true
+	sortDone := make(chan struct{})
+	called := false
+	v.finishSort(staleSortGen, stale, sortDone, func() {}, func([]fyne.URI) {
+		called = true
+	})
+	<-sortDone
+
+	if called {
+		t.Error("stale sort completion should not invoke its state-writing callback")
+	}
+	if !v.sorting {
+		t.Error("stale sort completion should not clear a newer sort's in-flight state")
+	}
+	assertEquivalentFileSlices(t, v)
+	if got := namesOfURIs(v.state.files); !slices.Equal(got, []string{"current.jpg"}) {
+		t.Errorf("files = %v, want newer sort state retained", got)
+	}
+}
+
+func assertEquivalentFileSlices(t *testing.T, v *viewer) {
+	t.Helper()
+
+	files := namesOfURIs(v.state.files)
+	unsorted := namesOfURIs(v.state.unsortedFiles)
+	slices.Sort(files)
+	slices.Sort(unsorted)
+	if !slices.Equal(files, unsorted) {
+		t.Errorf("files = %v and unsortedFiles = %v do not contain the same URIs", v.state.files, v.state.unsortedFiles)
+	}
+}
+
+func assertValidFileIndex(t *testing.T, v *viewer) {
+	t.Helper()
+
+	if len(v.state.files) == 0 {
+		if v.state.index != 0 {
+			t.Errorf("index = %d, want 0 with no files", v.state.index)
+		}
+		return
+	}
+	if v.state.index < 0 || v.state.index >= len(v.state.files) {
+		t.Errorf("index = %d, want a value in [0, %d)", v.state.index, len(v.state.files))
+	}
+}
+
+func namesOfURIs(files []fyne.URI) []string {
+	names := make([]string, len(files))
+	for i, u := range files {
+		names[i] = u.Name()
+	}
+	return names
 }
 
 // TestSetSortMode_SnapshotDoesNotAliasUnsortedFiles is a -race regression
 // test for the snapshot SetSortMode hands to startSort's goroutine: a plain
-// slice-header copy of v.unsortedFiles aliases its backing array, which
+// slice-header copy of v.state.unsortedFiles aliases its backing array, which
 // RemoveFile (a failed-decode retry, a Shift+Delete) then shifts *in place*
 // on the UI goroutine while filesort.Order is still copying it - an
 // unsynchronized read/write on the same memory. Nothing here asserts: the
@@ -1480,8 +1653,8 @@ func TestSetSortMode_SnapshotDoesNotAliasUnsortedFiles(t *testing.T) {
 		unsorted = append(unsorted, uitest.FakeURI{FileName: fmt.Sprintf("img_%05d.jpg", i), Ext: ".jpg"})
 	}
 
-	v.files = append([]fyne.URI(nil), unsorted...)
-	v.unsortedFiles = unsorted
+	v.state.files = append([]fyne.URI(nil), unsorted...)
+	v.state.unsortedFiles = unsorted
 
 	v.SetSortMode(filesort.ByModTime)
 
@@ -1495,10 +1668,10 @@ func TestSetSortMode_SnapshotDoesNotAliasUnsortedFiles(t *testing.T) {
 // TestHandleKeyEvent_EscapeDuringFirstDropReorderDoesNotCloseWindow guards
 // keys.go's Escape branch: a first-ever drop's scan clears v.scanning back
 // to false before applyScannedFiles's startSort (drop.go/sort.go) has
-// actually populated v.files, so for as long as that reorder is still
-// computing, v.files reads exactly like the "nothing left to reset" state
+// actually populated v.state.files, so for as long as that reorder is still
+// computing, v.state.files reads exactly like the "nothing left to reset" state
 // Escape otherwise closes the window on. v.sorting is what tells the two
-// apart. Drives the in-flight state directly - v.sorting true, v.files
+// apart. Drives the in-flight state directly - v.sorting true, v.state.files
 // still empty, v.sortCancel a harmless stub standing in for the real one
 // startSort would have paired with it - rather than racing a real drop's
 // background goroutine to reproduce that window, the same approach
@@ -1536,24 +1709,24 @@ func TestHandleKeyEvent_EscapeDuringResortOfExistingFilesDoesNotClearThem(t *tes
 	b := uitest.TempJPEGURI(t, "b.jpg", 4, 4, color.White)
 	dropAndWait(t, v, a, b)
 
-	filesBefore := append([]fyne.URI(nil), v.files...)
-	indexBefore := v.index
+	filesBefore := append([]fyne.URI(nil), v.state.files...)
+	indexBefore := v.state.index
 
 	v.sorting = true
 	v.sortCancel = func() {}
 
 	v.handleKeyEvent(&fyne.KeyEvent{Name: fyne.KeyEscape})
 
-	if len(v.files) != len(filesBefore) {
-		t.Fatalf("files = %v, want unchanged %v after cancelling a resort", v.files, filesBefore)
+	if len(v.state.files) != len(filesBefore) {
+		t.Fatalf("files = %v, want unchanged %v after cancelling a resort", v.state.files, filesBefore)
 	}
-	for i, u := range v.files {
+	for i, u := range v.state.files {
 		if u.String() != filesBefore[i].String() {
 			t.Errorf("files[%d] = %q, want unchanged %q after cancelling a resort", i, u, filesBefore[i])
 		}
 	}
-	if v.index != indexBefore {
-		t.Errorf("index = %d, want unchanged %d after cancelling a resort", v.index, indexBefore)
+	if v.state.index != indexBefore {
+		t.Errorf("index = %d, want unchanged %d after cancelling a resort", v.state.index, indexBefore)
 	}
 	if v.img.Image == nil {
 		t.Error("the displayed image should not be cleared by cancelling a resort")
@@ -1575,11 +1748,11 @@ func TestViewerReset(t *testing.T) {
 
 	v.reset()
 
-	if v.files != nil {
-		t.Errorf("files = %v, want nil after reset", v.files)
+	if v.state.files != nil {
+		t.Errorf("files = %v, want nil after reset", v.state.files)
 	}
-	if v.index != 0 {
-		t.Errorf("index = %d, want 0 after reset", v.index)
+	if v.state.index != 0 {
+		t.Errorf("index = %d, want 0 after reset", v.state.index)
 	}
 	if v.img.Image != nil {
 		t.Error("image should be cleared after reset")
@@ -1658,23 +1831,23 @@ func TestViewerShow_AutoAdvancesPastBrokenFileDuringNavigation(t *testing.T) {
 
 	dropAndWait(t, v, first, corrupt, third)
 
-	if len(v.files) != 3 {
-		t.Fatalf("files = %v, want all 3 dropped files kept until navigation actually reaches the broken one", v.files)
+	if len(v.state.files) != 3 {
+		t.Fatalf("files = %v, want all 3 dropped files kept until navigation actually reaches the broken one", v.state.files)
 	}
 
 	// Step onto the broken file.
-	v.ShowImage(v.index + 1)
+	v.ShowImage(v.state.index + 1)
 	waitUntilLoaded(t, v)
 
-	if len(v.files) != 2 {
-		t.Fatalf("files = %v, want the broken file dropped from the set", v.files)
+	if len(v.state.files) != 2 {
+		t.Fatalf("files = %v, want the broken file dropped from the set", v.state.files)
 	}
-	for _, u := range v.files {
+	for _, u := range v.state.files {
 		if u.Name() == "2.jpg" {
-			t.Errorf("files = %v, the broken file should have been removed", v.files)
+			t.Errorf("files = %v, the broken file should have been removed", v.state.files)
 		}
 	}
-	if got := v.files[v.index].Name(); got != "3.jpg" {
+	if got := v.state.files[v.state.index].Name(); got != "3.jpg" {
 		t.Errorf("displayed file = %q, want auto-advance to land on 3.jpg", got)
 	}
 	if v.img.Image == nil {
@@ -1697,8 +1870,8 @@ func TestViewerShow_AutoAdvancesPastBrokenFirstFile(t *testing.T) {
 
 	dropAndWait(t, v, corrupt, second)
 
-	if len(v.files) != 1 || v.files[0].Name() != "2.jpg" {
-		t.Fatalf("files = %v, want only 2.jpg left after the broken first file was auto-skipped", v.files)
+	if len(v.state.files) != 1 || v.state.files[0].Name() != "2.jpg" {
+		t.Fatalf("files = %v, want only 2.jpg left after the broken first file was auto-skipped", v.state.files)
 	}
 	if v.img.Image == nil {
 		t.Fatal("expected the app to auto-advance to the one good image instead of giving up on the first failure")
@@ -1720,8 +1893,8 @@ func TestViewerShow_AllFilesBrokenFallsBackToEmptyState(t *testing.T) {
 
 	dropAndWait(t, v, corrupt1, corrupt2)
 
-	if v.files != nil {
-		t.Errorf("files = %v, want nil once every dropped file has failed to decode", v.files)
+	if v.state.files != nil {
+		t.Errorf("files = %v, want nil once every dropped file has failed to decode", v.state.files)
 	}
 	if v.img.Image != nil {
 		t.Error("no image should be displayed once every file has failed")
@@ -1855,7 +2028,7 @@ func TestFinishLoad_PreloadsBothNeighbors(t *testing.T) {
 // TestAttemptLoad_CacheHitServesFileRemovedFromDisk proves a cache hit
 // really does skip the disk read: b's file is deleted from disk right after
 // it's preloaded, so a real (non-cached) load of it would fail and trigger
-// retryAfterLoadFailure, dropping it from v.files. Navigating to it
+// retryAfterLoadFailure, dropping it from v.state.files. Navigating to it
 // succeeding instead demonstrates the display came from imgCache.
 func TestAttemptLoad_CacheHitServesFileRemovedFromDisk(t *testing.T) {
 	v := newTestViewer(t)
@@ -1876,11 +2049,11 @@ func TestAttemptLoad_CacheHitServesFileRemovedFromDisk(t *testing.T) {
 	v.ShowImage(1)
 	waitUntilLoaded(t, v)
 
-	if v.index != 1 {
-		t.Fatalf("index = %d, want 1 - a cache hit must not fall through to retryAfterLoadFailure", v.index)
+	if v.state.index != 1 {
+		t.Fatalf("index = %d, want 1 - a cache hit must not fall through to retryAfterLoadFailure", v.state.index)
 	}
-	if len(v.files) != 2 {
-		t.Fatalf("files = %v, want b still present - a cache hit must not treat it as broken", v.files)
+	if len(v.state.files) != 2 {
+		t.Fatalf("files = %v, want b still present - a cache hit must not treat it as broken", v.state.files)
 	}
 }
 
@@ -1889,8 +2062,8 @@ func TestRemoveFile_PurgesCacheEntry(t *testing.T) {
 
 	a := uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White)
 	b := uitest.TempJPEGURI(t, "b.jpg", 4, 4, color.White)
-	v.files = []fyne.URI{a, b}
-	v.unsortedFiles = []fyne.URI{a, b}
+	v.state.files = []fyne.URI{a, b}
+	v.state.unsortedFiles = []fyne.URI{a, b}
 	v.imgCache.Add(a.String(), &imaging.LoadedImage{Frames: []image.Image{image.NewRGBA(image.Rect(0, 0, 1, 1))}})
 
 	v.RemoveFile(0)
@@ -1972,8 +2145,8 @@ func TestAttemptLoad_ReportsAFileTooLargeToOpen(t *testing.T) {
 	if v.img.Image != nil {
 		t.Error("no image should be loaded after a file is refused for its size")
 	}
-	if len(v.files) != 0 {
-		t.Errorf("files = %v, want the refused file dropped from the set", v.files)
+	if len(v.state.files) != 0 {
+		t.Errorf("files = %v, want the refused file dropped from the set", v.state.files)
 	}
 	if !v.toast.card.Visible() {
 		t.Fatal("expected a toast after a file was refused for its size")
@@ -2010,8 +2183,8 @@ func TestAttemptLoad_ToastsAndFallsBackToAStaticFrameForAnOversizedAnimation(t *
 	if v.animStop != nil {
 		t.Error("animStop is armed, want no animation goroutine for a refused animation")
 	}
-	if len(v.files) != 1 {
-		t.Errorf("files = %v, want the file kept - it is valid, just too big to animate", v.files)
+	if len(v.state.files) != 1 {
+		t.Errorf("files = %v, want the file kept - it is valid, just too big to animate", v.state.files)
 	}
 	if !v.toast.card.Visible() {
 		t.Fatal("expected a toast explaining why the animation isn't playing")
