@@ -6,7 +6,9 @@ BIN_DIR  := bin
 WIN_ARCHES := amd64 arm64
 LINUX_ARCHES := amd64 arm64
 
-.PHONY: all build build-linux-all run fmt vet test golden tidy clean package-mac package-windows package-windows-debug package-linux package-linux-debug build-all install-tools install-linux-tools security security-govulncheck security-github bump-version help
+RELEASE_BRANCH := main
+
+.PHONY: all build build-linux-all run fmt vet test verify golden tidy clean package-mac package-windows package-windows-debug package-linux package-linux-debug build-all install-tools install-linux-tools security security-govulncheck security-github bump-version release help
 
 all: build
 
@@ -25,6 +27,15 @@ vet: ## Run go vet
 
 test: ## Run tests
 	go test ./...
+
+verify: ## Run the same checks CI does (gofmt, vet, build, race tests)
+	@unformatted=$$(gofmt -l .); \
+	if [ -n "$$unformatted" ]; then \
+		echo "These files need gofmt (run 'make fmt'):"; echo "$$unformatted"; exit 1; \
+	fi
+	go vet ./...
+	go build ./...
+	go test -race ./...
 
 golden: ## Regenerate the e2e golden-master screenshots via Docker (linux/amd64, matching CI exactly - needs Docker)
 	@# Fyne's software rasterizer renders slightly different anti-aliased
@@ -110,36 +121,51 @@ install-linux-tools: ## Install apt dev headers needed to build natively on Linu
 	sudo apt-get update
 	sudo apt-get install -y gcc libgl1-mesa-dev xorg-dev libwayland-dev libxkbcommon-dev
 
-bump-version: ## Bump FyneApp.toml version (PART=major|minor|patch, default patch) and tag HEAD as vX.Y.Z
-	@version=$$(sed -nE 's/^Version = "(.*)"/\1/p' FyneApp.toml); \
-	build=$$(sed -nE 's/^Build = ([0-9]+)/\1/p' FyneApp.toml); \
+bump-version: ## Bump FyneApp.toml's Version/Build only (PART=major|minor|patch, default patch); no commit, no tag
+	@scripts/bump_version.sh $${PART:-patch} >/dev/null
+	@echo "FyneApp.toml was updated but NOT committed. Use 'make release' for the full flow."
+
+release: ## Full release: verify, bump version, commit, tag, push (PART=major|minor|patch, default patch; YES=1 skips the prompt)
+	@# The tag must contain its own version bump, so this target commits the
+	@# FyneApp.toml edit before tagging - the one place the Makefile writes to
+	@# git history. Publishing happens in .github/workflows/release.yml, which
+	@# is triggered by the tag push and re-runs CI as a gate, so a red run
+	@# leaves the tag orphaned rather than shipping a broken build.
+	@set -e; \
 	part=$${PART:-patch}; \
-	major=$$(echo $$version | cut -d. -f1); \
-	minor=$$(echo $$version | cut -d. -f2); \
-	patch=$$(echo $$version | cut -d. -f3); \
-	case $$part in \
-		major) major=$$((major+1)); minor=0; patch=0 ;; \
-		minor) minor=$$((minor+1)); patch=0 ;; \
-		patch) patch=$$((patch+1)) ;; \
-		*) echo "Unknown PART=$$part (want major|minor|patch)"; exit 1 ;; \
-	esac; \
-	new_version=$$major.$$minor.$$patch; \
-	new_build=$$((build+1)); \
+	branch=$$(git rev-parse --abbrev-ref HEAD); \
+	if [ "$$branch" != "$(RELEASE_BRANCH)" ]; then \
+		echo "On branch '$$branch', expected '$(RELEASE_BRANCH)' (override with RELEASE_BRANCH=)"; exit 1; \
+	fi; \
+	if [ -n "$$(git status --porcelain)" ]; then \
+		echo "Working tree is dirty - commit or stash first:"; git status --short; exit 1; \
+	fi; \
+	git fetch --quiet origin "$(RELEASE_BRANCH)"; \
+	if [ "$$(git rev-parse HEAD)" != "$$(git rev-parse origin/$(RELEASE_BRANCH))" ]; then \
+		echo "HEAD and origin/$(RELEASE_BRANCH) have diverged - pull/push first"; exit 1; \
+	fi; \
+	new_version=$$(scripts/bump_version.sh $$part --dry-run); \
 	tag="v$$new_version"; \
-	if git rev-parse "$$tag" >/dev/null 2>&1; then \
+	if git rev-parse -q --verify "refs/tags/$$tag" >/dev/null || \
+	   [ -n "$$(git ls-remote --tags origin "refs/tags/$$tag")" ]; then \
 		echo "Tag $$tag already exists"; exit 1; \
 	fi; \
-	sed -i.bak -E "s/^Version = \".*\"/Version = \"$$new_version\"/" FyneApp.toml; \
-	sed -i.bak -E "s/^Build = [0-9]+/Build = $$new_build/" FyneApp.toml; \
-	rm -f FyneApp.toml.bak; \
-	git tag -a "$$tag" -m "Release $$tag" HEAD; \
-	echo "Bumped version $$version -> $$new_version (build $$build -> $$new_build)"; \
-	echo "Tagged current HEAD ($$(git rev-parse --short HEAD)) as $$tag"; \
-	echo; \
-	echo "FyneApp.toml was updated but NOT committed (this Makefile never commits)."; \
-	echo "Note: $$tag points at HEAD as it was BEFORE this edit, so it does not yet"; \
-	echo "include the FyneApp.toml change. Suggested commit message:"; \
-	echo "  Bump version to $$new_version"
+	if [ -z "$$YES" ]; then \
+		printf "Release %s from %s (%s)? [y/N] " "$$tag" "$(RELEASE_BRANCH)" "$$(git rev-parse --short HEAD)"; \
+		read answer; \
+		case $$answer in y|Y|yes|YES) ;; *) echo "Aborted."; exit 1 ;; esac; \
+	fi; \
+	$(MAKE) verify; \
+	scripts/bump_version.sh $$part >/dev/null; \
+	git add FyneApp.toml; \
+	git commit -m "Release $$tag"; \
+	git tag -a "$$tag" -m "Release $$tag"; \
+	git push origin "$(RELEASE_BRANCH)"; \
+	git push origin "$$tag"; \
+	echo "Pushed $$tag - .github/workflows/release.yml now builds and publishes the artifacts."; \
+	if command -v gh >/dev/null 2>&1; then \
+		echo "Watch it with: gh run watch --exit-status"; \
+	fi
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*##"}; {printf "  %-16s %s\n", $$1, $$2}'
