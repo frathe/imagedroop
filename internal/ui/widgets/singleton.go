@@ -3,6 +3,7 @@ package widgets
 import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/driver/desktop"
 
 	"github.com/frathe/picfetch/internal/winpos"
 )
@@ -29,6 +30,10 @@ type Singleton struct {
 	// live window, and only at moments when asking is possible.
 	pos  winpos.Tracker
 	size fyne.Size
+
+	// onTop is what KeepOnTop turns on: every window this Singleton opens
+	// asks to float above the rest of the app.
+	onTop bool
 
 	// stopPoll stops the position poller behind the open window, and is nil
 	// whenever none is running. Called on close, and by StopTracking at
@@ -78,6 +83,14 @@ func (s *Singleton) Geometry() Geometry {
 	x, y, ok := s.pos.Get()
 
 	return Geometry{X: x, Y: y, PositionSet: ok, Size: s.size}
+}
+
+// KeepOnTop asks every window this Singleton opens to float above the
+// others, for a panel meant to be read alongside the image it describes
+// rather than in front of it. Call before Show; the request only reaches
+// windows opened afterwards, and a window manager is free to ignore it.
+func (s *Singleton) KeepOnTop() {
+	s.onTop = true
 }
 
 // StopTracking stops the position poller without closing the window, for
@@ -146,10 +159,16 @@ func (s *Singleton) Show(app fyne.App, title string, size fyne.Size, build func(
 
 	s.win = win
 
-	// Applied before Show for the reason internal/ui's startup restoration
-	// applies the main window's saved position before that window is shown:
-	// RequestPosition on a window that isn't up yet just primes the
-	// coordinates the glfw driver's window-creation path uses once it does run.
+	// Both requests below only prime values the glfw driver's
+	// window-creation path reads when the window actually goes up, so both
+	// have to be made before Show - see internal/ui's startup restoration
+	// for the same ordering on the main window. A backend with no native
+	// window to ask (the fyne test driver included) isn't a desktop.Window
+	// at all, and simply doesn't get the request.
+	if dw, isDesktop := win.(desktop.Window); isDesktop && s.onTop {
+		dw.RequestAlwaysOnTop()
+	}
+
 	if s.remember {
 		s.pos.Restore(win)
 	}

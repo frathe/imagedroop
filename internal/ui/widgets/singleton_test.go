@@ -112,6 +112,26 @@ func TestSingleton_GeometrySurvivesTheWindowClosing(t *testing.T) {
 	}
 }
 
+// The fyne test driver's windows are not desktop.Windows, so the always-on-
+// top request has nothing to reach - it must degrade to a no-op rather than
+// panicking on a failed type assertion, and leave the window otherwise
+// untouched.
+func TestSingleton_KeepOnTopOnANonDesktopWindow(t *testing.T) {
+	app := test.NewApp()
+
+	var s Singleton
+	s.KeepOnTop()
+	s.Show(app, "ontop", fyne.NewSize(300, 200), newSingletonContent, nil)
+	defer s.Window().Close()
+
+	if s.Window() == nil {
+		t.Fatal("window should be open after Show")
+	}
+	if got, want := s.Window().Canvas().Size(), fyne.NewSize(300, 200); got != want {
+		t.Errorf("window size = %v, want %v", got, want)
+	}
+}
+
 func TestSingleton_StopTrackingIsSafeWhenNothingIsTracking(t *testing.T) {
 	var s Singleton
 

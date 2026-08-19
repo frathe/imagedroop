@@ -87,11 +87,18 @@ type Window struct {
 // New returns the EXIF window for application. current is called on every
 // open and refresh to find the file to read.
 func New(application fyne.App, current func() (fyne.URI, bool)) *Window {
-	return &Window{
+	w := &Window{
 		app:     application,
 		current: current,
 		tiles:   newTileFetcher(osmTiles, nil),
 	}
+
+	// The panel is read against the photo it describes, so it floats above
+	// the image window instead of disappearing behind it the moment the
+	// user clicks back to navigate.
+	w.win.KeepOnTop()
+
+	return w
 }
 
 // Show opens the panel, or raises it and syncs it to the current image if
