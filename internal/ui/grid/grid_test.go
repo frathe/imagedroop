@@ -201,6 +201,124 @@ func TestHandleKey_ArrowMovesHighlight(t *testing.T) {
 	}
 }
 
+// hover stands in for the pointer entering the cell at display index id.
+// Fyne's GridWrap gives its items an onHovered that does exactly this call
+// and nothing else, so driving the callback is the whole of a hover as far
+// as the grid can observe it - the test driver has no pointer to move.
+func hover(g *Overview, id int) {
+	g.wrap.OnHighlighted(id)
+}
+
+// TestHover_MovesTheRingAndTheKeyboardCursor: the ring and GridWrap's own
+// keyboard cursor are separate positions, and a hover only ever moved the
+// first - so the next arrow key resumed from wherever the keyboard had last
+// been rather than from the cell under the pointer.
+func TestHover_MovesTheRingAndTheKeyboardCursor(t *testing.T) {
+	g := newOverview(t, hostWith(t, "a.jpg", "b.jpg", "c.jpg", "d.jpg"))
+	if err := g.Warm(); err != nil {
+		t.Fatalf("Warm: %v", err)
+	}
+	g.Toggle()
+
+	hover(g, 2)
+	if g.Highlight() != 2 {
+		t.Fatalf("Highlight() = %d, want 2 right after hovering that cell", g.Highlight())
+	}
+
+	g.HandleKey(&fyne.KeyEvent{Name: fyne.KeyRight})
+	if g.Highlight() != 3 {
+		t.Errorf("Highlight() = %d, want 3 - Right should step on from the hovered cell", g.Highlight())
+	}
+
+	hover(g, 0)
+	g.HandleKey(&fyne.KeyEvent{Name: fyne.KeyLeft})
+	if g.Highlight() != 0 {
+		t.Errorf("Highlight() = %d, want it to stay at 0 - Left from the hovered first cell has nowhere to go", g.Highlight())
+	}
+}
+
+// TestHover_OnTheHighlightedCellIsANoop covers the re-entry guard: moving
+// the keyboard cursor fires the same callback a hover does, so an
+// unguarded handler would recurse until the stack ran out.
+func TestHover_OnTheHighlightedCellIsANoop(t *testing.T) {
+	g := newOverview(t, hostWith(t, "a.jpg", "b.jpg"))
+	if err := g.Warm(); err != nil {
+		t.Fatalf("Warm: %v", err)
+	}
+	g.Toggle()
+
+	hover(g, 0)
+	hover(g, 0)
+
+	if g.Highlight() != 0 {
+		t.Errorf("Highlight() = %d, want 0", g.Highlight())
+	}
+}
+
+// TestToggle_KeyboardCursorStartsOnTheCurrentImage: opening the grid puts
+// the ring on the image on screen, and the arrow keys have to agree - they
+// used to resume from cell 0 no matter where the ring was drawn.
+func TestToggle_KeyboardCursorStartsOnTheCurrentImage(t *testing.T) {
+	host := hostWith(t, "a.jpg", "b.jpg", "c.jpg", "d.jpg")
+	host.index = 2
+	g := newOverview(t, host)
+	if err := g.Warm(); err != nil {
+		t.Fatalf("Warm: %v", err)
+	}
+	g.Toggle()
+
+	g.HandleKey(&fyne.KeyEvent{Name: fyne.KeyRight})
+
+	if g.Highlight() != 3 {
+		t.Errorf("Highlight() = %d, want 3 - Right should step on from the image the grid opened on", g.Highlight())
+	}
+}
+
+// TestHandleRune_FilteringResetsTheKeyboardCursorToo: same reset as the
+// ring's, since a cursor left past the end of the filtered set would send
+// the first arrow key somewhere the user never was.
+func TestHandleRune_FilteringResetsTheKeyboardCursorToo(t *testing.T) {
+	host := hostWith(t, "moon.jpg", "a.jpg", "b.jpg", "c.jpg")
+	host.index = 3
+	g := newOverview(t, host)
+	if err := g.Warm(); err != nil {
+		t.Fatalf("Warm: %v", err)
+	}
+	g.Toggle()
+
+	typeQuery(g, "moon")
+	g.HandleKey(&fyne.KeyEvent{Name: fyne.KeyRight})
+
+	if g.Highlight() != 0 {
+		t.Errorf("Highlight() = %d, want it to stay at 0 - the filtered grid has a single cell", g.Highlight())
+	}
+}
+
+// TestHandleRune_NoMatchesLeavesTheKeyboardCursorAlone: an empty grid has
+// no cell to put a cursor on, and widening the query again must not have
+// left one pointing into the set that was filtered away.
+func TestHandleRune_NoMatchesLeavesTheKeyboardCursorAlone(t *testing.T) {
+	g := newOverview(t, hostWith(t, "a.jpg", "b.jpg", "c.jpg"))
+	if err := g.Warm(); err != nil {
+		t.Fatalf("Warm: %v", err)
+	}
+	g.Toggle()
+
+	typeQuery(g, "zzz")
+	g.HandleKey(&fyne.KeyEvent{Name: fyne.KeyRight})
+	if g.Highlight() != 0 {
+		t.Errorf("Highlight() = %d, want 0 with nothing to highlight", g.Highlight())
+	}
+
+	g.HandleKey(&fyne.KeyEvent{Name: fyne.KeyBackspace})
+	g.HandleKey(&fyne.KeyEvent{Name: fyne.KeyBackspace})
+	g.HandleKey(&fyne.KeyEvent{Name: fyne.KeyBackspace})
+	g.HandleKey(&fyne.KeyEvent{Name: fyne.KeyRight})
+	if g.Highlight() != 1 {
+		t.Errorf("Highlight() = %d, want 1 - Right from the reset cursor once every cell is back", g.Highlight())
+	}
+}
+
 func TestHandleKey_LeftAtStartIsNoop(t *testing.T) {
 	g := newOverview(t, hostWith(t, "a.jpg", "b.jpg"))
 	if err := g.Warm(); err != nil {
