@@ -196,6 +196,15 @@ func TestRoundTrip_AnswersAMissImmediatelyAndFetchesInTheBackground(t *testing.T
 
 func TestRoundTrip_DownloadsATileOnlyOnce(t *testing.T) {
 	s := newTileServer(t)
+
+	// Hold the server so the tile is genuinely still on its way for all the
+	// repaints below. Without this the background download can land between
+	// two of them - a loopback fetch takes microseconds - and the cache
+	// starts answering them for real, which is correct behaviour failing an
+	// assertion about a state the test no longer has.
+	release := s.hold()
+	t.Cleanup(release)
+
 	f := fetcherFor(s)
 
 	req, err := http.NewRequest(http.MethodGet, s.URL+"/15/1/1.png", nil)
@@ -211,6 +220,7 @@ func TestRoundTrip_DownloadsATileOnlyOnce(t *testing.T) {
 		}
 	}
 
+	release()
 	waitForPending(t, f)
 
 	if _, err := f.RoundTrip(req); err != nil {
@@ -452,16 +462,14 @@ func TestTileLogFilter(t *testing.T) {
 		f := &tileLogFilter{out: &bytes.Buffer{}}
 
 		var wg sync.WaitGroup
-		for i := 0; i < 8; i++ {
-			wg.Add(1)
+		for range 8 {
 
-			go func() {
-				defer wg.Done()
+			wg.Go(func() {
 
-				for j := 0; j < 50; j++ {
+				for range 50 {
 					_, _ = f.Write([]byte("Fyne error:  tile fetch error\n"))
 				}
-			}()
+			})
 		}
 
 		wg.Wait()

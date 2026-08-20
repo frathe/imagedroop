@@ -51,4 +51,9 @@ jobs:
         run: go build ./...
 
       - name: Test
+        # The runner's default locale is "C", which is not a well-formed
+        # BCP-47 tag, so Fyne logs a three-line parse fault before any test
+        # runs. Naming a real one keeps that noise out of the test output.
+        env:
+          LANG: en_US.UTF-8
         run: go test -race ./...
