@@ -71,9 +71,11 @@ set with the keyboard.
   that isn't actually shown
 - `Escape` closes the window
 - Built-in end-user manual ([manual.md](internal/ui/help/manual.md), embedded at build time and
-  rendered in its own scrollable window) via `F1` or **Help → Manual**;
-  `Escape` closes just the manual window. Fyne's markdown renderer has no
-  table extension, so keep `manual.md` table-free
+  rendered in its own scrollable window) via `F1` or **Help → Manual**
+  (F1 is shown next to that menu item); the window has a search bar at the
+  top — Enter finds and highlights matches and scrolls to the first, Enter
+  again jumps to the next. `Escape` closes just the manual window. Fyne's
+  markdown renderer has no table extension, so keep `manual.md` table-free
 - Window auto-resizes to fit the image, capped at 1500x950
 - Image decoding happens off the UI thread so large files don't freeze the
   window; an indeterminate progress bar shows along the top edge while a

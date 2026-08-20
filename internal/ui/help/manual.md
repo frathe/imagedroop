@@ -43,10 +43,12 @@ You are reading it, so you have probably already found it, but for the record:
 - Press **`F1`** at any time, or
 - choose **Help -> Manual** from the menu.
 
-The manual opens in its own scrollable window. Press **`Esc`** or close the
-window to dismiss it; the image you were viewing is untouched. Pressing `F1`
-again brings the existing manual window back to the front instead of opening a
-second copy.
+The manual opens in its own scrollable window. A search field stays at the
+top; type a term and press **Enter** to highlight matches and scroll the first
+into view. Press **Enter** again with the same term to jump to the next match.
+Press **`Esc`** or close the window to dismiss it; the image you were viewing
+is untouched. Pressing `F1` again brings the existing manual window back to
+the front instead of opening a second copy.
 
 ---
 

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/driver/desktop"
 )
 
 // manuals is shared by every check below that should hold for both shipped
@@ -100,6 +101,14 @@ func TestHelpMenu(t *testing.T) {
 		t.Error("manual menu item has no action")
 	}
 
+	shortcut, ok := manual.Shortcut.(*desktop.CustomShortcut)
+	if !ok {
+		t.Fatalf("Manual item Shortcut = %#v, want a *desktop.CustomShortcut for F1", manual.Shortcut)
+	}
+	if shortcut.KeyName != fyne.KeyF1 || shortcut.Modifier != 0 {
+		t.Errorf("Manual accelerator = %+v, want {KeyF1, 0}", shortcut)
+	}
+
 	if !help.Items[1].IsSeparator {
 		t.Error("expected a separator between Manual and About")
 	}
@@ -116,8 +125,8 @@ func TestHelpMenu(t *testing.T) {
 }
 
 func firstLine(s string) string {
-	if i := strings.IndexByte(s, '\n'); i >= 0 {
-		return s[:i]
+	if before, _, ok := strings.Cut(s, "\n"); ok {
+		return before
 	}
 
 	return s

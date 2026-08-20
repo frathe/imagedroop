@@ -12,6 +12,7 @@ package help
 
 import (
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/lang"
 
 	"github.com/frathe/picfetch/internal/ui/widgets"
@@ -31,6 +32,7 @@ type Help struct {
 
 	manualWin widgets.Singleton
 	aboutWin  widgets.Singleton
+	manual    *manualView
 }
 
 // New returns the help UI for application, showing title as the app's name
@@ -48,6 +50,9 @@ func New(application fyne.App, title string, art []byte) *Help {
 // ARCHITECTURE.md).
 func (h *Help) Menu() *fyne.Menu {
 	manual := fyne.NewMenuItem(lang.L("Manual"), h.ShowManual)
+	// Display-only: F1 itself is handleKeyEvent in internal/ui. This is the
+	// same menu-hint pattern File uses for Open/Save/Export.
+	manual.Shortcut = &desktop.CustomShortcut{KeyName: fyne.KeyF1}
 	about := fyne.NewMenuItem(lang.L("About"), h.ShowAbout)
 
 	return fyne.NewMenu(lang.L("Help"), manual, fyne.NewMenuItemSeparator(), about)

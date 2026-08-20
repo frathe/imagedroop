@@ -50,7 +50,10 @@ Vollständigkeit halber:
 - Drücken Sie jederzeit **`F1`**, oder
 - wählen Sie **Hilfe -> Handbuch** aus dem Menü.
 
-Das Handbuch öffnet sich in einem eigenen, scrollbaren Fenster. Drücken Sie
+Das Handbuch öffnet sich in einem eigenen, scrollbaren Fenster. Oben bleibt
+ein Suchfeld stehen: geben Sie einen Begriff ein und drücken Sie **Enter**,
+um Treffer hervorzuheben und den ersten in den Blick zu scrollen. **Enter**
+mit demselben Begriff springt zum nächsten Treffer. Drücken Sie
 **`Esc`** oder schließen Sie das Fenster, um es zu verlassen; das Bild, das
 Sie betrachtet haben, bleibt unverändert. Ein erneuter Druck auf `F1` holt das
 bereits geöffnete Handbuchfenster nach vorne, statt eine zweite Kopie zu

@@ -10,15 +10,13 @@
 - when zooming in or out the window scales in size with the image. The minimum window size is the default app
   open size, and the maximum is the user-configurable maximum window size; pan inside the window once the cap
   is reached.
+- the manual has a search bar at the top of the window ("Search for..."). Enter highlights matches and scrolls
+  the first into view; Enter again on the same term walks to the next match. Help → Manual shows the F1 key.
 
 ## ACTIVE DEVELOPMENT
 
 ## TODO
 
- - the manual should have a search bar. searches text should be highlighted in the text and when hitting enter the 
-   search should be performed, the window should scroll the first result into view. when hitting enter again on the same
-   search term the second result should scroll into view and so on. The search bar has a fixed position on the top of
-   the window. and has a helpful text like "Search for...", The Help key F1 should also be shown in the help menu.
  - We need an easter egg! When searching the manual for "please hypnotize me" a full screen window should be opened 
    The project code for the spiral easter egg is in the folder ../golang_course/spiral/ adapt it so it can live in
    this repository.
