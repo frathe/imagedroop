@@ -7,8 +7,11 @@ package widgets
 import (
 	"image/color"
 
+	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
+	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/theme"
+	"fyne.io/fyne/v2/widget"
 )
 
 // This file gathers the app's shared hardcoded style values - everything
@@ -80,6 +83,18 @@ func NewFocusRing(strokeWidth, cornerRadius float32) *canvas.Rectangle {
 	ring.CornerRadius = cornerRadius
 
 	return ring
+}
+
+// Ringed pairs a button with its selection ring: the ring fills the cell,
+// the button is inset by one padding step inside it, so the ring's stroke
+// lands in that gap instead of underneath the button. Stacking the two at
+// the same size hides the ring entirely - a Fyne button paints an opaque
+// background across its whole area, including the DangerImportance red -
+// and the card then looks identical whichever button is selected. Behind
+// rather than on top so the ring can never sit between the pointer and the
+// button it marks.
+func Ringed(ring *canvas.Rectangle, btn *widget.Button) *fyne.Container {
+	return container.NewStack(ring, container.NewPadded(btn))
 }
 
 // NewSelectionTint returns the translucent wash the grid overview draws over

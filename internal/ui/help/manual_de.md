@@ -491,6 +491,11 @@ tatsächlich verschoben wurden.
   macOS/Linux, nur Dateien unter Windows — siehe oben)
 - **`Cmd`/`Strg+1`** bis **`Cmd`/`Strg+9`** — die sortierten Favoriten 1 bis
   9 öffnen; **`Cmd`/`Strg+0`** öffnet Favorit 10 (siehe „Menü“ unten)
+- **`Cmd`/`Strg+Shift+F`** — „Favoriten verwalten…“ öffnen, vollständig über
+  die Tastatur bedienbar (einschließlich der Rückfrage vor dem Entfernen):
+  die Pfeiltasten bewegen einen Rahmen über die Favoriten und über deren
+  Schaltflächen „Öffnen“/„Entfernen“, `Return` löst die gerade markierte
+  Option aus, `Esc` schließt (siehe „Menü“ unten)
 - **`→`** / **`↓`** — nächstes Bild
 - **`←`** / **`↑`** — vorheriges Bild
 - **`Home`** / **`End`** — erstes / letztes Bild
@@ -615,15 +620,27 @@ benötigen in beiden Fällen nichts Zusätzliches.
   geladen werden
 - **Favoriten -> _Favoritenname_** — öffnet die gespeicherte Liste mit
   demselben Scan-, Sortier- und Zusammenführen-Verhalten wie „Dateien
-  öffnen“. Die Einträge sind ohne Beachtung der Groß-/Kleinschreibung nach
-  Namen sortiert. Die ersten neun zeigen `Cmd`/`Strg+1` bis
-  `Cmd`/`Strg+9`, der zehnte zeigt `Cmd`/`Strg+0`. Wird eine Sammlung unter
-  einem bereits vorhandenen Namen gespeichert, fragt PicFetch vor dem
-  Ersetzen der gespeicherten Liste nach
-- **Favoriten -> Favoriten verwalten…** — zeigt alle gespeicherten Sammlungen
-  an und ermöglicht, eine davon nach Bestätigung zu entfernen. Dabei wird
-  nur der eigene Ordner der Sammlung in den Papierkorb verschoben; die
-  Originalbilder werden **nicht** verschoben oder gelöscht
+  öffnen“. Jeder Eintrag zeigt, wie viele Dateien er enthält, z. B.
+  „Urlaub 2024 (128)“; die Einträge sind ohne Beachtung der
+  Groß-/Kleinschreibung nach Namen sortiert. Die ersten neun zeigen
+  `Cmd`/`Strg+1` bis `Cmd`/`Strg+9`, der zehnte zeigt `Cmd`/`Strg+0`. Wird
+  eine Sammlung unter einem bereits vorhandenen Namen gespeichert, fragt
+  PicFetch vor dem Ersetzen der gespeicherten Liste nach
+- **Favoriten -> Favoriten verwalten…** (auch `Cmd`/`Strg+Shift+F`) — zeigt
+  alle gespeicherten Sammlungen mit ihrer Dateianzahl an und lässt Sie eine
+  davon öffnen oder entfernen. Vollständig über die Tastatur bedienbar:
+  **`↑`**/**`↓`** bewegen den Rahmen zwischen den Zeilen, **`←`**/**`→`**
+  bewegen ihn zwischen den Schaltflächen „Öffnen“ und „Entfernen“ der
+  jeweiligen Zeile, **`Return`** löst die gerade markierte Option aus, und
+  ein Klick führt immer die angeklickte Schaltfläche aus, unabhängig davon,
+  wo der Rahmen gerade steht. **`Esc`** schließt den Dialog. Das Entfernen
+  fragt vorher nach Bestätigung; auch diese Rückfrage lässt sich vollständig
+  über die Tastatur beantworten: **`←`**/**`→`** bewegen den Rahmen zwischen
+  „Abbrechen“ und „Entfernen“ — er steht anfangs auf „Abbrechen“, sodass
+  `Return` von sich aus nichts entfernt —, **`Return`** löst die markierte
+  Option aus, **`Esc`** bricht ab. Wird bestätigt, wandert nur der eigene
+  Ordner der Sammlung in den Papierkorb; die Originalbilder werden **nicht**
+  verschoben oder gelöscht
 - **Hilfe -> Handbuch** — öffnet dieses Handbuch, genau wie `F1`
 
 ---

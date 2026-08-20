@@ -167,6 +167,92 @@ func TestLoadRejectsMalformedData(t *testing.T) {
 	}
 }
 
+func TestCountReturnsStoredEntryCount(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	files := make([]fyne.URI, 5)
+	for i := range files {
+		files[i] = storage.NewFileURI(filepath.Join(dir, "images", string(rune('a'+i))+".jpg"))
+	}
+	if err := Save(dir, "Trip", files); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	got, err := Count(dir, "Trip")
+	if err != nil {
+		t.Fatalf("Count: %v", err)
+	}
+	if got != len(files) {
+		t.Errorf("Count = %d, want %d", got, len(files))
+	}
+}
+
+// A favorite saved with no files is a real, distinguishable zero - not the
+// same thing as the errors below, which never manage to report a count at
+// all.
+func TestCountOfEmptySavedFavoriteIsZero(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	if err := Save(dir, "Empty", nil); err != nil {
+		t.Fatalf("Save: %v", err)
+	}
+
+	got, err := Count(dir, "Empty")
+	if err != nil {
+		t.Fatalf("Count: %v", err)
+	}
+	if got != 0 {
+		t.Errorf("Count = %d, want 0", got)
+	}
+}
+
+func TestCountMissingFavoriteIsError(t *testing.T) {
+	t.Parallel()
+
+	if _, err := Count(t.TempDir(), "Missing"); err == nil {
+		t.Error("Count did not error for a favorite that was never saved")
+	}
+}
+
+func TestCountRejectsMalformedData(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name string
+		data string
+	}{
+		{name: "invalid JSON", data: "{"},
+		{name: "non-numeric index", data: `{"first":"/a.jpg"}`},
+		{name: "negative index", data: `{"-1":"/a.jpg"}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := t.TempDir()
+			favoriteDir := filepath.Join(dir, "Broken")
+			if err := os.Mkdir(favoriteDir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(filepath.Join(favoriteDir, fileListName), []byte(tt.data), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := Count(dir, "Broken"); err == nil {
+				t.Error("Count accepted malformed data")
+			}
+		})
+	}
+}
+
+func TestCountRejectsInvalidName(t *testing.T) {
+	t.Parallel()
+
+	if _, err := Count(t.TempDir(), "../escape"); err == nil {
+		t.Error("Count accepted an invalid name")
+	}
+}
+
 func TestList(t *testing.T) {
 	t.Parallel()
 

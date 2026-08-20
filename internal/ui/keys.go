@@ -40,6 +40,12 @@ func defaultKeyModifiers() fyne.KeyModifier {
 // every key binding is dispatched from here rather than from a focused
 // widget (see grid.Close on the one place that has to actively restore it).
 func (v *viewer) handleTypedRune(r rune) {
+	// A Fyne dialog owns the keyboard whole while it is up, for the same
+	// reason it does in handleKeyEvent below.
+	if v.win.Canvas().Overlays().Top() != nil {
+		return
+	}
+
 	// The delete confirmation and the export-format prompt own the keyboard
 	// whole while either is up, for the same reasons they do in
 	// handleKeyEvent below.
@@ -61,6 +67,24 @@ func (v *viewer) handleTypedRune(r rune) {
 // SetOnTypedKey in buildViewer (build.go), so tests can drive the exact
 // same dispatch instead of reimplementing it.
 func (v *viewer) handleKeyEvent(ev *fyne.KeyEvent) {
+	// A Fyne dialog (favorites' Manage/Add/Replace/removal dialogs, the
+	// file picker, a native menu) owns the keyboard whole while it is up.
+	// This dispatcher is the canvas's *unfocused* handler, and Fyne resolves
+	// Canvas.Focused through the top overlay's focus manager only - so a
+	// dialog whose content focuses nothing leaves Focused() nil and the glfw
+	// driver routes every key here instead, where Escape would reset the
+	// session or close the window from behind the modal.
+	//
+	// This cannot shadow the app's own modal surfaces: the delete card, the
+	// export prompt, the grid, the info card and the toast are all layers of
+	// the window content stack assembled in build.go, not canvas overlays -
+	// only Fyne's own dialogs and menus put anything in Overlays(). The
+	// spiral easter egg is a separate window with its own SetOnTypedKey and
+	// never reaches this function at all.
+	if v.win.Canvas().Overlays().Top() != nil {
+		return
+	}
+
 	// The delete confirmation (Shift+Delete, see internal/ui/deletion) takes
 	// over the keyboard entirely while it's up: every other key here -
 	// navigation, zoom, S/M/P/I, even Escape's own usual meaning - would

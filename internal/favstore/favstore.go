@@ -133,8 +133,14 @@ func Save(dir, name string, files []fyne.URI) error {
 	return os.Rename(tmpPath, filepath.Join(favoriteDir, fileListName))
 }
 
-// Load returns the files stored in the favorite named name.
-func Load(dir, name string) ([]fyne.URI, error) {
+// readList reads and decodes the favorite named name's file-list.json into
+// its raw index-to-path map, rejecting only an invalid name or data that
+// isn't valid JSON. It does not validate that each key is a well-formed
+// index - Load and Count each decide for themselves what to do with a key
+// that isn't, since they disagree about whether they need to know the index
+// at all. Load and Count both build on this so they never disagree about
+// what is actually stored on disk.
+func readList(dir, name string) (map[string]string, error) {
 	if !ValidName(name) {
 		return nil, fmt.Errorf("invalid favorite name %q", name)
 	}
@@ -146,6 +152,15 @@ func Load(dir, name string) ([]fyne.URI, error) {
 
 	var list map[string]string
 	if err := json.Unmarshal(data, &list); err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
+// Load returns the files stored in the favorite named name.
+func Load(dir, name string) ([]fyne.URI, error) {
+	list, err := readList(dir, name)
+	if err != nil {
 		return nil, err
 	}
 
@@ -168,6 +183,30 @@ func Load(dir, name string) ([]fyne.URI, error) {
 		files[i] = storage.NewFileURI(item.path)
 	}
 	return files, nil
+}
+
+// Count returns how many files the favorite named name stores.
+//
+// It validates each key exactly as Load does rather than just returning
+// len(list): a hand-edited file-list.json with a non-numeric or negative
+// key is not a valid stored list, and Count reporting a count for it anyway
+// would let a menu label claim a number Load then refuses to open - the two
+// must agree on what counts as a stored list, not just on how many keys are
+// present. A missing favorite, an unreadable file, and malformed JSON are
+// likewise errors here, never 0 - 0 is what a favorite saved with no files
+// legitimately reports, and callers need to tell the two apart.
+func Count(dir, name string) (int, error) {
+	list, err := readList(dir, name)
+	if err != nil {
+		return 0, err
+	}
+
+	for key := range list {
+		if index, err := strconv.Atoi(key); err != nil || index < 0 {
+			return 0, fmt.Errorf("invalid file index %q", key)
+		}
+	}
+	return len(list), nil
 }
 
 // Remove moves the favorite named name to the operating system's trash.

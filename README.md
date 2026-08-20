@@ -47,9 +47,14 @@ set with the keyboard.
   lazily and with bounded concurrency, in a separate small LRU cache from
   the full-size decode cache, so opening it on a several-thousand-file
   folder doesn't spawn a decode per file
-- Opening or saving a favorite also saves its grid previews to disk under
-  that favorite's own folder in the background, so reopening it paints the
-  grid without re-decoding the originals (toggle this off in Settings)
+- Favorites remember named file lists; each entry shows how many files it
+  holds (`Holiday 2024 (128)`), and **Manage Favorites…** (also
+  `Cmd`/`Ctrl+Shift+F`) is fully keyboard-navigable — arrow keys move a ring
+  over the rows and their Open/Remove buttons, `Return` activates whichever
+  is ringed. Opening or saving a favorite also saves its grid previews to
+  disk under that favorite's own folder in the background, so reopening it
+  paints the grid without re-decoding the originals (toggle this off in
+  Settings)
 - Zoom via `+`/`-`/`1`/`0`, or scroll (mouse wheel/trackpad) to zoom
   anchored at the cursor; click-drag or Shift+scroll to pan once zoomed in.
   No native pinch gesture — Fyne's desktop driver (GLFW) has no magnify/

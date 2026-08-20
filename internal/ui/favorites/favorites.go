@@ -8,7 +8,6 @@ import (
 	"sync"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/container"
 	"fyne.io/fyne/v2/data/validation"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/driver/desktop"
@@ -59,8 +58,13 @@ type Feature struct {
 	manageItem *fyne.MenuItem
 	names      []string
 
+	// manageDialog and managePanel are the Manage Favorites dialog while it
+	// is up, and nil whenever it is not - see manage.go, where a non-nil
+	// manageDialog doubles as the guard against stacking a second one.
 	manageDialog dialog.Dialog
-	pending      sync.WaitGroup
+	managePanel  *managePanel
+
+	pending sync.WaitGroup
 }
 
 // New builds the Favorites menu without reading from disk.
@@ -68,7 +72,16 @@ func New(host Host, win fyne.Window) *Feature {
 	f := &Feature{host: host, win: win}
 	f.addItem = fyne.NewMenuItem(lang.L("Add Current List to Favorites…"), f.addToFavorites)
 	f.addItem.Disabled = true
-	f.manageItem = fyne.NewMenuItem(lang.L("Manage Favorites…"), f.showManage)
+	f.manageItem = fyne.NewMenuItem(lang.L("Manage Favorites…"), f.ShowManage)
+	// Display-only, mirroring how internal/ui/menu.go sets Export image's
+	// and Set as Wallpaper's Shortcut fields: the binding itself is
+	// wireManageFavoritesShortcut's AddShortcut call
+	// (internal/ui/shortcuts.go). This just shows the same accelerator next
+	// to the menu item.
+	f.manageItem.Shortcut = &desktop.CustomShortcut{
+		KeyName:  fyne.KeyF,
+		Modifier: fyne.KeyModifierShortcutDefault | fyne.KeyModifierShift,
+	}
 	f.menu = fyne.NewMenu(lang.L("Favorites"),
 		f.addItem, fyne.NewMenuItemSeparator(), f.manageItem)
 	return f
@@ -121,7 +134,7 @@ func (f *Feature) refreshMenu() bool {
 	items := []*fyne.MenuItem{f.addItem, fyne.NewMenuItemSeparator()}
 	for i, name := range names {
 		favoriteName := name
-		item := fyne.NewMenuItem(favoriteName, func() {
+		item := fyne.NewMenuItem(f.menuLabel(favoriteName), func() {
 			f.openFavorite(favoriteName)
 		})
 		if shortcut := ShortcutForIndex(i); shortcut != nil {
@@ -137,6 +150,21 @@ func (f *Feature) refreshMenu() bool {
 	f.menu.Items = items
 	f.menu.Refresh()
 	return true
+}
+
+// menuLabel returns a favorite's Favorites-menu label: its name and its
+// stored file count, sourced from favstore.Count so the number always
+// matches what opening the favorite would try to load. A count that can't
+// be read falls back to the bare name rather than a toast - the favorite
+// still lists, still opens (through favoriteName in refreshMenu, never this
+// label), and still holds its accelerator slot; reportError per favorite
+// here would turn one broken file-list.json into a toast on every refresh.
+func (f *Feature) menuLabel(name string) string {
+	count, err := favstore.Count(f.dir, name)
+	if err != nil {
+		return name
+	}
+	return fmt.Sprintf(lang.L("%s (%d)"), name, count)
 }
 
 func (f *Feature) addToFavorites() {
@@ -238,78 +266,6 @@ func (f *Feature) openFavorite(name string) {
 	// triggers rather than behind it.
 	f.host.SyncFavoritePreviews(favstore.Dir(f.dir, name), files)
 	f.host.OpenFiles(files)
-}
-
-func (f *Feature) showManage() {
-	names, err := favstore.List(f.dir)
-	if err != nil {
-		f.reportError(lang.L("could not list favorites: %v"), err)
-		return
-	}
-
-	var content fyne.CanvasObject
-	if len(names) == 0 {
-		content = widget.NewLabel(lang.L("No favorites yet"))
-	} else {
-		rows := make([]fyne.CanvasObject, 0, len(names))
-		for _, name := range names {
-			favoriteName := name
-			remove := widget.NewButton(lang.L("Remove"), func() {
-				f.removeFavorite(favoriteName)
-			})
-			rows = append(rows, container.NewBorder(nil, nil, nil, remove,
-				widget.NewLabel(favoriteName)))
-		}
-		scroll := container.NewVScroll(container.NewVBox(rows...))
-		scroll.SetMinSize(fyne.NewSize(420, 240))
-		content = scroll
-	}
-
-	f.manageDialog = dialog.NewCustom(
-		lang.L("Manage Favorites"),
-		lang.L("Close"),
-		content,
-		f.win,
-	)
-	f.manageDialog.Show()
-}
-
-func (f *Feature) removeFavorite(name string) {
-	confirm := dialog.NewConfirm(
-		lang.L("Remove Favorite"),
-		fmt.Sprintf(lang.L("Remove %q from favorites? Its folder will be moved to the Trash."), name),
-		func(remove bool) {
-			if remove {
-				f.performRemove(name)
-			}
-		},
-		f.win,
-	)
-	confirm.SetConfirmText(lang.L("Remove"))
-	confirm.SetConfirmImportance(widget.DangerImportance)
-	confirm.Show()
-}
-
-func (f *Feature) performRemove(name string) {
-	f.pending.Add(1)
-	go func() {
-		err := favstore.Remove(f.dir, name)
-		fyne.Do(func() {
-			defer f.pending.Done()
-
-			if err != nil {
-				f.reportError(lang.L("could not remove favorite %q: %v"), name, err)
-				return
-			}
-
-			f.refreshMenu()
-			f.host.ShowToast(fmt.Sprintf(lang.L("removed favorite %q"), name))
-			if f.manageDialog != nil {
-				f.manageDialog.Hide()
-				f.showManage()
-			}
-		})
-	}()
 }
 
 func (f *Feature) reportError(format string, args ...any) {

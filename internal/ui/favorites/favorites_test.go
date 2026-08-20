@@ -15,7 +15,6 @@ import (
 	"fyne.io/fyne/v2/test"
 
 	"github.com/frathe/picfetch/internal/favstore"
-	"github.com/frathe/picfetch/internal/uitest"
 )
 
 type fakeHost struct {
@@ -83,6 +82,29 @@ func TestNewBuildsStaticMenuWithoutDiskAccess(t *testing.T) {
 	}
 }
 
+// TestNewSetsManageItemAccelerator covers the display-only *desktop.
+// CustomShortcut New sets on f.manageItem, mirroring
+// TestSetDirAssignsDigitShortcutsToFirstTenFavorites below - distinct from
+// wireManageFavoritesShortcut (internal/ui/shortcuts.go), which is what
+// actually binds Cmd/Ctrl+Shift+F; this only pins what the menu shows next
+// to the item as a hint.
+func TestNewSetsManageItemAccelerator(t *testing.T) {
+	app := test.NewApp()
+	t.Cleanup(app.Quit)
+	win := app.NewWindow("favorites test")
+	t.Cleanup(win.Close)
+
+	f := New(&fakeHost{}, win)
+
+	got, ok := f.manageItem.Shortcut.(*desktop.CustomShortcut)
+	if !ok {
+		t.Fatalf("manage item shortcut type = %T, want *desktop.CustomShortcut", f.manageItem.Shortcut)
+	}
+	if got.KeyName != fyne.KeyF || got.Modifier != fyne.KeyModifierShortcutDefault|fyne.KeyModifierShift {
+		t.Errorf("manage item shortcut = %+v, want {KeyF, KeyModifierShortcutDefault|KeyModifierShift}", got)
+	}
+}
+
 func TestSetDirBuildsSortedFavoriteItems(t *testing.T) {
 	host := &fakeHost{}
 	f := newFeature(t, host)
@@ -98,12 +120,131 @@ func TestSetDirBuildsSortedFavoriteItems(t *testing.T) {
 		t.Fatalf("menu item count = %d, want 7", len(f.menu.Items))
 	}
 	got := []string{f.menu.Items[2].Label, f.menu.Items[3].Label, f.menu.Items[4].Label}
-	want := []string{"Alpha", "beta", "zebra"}
+	want := []string{"Alpha (0)", "beta (0)", "zebra (0)"}
 	if !slices.Equal(got, want) {
 		t.Errorf("favorite items = %v, want %v", got, want)
 	}
 	if !f.menu.Items[1].IsSeparator || !f.menu.Items[5].IsSeparator {
 		t.Error("dynamic entries should be enclosed by separators")
+	}
+}
+
+// TestRefreshMenuLabelsCarryStoredCounts pins the label format the Favorites
+// menu commits to: name and stored count together, sourced from
+// favstore.Count rather than len(files) at save time, so a favorite edited
+// on disk between refreshes still reports what Load would actually return.
+func TestRefreshMenuLabelsCarryStoredCounts(t *testing.T) {
+	host := &fakeHost{}
+	f := newFeature(t, host)
+	counts := map[string]int{"Alpha": 3, "beta": 0, "zebra": 12}
+	for name, n := range counts {
+		files := make([]fyne.URI, n)
+		for i := range files {
+			files[i] = storage.NewFileURI(fmt.Sprintf("/photos/%s/%02d.jpg", name, i))
+		}
+		if err := favstore.Save(f.dir, name, files); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	f.SetDir(f.dir)
+
+	if len(f.names) != len(counts) {
+		t.Fatalf("f.names = %v, want %d favorites", f.names, len(counts))
+	}
+	for i, name := range f.names {
+		want := fmt.Sprintf("%s (%d)", name, counts[name])
+		if got := f.menu.Items[i+2].Label; got != want {
+			t.Errorf("favorite %q label = %q, want %q", name, got, want)
+		}
+	}
+}
+
+// TestRefreshMenuFallsBackToBareNameForUnreadableCount pins the fallback
+// this stage adds: a favorite whose file-list.json can't be read still
+// lists, in its accelerator slot, under its bare name. favstore.Count and
+// favstore.Load share the exact same readList/index validation (see Stage
+// 1), so a file broken enough to make Count fail also makes Load fail -
+// the point of this test isn't that the click opens files (it can't), it's
+// that the click still resolves to *this* favorite's name and reaches the
+// host through it, proving the fallback label cost it a count, not its
+// identity. A refresh must also not toast per unreadable favorite: that
+// would bury the user in toasts on every SetDir.
+func TestRefreshMenuFallsBackToBareNameForUnreadableCount(t *testing.T) {
+	host := &fakeHost{}
+	f := newFeature(t, host)
+	if err := favstore.Save(f.dir, "Broken", nil); err != nil {
+		t.Fatal(err)
+	}
+	listPath := filepath.Join(f.dir, "Broken", "file-list.json")
+	if err := os.WriteFile(listPath, []byte("not json"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	f.SetDir(f.dir)
+
+	if len(host.toasts) != 0 {
+		t.Errorf("SetDir raised toasts for an unreadable count: %v, want none", host.toasts)
+	}
+	if len(f.menu.Items) != 5 {
+		t.Fatalf("menu item count = %d, want 5 (add, sep, Broken, sep, manage)", len(f.menu.Items))
+	}
+	item := f.menu.Items[2]
+	if item.Label != "Broken" {
+		t.Errorf("label = %q, want bare name %q", item.Label, "Broken")
+	}
+	if item.Shortcut == nil {
+		t.Error("Broken favorite lost its accelerator slot")
+	}
+	if !slices.Equal(f.names, []string{"Broken"}) {
+		t.Fatalf("f.names = %v, want [Broken]", f.names)
+	}
+
+	item.Action()
+
+	if len(host.toasts) != 1 || !strings.Contains(host.toasts[0], "Broken") {
+		t.Errorf("clicking the fallback item produced toasts = %v, want one naming %q", host.toasts, "Broken")
+	}
+	if host.opened != nil {
+		t.Errorf("opened = %v, want nil: the corrupt list can't load either", host.opened)
+	}
+}
+
+// TestOpenMapsDigitSlotsThroughNamesDespiteCountLabels guards the seam this
+// stage must not disturb: f.names, not the menu item's text, is what Open
+// resolves a Cmd/Ctrl+digit slot through. Favorites are saved with distinct
+// counts so a label carrying the wrong count would still be an obviously
+// wrong label, but Open must still land on the right favorite's files.
+func TestOpenMapsDigitSlotsThroughNamesDespiteCountLabels(t *testing.T) {
+	host := &fakeHost{}
+	f := newFeature(t, host)
+	type saved struct {
+		name  string
+		count int
+	}
+	favs := []saved{{"Alpha", 3}, {"beta", 1}, {"zebra", 5}}
+	for _, fv := range favs {
+		files := make([]fyne.URI, fv.count)
+		for i := range files {
+			files[i] = storage.NewFileURI(fmt.Sprintf("/photos/%s/%02d.jpg", fv.name, i))
+		}
+		if err := favstore.Save(f.dir, fv.name, files); err != nil {
+			t.Fatal(err)
+		}
+	}
+	f.SetDir(f.dir)
+
+	for i, name := range f.names {
+		label := f.menu.Items[i+2].Label
+		if !strings.HasPrefix(label, name+" (") {
+			t.Fatalf("item %d label = %q, does not name %q", i, label, name)
+		}
+
+		f.Open(i)
+		want := fmt.Sprintf("/photos/%s/00.jpg", name)
+		if len(host.opened) == 0 || host.opened[0].Path() != want {
+			t.Errorf("Open(%d) opened %v, want first file %q for %q", i, host.opened, want, name)
+		}
 	}
 }
 
@@ -219,7 +360,7 @@ func TestWriteFavoriteSavesCurrentListAndRefreshesMenu(t *testing.T) {
 	if len(got) != 2 || got[0].Path() != "/photos/a.jpg" || got[1].Path() != "/photos/b.jpg" {
 		t.Errorf("stored files = %v", got)
 	}
-	if len(f.menu.Items) != 5 || f.menu.Items[2].Label != "Trip" {
+	if len(f.menu.Items) != 5 || f.menu.Items[2].Label != "Trip (2)" {
 		t.Errorf("menu not refreshed after save: %+v", f.menu.Items)
 	}
 	if len(host.toasts) != 1 || !strings.Contains(host.toasts[0], "Trip") {
@@ -385,66 +526,4 @@ func TestOpenFavoriteReportsLoadError(t *testing.T) {
 	if len(host.toasts) != 1 || !strings.Contains(host.toasts[0], "Missing") {
 		t.Errorf("toasts = %v", host.toasts)
 	}
-}
-
-func TestPerformRemoveTrashesDirectoryAndRefreshesMenu(t *testing.T) {
-	host := &fakeHost{}
-	f := newFeature(t, host)
-	if err := favstore.Save(f.dir, "Trip", nil); err != nil {
-		t.Fatal(err)
-	}
-	f.SetDir(f.dir)
-	uitest.StubTrashMove(t, func(path string) error { return os.RemoveAll(path) })
-
-	f.performRemove("Trip")
-	f.pending.Wait()
-
-	if favstore.Exists(f.dir, "Trip") {
-		t.Error("favorite still exists after removal")
-	}
-	if len(f.menu.Items) != 3 {
-		t.Errorf("menu item count = %d, want static 3 after removal", len(f.menu.Items))
-	}
-	if len(host.toasts) != 1 || !strings.Contains(host.toasts[0], "Trip") {
-		t.Errorf("toasts = %v", host.toasts)
-	}
-}
-
-func TestPerformRemoveReportsTrashError(t *testing.T) {
-	host := &fakeHost{}
-	f := newFeature(t, host)
-	if err := favstore.Save(f.dir, "Trip", nil); err != nil {
-		t.Fatal(err)
-	}
-	wantErr := errors.New("trash unavailable")
-	uitest.StubTrashMove(t, func(string) error { return wantErr })
-
-	f.performRemove("Trip")
-	f.pending.Wait()
-
-	if !favstore.Exists(f.dir, "Trip") {
-		t.Error("favorite disappeared after failed removal")
-	}
-	if len(host.toasts) != 1 || !strings.Contains(host.toasts[0], wantErr.Error()) {
-		t.Errorf("toasts = %v", host.toasts)
-	}
-}
-
-func TestShowManageBuildsEmptyAndPopulatedDialogs(t *testing.T) {
-	f := newFeature(t, &fakeHost{})
-
-	f.showManage()
-	if f.manageDialog == nil {
-		t.Fatal("showManage did not build an empty dialog")
-	}
-	f.manageDialog.Hide()
-
-	if err := favstore.Save(f.dir, "Trip", nil); err != nil {
-		t.Fatal(err)
-	}
-	f.showManage()
-	if f.manageDialog == nil {
-		t.Fatal("showManage did not build a populated dialog")
-	}
-	f.manageDialog.Hide()
 }

@@ -190,7 +190,7 @@ func TestWireFavoriteShortcutsMapsDigitsToFavoriteSlots(t *testing.T) {
 		opened = append(opened, index)
 	})
 
-	for i := 0; i < favoriteui.ShortcutCount; i++ {
+	for i := range favoriteui.ShortcutCount {
 		handler.TypedShortcut(favoriteui.ShortcutForIndex(i))
 	}
 
@@ -218,6 +218,80 @@ func TestFavoriteShortcutOpensStoredFilesThroughViewer(t *testing.T) {
 
 	if len(v.state.files) != 1 || v.state.files[0].Path() != image.Path() {
 		t.Errorf("files = %v, want shortcut favorite %q", v.state.files, image.Path())
+	}
+}
+
+// --- Cmd/Ctrl+Shift+F (Manage Favorites) shortcut --------------------------
+
+// TestWireManageFavoritesShortcut_OpensTheDialog covers wireManageFavoritesShortcut
+// (shortcuts.go): F isn't one of the glfw driver's specially-cased bare
+// shortcuts, so the combo reaches it as a plain desktop.CustomShortcut the
+// way Cmd/Ctrl+S reaches wireSaveShortcut (see
+// TestWireSaveShortcut_SavesTheCurrentRotation, save_test.go). The dialog is
+// a real fyne.Window overlay (dialog.NewCustom), not one of this app's own
+// stacked cards, so its presence shows up on the canvas's own overlay stack -
+// the same signal TestHandleDrop_EmptyDrop (library_test.go) checks for "no
+// dialog open".
+func TestWireManageFavoritesShortcut_OpensTheDialog(t *testing.T) {
+	v := newTestViewer(t)
+
+	handler := &fyne.ShortcutHandler{}
+	wireManageFavoritesShortcut(handler, v)
+
+	handler.TypedShortcut(&desktop.CustomShortcut{
+		KeyName:  fyne.KeyF,
+		Modifier: fyne.KeyModifierShortcutDefault | fyne.KeyModifierShift,
+	})
+
+	if n := len(v.win.Canvas().Overlays().List()); n != 1 {
+		t.Errorf("overlay count = %d, want 1 (the Manage Favorites dialog)", n)
+	}
+}
+
+// TestWireManageFavoritesShortcut_DoesNothingWhileTheDeleteCardIsUp covers
+// showManageFavorites' guard: Cmd/Ctrl+Shift+F is a shortcut and arrives
+// without passing handleKeyEvent, so without the guard the dialog would open
+// over a delete confirmation that still believes it owns the keyboard - see
+// TestPromptExport_DoesNothingWhileTheDeleteCardIsUp (export_test.go) for the
+// same shape guarding the export prompt instead.
+func TestWireManageFavoritesShortcut_DoesNothingWhileTheDeleteCardIsUp(t *testing.T) {
+	v := newTestViewer(t)
+	dropAndWait(t, v, uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White))
+
+	v.requestDelete()
+	if !v.deletion.Visible() {
+		t.Fatal("the delete card should be up - the premise of this test")
+	}
+
+	v.showManageFavorites()
+
+	if n := len(v.win.Canvas().Overlays().List()); n != 0 {
+		t.Errorf("overlay count = %d, want 0 - the dialog must not open over the delete card", n)
+	}
+	if !v.deletion.Visible() {
+		t.Error("the delete card should still be up")
+	}
+}
+
+// TestWireManageFavoritesShortcut_DoesNothingWhileTheExportPromptIsUp is the
+// mirror case: the export-format prompt is the other card a shortcut can
+// arrive over.
+func TestWireManageFavoritesShortcut_DoesNothingWhileTheExportPromptIsUp(t *testing.T) {
+	v := newTestViewer(t)
+	dropAndWait(t, v, uitest.TempJPEGURI(t, "a.jpg", 4, 4, color.White))
+
+	v.promptExport()
+	if !v.exportPrompt.Visible() {
+		t.Fatal("the export prompt should be up - the premise of this test")
+	}
+
+	v.showManageFavorites()
+
+	if n := len(v.win.Canvas().Overlays().List()); n != 0 {
+		t.Errorf("overlay count = %d, want 0 - the dialog must not open over the export prompt", n)
+	}
+	if !v.exportPrompt.Visible() {
+		t.Error("the export prompt should still be up")
 	}
 }
 

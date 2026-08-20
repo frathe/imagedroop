@@ -32,6 +32,7 @@ type shortcutAdder interface {
 func wireGlobalShortcuts(c shortcutAdder, view *viewer) {
 	wireOpenShortcuts(c, view)
 	wireFavoriteShortcuts(c, view.favorites.Open)
+	wireManageFavoritesShortcut(c, view)
 	wireClipboardShortcuts(c, view)
 	wireDeleteShortcut(c, view)
 	wireSelectAllShortcut(c, view)
@@ -64,7 +65,7 @@ func wireOpenShortcuts(c shortcutAdder, view *viewer) {
 // through 9, then Cmd/Ctrl+0. The handlers stay registered while Feature.Open
 // resolves each slot against the latest menu refresh after an add or removal.
 func wireFavoriteShortcuts(c shortcutAdder, open func(index int)) {
-	for i := 0; i < favorites.ShortcutCount; i++ {
+	for i := range favorites.ShortcutCount {
 		index := i
 		c.AddShortcut(favorites.ShortcutForIndex(index), func(fyne.Shortcut) {
 			open(index)
@@ -172,4 +173,33 @@ func wireExportShortcuts(c shortcutAdder, view *viewer) {
 		KeyName:  fyne.KeyE,
 		Modifier: fyne.KeyModifierShortcutDefault | fyne.KeyModifierShift,
 	}, func(fyne.Shortcut) { view.setAsWallpaper() })
+}
+
+// wireManageFavoritesShortcut binds Cmd/Ctrl+Shift+F to
+// showManageFavorites, reaching the Favorites menu's "Manage Favorites…"
+// item (favorites.Feature.ShowManage) without it. F isn't one of the
+// driver's specially-cased bare shortcuts (only Z/Y/V/C/Insert/X/A are - see
+// wireClipboardShortcuts' own comment), so a plain desktop.CustomShortcut
+// reaches it the same way Cmd/Ctrl+S reaches wireSaveShortcut.
+func wireManageFavoritesShortcut(c shortcutAdder, view *viewer) {
+	c.AddShortcut(&desktop.CustomShortcut{
+		KeyName:  fyne.KeyF,
+		Modifier: fyne.KeyModifierShortcutDefault | fyne.KeyModifierShift,
+	}, func(fyne.Shortcut) { view.showManageFavorites() })
+}
+
+// showManageFavorites is what Cmd/Ctrl+Shift+F runs. It exists only to add
+// the guard the menu item's own click doesn't need: this is a shortcut, so
+// it reaches here without passing handleKeyEvent's dispatch at all, and
+// could otherwise raise the Manage Favorites dialog *over* a delete
+// confirmation or export-format prompt that still believes it owns the
+// keyboard - the same trap promptExport (export.go) documents and guards
+// against for itself, mirrored here rather than shared because the two
+// prompts' own guard against each other already lives on their side.
+func (v *viewer) showManageFavorites() {
+	if v.deletion.Visible() || v.exportPrompt.Visible() {
+		return
+	}
+
+	v.favorites.ShowManage()
 }

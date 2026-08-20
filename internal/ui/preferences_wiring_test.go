@@ -8,6 +8,7 @@ package ui
 import (
 	"reflect"
 	"runtime"
+	"strings"
 	"testing"
 	"time"
 
@@ -323,8 +324,11 @@ func TestStartViewerRuntime_ReplacesConstructionStopAfterGeometryRestoration(t *
 		t.Fatalf("startViewerRuntime left noPollerStop installed (%s)", got)
 	}
 
+	// A prefix rather than the whole label: this test is about the runtime
+	// directory reaching the menu at all, and the favorites package owns how
+	// an item is worded (it carries the favorite's stored file count).
 	items := v.favorites.Menu().Items
-	if len(items) != 5 || items[2].Label != "Runtime Favorite" {
+	if len(items) != 5 || !strings.HasPrefix(items[2].Label, "Runtime Favorite") {
 		t.Errorf("favorites menu items = %+v, want the temporary favorite", items)
 	}
 }

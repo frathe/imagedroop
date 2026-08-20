@@ -437,6 +437,10 @@ many of them actually went.
   folders on macOS/Linux, files only on Windows — see above)
 - **`Cmd`/`Ctrl+1`** through **`Cmd`/`Ctrl+9`** — open sorted favorites 1
   through 9; **`Cmd`/`Ctrl+0`** opens favorite 10 (see "Menu" below)
+- **`Cmd`/`Ctrl+Shift+F`** — open **Manage Favorites…**, fully keyboard-driven
+  (the removal confirmation included): arrow keys move a ring over each
+  favorite and over its `Open`/`Remove` buttons, `Return` activates whichever
+  is ringed, `Esc` closes (see "Menu" below)
 - **`→`** / **`↓`** — next image
 - **`←`** / **`↑`** — previous image
 - **`Home`** / **`End`** — first / last image
@@ -549,14 +553,24 @@ needed. macOS and Windows need nothing extra either way.
   favorite's grid previews in the background, so opening its Grid Overview
   (`G`) later is fast
 - **Favorites -> _favorite name_** — opens that saved list through the same
-  scan, sort, and merge behavior as Open Files. Entries are sorted by name,
+  scan, sort, and merge behavior as Open Files. Each entry shows how many
+  files it stores, e.g. `Holiday 2024 (128)`; entries are sorted by name,
   case-insensitively. The first nine show `Cmd/Ctrl+1` through
   `Cmd/Ctrl+9`; the tenth shows `Cmd/Ctrl+0`. Saving another collection with
   an existing name asks before replacing its stored list. Opening a favorite
   also tops up its grid previews in the background if any are missing, so
   its Grid Overview opens quickly
-- **Favorites -> Manage Favorites…** — lists every saved collection and lets
-  you remove one after confirmation. Removing a favorite moves the
+- **Favorites -> Manage Favorites…** (also `Cmd/Ctrl+Shift+F`) — lists every
+  saved collection, each with the same file count, and lets you open or
+  remove one. Fully keyboard-driven: **`↑`**/**`↓`** move a ring between
+  rows, **`←`**/**`→`** move it between that row's **Open** and **Remove**
+  buttons, **`Return`** activates whichever is ringed, and a click always
+  runs whichever button you actually click, wherever the ring currently sits.
+  **`Esc`** closes the dialog. Removing a favorite asks for confirmation
+  first, and that prompt is keyboard-driven as well: **`←`**/**`→`** move the
+  ring between **Cancel** and **Remove** — it starts on **Cancel**, so
+  `Return` never removes anything by itself — **`Return`** activates whichever
+  is ringed, and **`Esc`** cancels. A confirmed removal moves the
   collection's own folder to the system Trash; it does **not** move or delete
   any of the original images
 - **Help -> Manual** — opens this manual, same as `F1`
