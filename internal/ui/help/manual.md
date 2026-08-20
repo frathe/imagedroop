@@ -538,17 +538,23 @@ needed. macOS and Windows need nothing extra either way.
   or `plasma-apply-wallpaperimage` (KDE Plasma 5.24+); a message says so if
   neither is installed
 - **File -> Close Files** — returns to the drop zone without quitting
-- **File -> Settings…** — opens the settings window
+- **File -> Settings…** — opens the settings window, including the
+  **Cache favorite previews on disk** checkbox (on by default) for the
+  background favorite-preview generation described below
 - **Favorites -> Add Current List to Favorites…** — saves the complete
   currently open file list as a named collection. Favorites remain available
   after restarting PicFetch. This stores references to the original files,
   not copies of the images; moving or deleting an original means it can no
-  longer be loaded from the favorite
+  longer be loaded from the favorite. Saving also starts preparing that
+  favorite's grid previews in the background, so opening its Grid Overview
+  (`G`) later is fast
 - **Favorites -> _favorite name_** — opens that saved list through the same
   scan, sort, and merge behavior as Open Files. Entries are sorted by name,
   case-insensitively. The first nine show `Cmd/Ctrl+1` through
   `Cmd/Ctrl+9`; the tenth shows `Cmd/Ctrl+0`. Saving another collection with
-  an existing name asks before replacing its stored list
+  an existing name asks before replacing its stored list. Opening a favorite
+  also tops up its grid previews in the background if any are missing, so
+  its Grid Overview opens quickly
 - **Favorites -> Manage Favorites…** — lists every saved collection and lets
   you remove one after confirmation. Removing a favorite moves the
   collection's own folder to the system Trash; it does **not** move or delete

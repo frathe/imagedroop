@@ -22,14 +22,29 @@ type fakeHost struct {
 	files  []fyne.URI
 	opened []fyne.URI
 	toasts []string
+
+	// syncedDirs/syncedFiles record every SyncFavoritePreviews call, and
+	// calls records the order OpenFiles and SyncFavoritePreviews arrived
+	// in - the open path deliberately reports the new list before handing
+	// it over, so the background pass starts against the scan rather than
+	// after it.
+	syncedDirs  []string
+	syncedFiles [][]fyne.URI
+	calls       []string
 }
 
 func (h *fakeHost) FileCount() int        { return len(h.files) }
 func (h *fakeHost) FileAt(i int) fyne.URI { return h.files[i] }
 func (h *fakeHost) OpenFiles(files []fyne.URI) {
 	h.opened = slices.Clone(files)
+	h.calls = append(h.calls, "open")
 }
 func (h *fakeHost) ShowToast(message string) { h.toasts = append(h.toasts, message) }
+func (h *fakeHost) SyncFavoritePreviews(favDir string, files []fyne.URI) {
+	h.syncedDirs = append(h.syncedDirs, favDir)
+	h.syncedFiles = append(h.syncedFiles, slices.Clone(files))
+	h.calls = append(h.calls, "sync")
+}
 
 func newFeature(t *testing.T, host *fakeHost) *Feature {
 	t.Helper()
@@ -94,7 +109,7 @@ func TestSetDirBuildsSortedFavoriteItems(t *testing.T) {
 
 func TestSetDirAssignsDigitShortcutsToFirstTenFavorites(t *testing.T) {
 	f := newFeature(t, &fakeHost{})
-	for i := 0; i < ShortcutCount+1; i++ {
+	for i := range ShortcutCount + 1 {
 		name := fmt.Sprintf("Favorite %02d", i+1)
 		if err := favstore.Save(f.dir, name, nil); err != nil {
 			t.Fatal(err)
@@ -115,7 +130,7 @@ func TestSetDirAssignsDigitShortcutsToFirstTenFavorites(t *testing.T) {
 		fyne.Key9,
 		fyne.Key0,
 	}
-	for i := 0; i < ShortcutCount+1; i++ {
+	for i := range ShortcutCount + 1 {
 		item := f.menu.Items[i+2]
 		if i == ShortcutCount {
 			if item.Shortcut != nil {
@@ -141,7 +156,7 @@ func TestSetDirAssignsDigitShortcutsToFirstTenFavorites(t *testing.T) {
 func TestOpenUsesCurrentSortedShortcutSlots(t *testing.T) {
 	host := &fakeHost{}
 	f := newFeature(t, host)
-	for i := 0; i < ShortcutCount+1; i++ {
+	for i := range ShortcutCount + 1 {
 		name := fmt.Sprintf("Favorite %02d", i+1)
 		files := []fyne.URI{storage.NewFileURI(fmt.Sprintf("/photos/%02d.jpg", i+1))}
 		if err := favstore.Save(f.dir, name, files); err != nil {
@@ -150,7 +165,7 @@ func TestOpenUsesCurrentSortedShortcutSlots(t *testing.T) {
 	}
 	f.SetDir(f.dir)
 
-	for i := 0; i < ShortcutCount; i++ {
+	for i := range ShortcutCount {
 		f.Open(i)
 		want := fmt.Sprintf("/photos/%02d.jpg", i+1)
 		if len(host.opened) != 1 || host.opened[0].Path() != want {
@@ -209,6 +224,41 @@ func TestWriteFavoriteSavesCurrentListAndRefreshesMenu(t *testing.T) {
 	}
 	if len(host.toasts) != 1 || !strings.Contains(host.toasts[0], "Trip") {
 		t.Errorf("toasts = %v, want saved Trip", host.toasts)
+	}
+}
+
+// TestWriteFavoriteSyncsPreviewsForSavedList is the save half of the same
+// trigger: the list the user just captured is reported straight away, so
+// its previews can be generated while the favorite sits unopened rather
+// than on the open that eventually wants them.
+func TestWriteFavoriteSyncsPreviewsForSavedList(t *testing.T) {
+	host := &fakeHost{files: []fyne.URI{
+		storage.NewFileURI("/photos/a.jpg"),
+		storage.NewFileURI("/photos/b.jpg"),
+	}}
+	f := newFeature(t, host)
+
+	f.writeFavorite("Trip")
+
+	wantDir := favstore.Dir(f.dir, "Trip")
+	if len(host.syncedDirs) != 1 || host.syncedDirs[0] != wantDir {
+		t.Fatalf("synced dirs = %v, want [%q]", host.syncedDirs, wantDir)
+	}
+	if len(host.syncedFiles) != 1 || len(host.syncedFiles[0]) != 2 ||
+		host.syncedFiles[0][0].Path() != "/photos/a.jpg" ||
+		host.syncedFiles[0][1].Path() != "/photos/b.jpg" {
+		t.Errorf("synced files = %v, want the two files just saved", host.syncedFiles)
+	}
+}
+
+func TestWriteFavoriteDoesNotSyncPreviewsForAFailedSave(t *testing.T) {
+	host := &fakeHost{}
+	f := newFeature(t, host)
+
+	f.writeFavorite("Empty")
+
+	if len(host.syncedDirs) != 0 {
+		t.Errorf("synced dirs = %v, want none when nothing was saved", host.syncedDirs)
 	}
 }
 
@@ -288,6 +338,38 @@ func TestOpenFavoriteLoadsStoredList(t *testing.T) {
 	if len(host.opened) != 2 || host.opened[0].Path() != files[0].Path() ||
 		host.opened[1].Path() != files[1].Path() {
 		t.Errorf("opened = %v, want %v", host.opened, files)
+	}
+}
+
+// TestOpenFavoriteSyncsPreviewsForLoadedList pins the open half of the
+// preview-cache trigger: the feature itself knows nothing about previews,
+// it only reports which directory now holds which files, and internal/ui
+// decides what that means. The report has to precede OpenFiles so the
+// background pass gets a head start on the scan the open kicks off.
+func TestOpenFavoriteSyncsPreviewsForLoadedList(t *testing.T) {
+	host := &fakeHost{}
+	f := newFeature(t, host)
+	files := []fyne.URI{
+		storage.NewFileURI("/photos/one.jpg"),
+		storage.NewFileURI("/photos/two.jpg"),
+	}
+	if err := favstore.Save(f.dir, "Trip", files); err != nil {
+		t.Fatal(err)
+	}
+
+	f.openFavorite("Trip")
+
+	wantDir := favstore.Dir(f.dir, "Trip")
+	if len(host.syncedDirs) != 1 || host.syncedDirs[0] != wantDir {
+		t.Fatalf("synced dirs = %v, want [%q]", host.syncedDirs, wantDir)
+	}
+	if len(host.syncedFiles) != 1 || len(host.syncedFiles[0]) != 2 ||
+		host.syncedFiles[0][0].Path() != files[0].Path() ||
+		host.syncedFiles[0][1].Path() != files[1].Path() {
+		t.Errorf("synced files = %v, want %v", host.syncedFiles, files)
+	}
+	if want := []string{"sync", "open"}; !slices.Equal(host.calls, want) {
+		t.Errorf("call order = %v, want %v", host.calls, want)
 	}
 }
 

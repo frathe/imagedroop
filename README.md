@@ -47,6 +47,9 @@ set with the keyboard.
   lazily and with bounded concurrency, in a separate small LRU cache from
   the full-size decode cache, so opening it on a several-thousand-file
   folder doesn't spawn a decode per file
+- Opening or saving a favorite also saves its grid previews to disk under
+  that favorite's own folder in the background, so reopening it paints the
+  grid without re-decoding the originals (toggle this off in Settings)
 - Zoom via `+`/`-`/`1`/`0`, or scroll (mouse wheel/trackpad) to zoom
   anchored at the cursor; click-drag or Shift+scroll to pan once zoomed in.
   No native pinch gesture — Fyne's desktop driver (GLFW) has no magnify/
@@ -297,6 +300,7 @@ internal/ui/          The application - the viewer core and the key dispatcher
   help/manual.md      End-user manual, embedded at build time
   testdata/           Golden master screenshots for the e2e suite
 internal/imaging/     Read - decode - EXIF-orient - cache pipeline
+internal/favthumbs/   Disk-cached grid previews for favorites
 internal/uitest/      Shared test fixtures and OS-seam stubs
 translations/         JSON translation bundles, embedded at build time
 assets/               Icon and README artwork (packaging, not embedded)

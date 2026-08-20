@@ -40,6 +40,7 @@ type fakeHost struct {
 	imgCacheMB   int
 	thumbCacheMB int
 	maxFileMB    int
+	favPreview   bool
 
 	sortModeCalls     []filesort.Mode
 	mergeModeCalls    []bool
@@ -51,6 +52,7 @@ type fakeHost struct {
 	imgCacheCalls     []int
 	thumbCacheCalls   []int
 	maxFileCalls      []int
+	favPreviewCalls   []bool
 }
 
 func (f *fakeHost) SortMode() filesort.Mode { return f.sortMode }
@@ -99,6 +101,11 @@ func (f *fakeHost) MaxFileSizeMB() int { return f.maxFileMB }
 func (f *fakeHost) SetMaxFileSizeMB(n int) {
 	f.maxFileMB = n
 	f.maxFileCalls = append(f.maxFileCalls, n)
+}
+func (f *fakeHost) FavoritePreviewCache() bool { return f.favPreview }
+func (f *fakeHost) SetFavoritePreviewCache(on bool) {
+	f.favPreview = on
+	f.favPreviewCalls = append(f.favPreviewCalls, on)
 }
 
 // TestShow_SeedsEveryControlFromHostWithoutRoundTripping checks both halves
@@ -196,6 +203,46 @@ func TestChecks_ChangeCallTheMatchingSetter(t *testing.T) {
 	}
 	if len(host.slideShuffleCalls) != 1 || !host.slideShuffleCalls[0] {
 		t.Errorf("SetSlideShuffle calls = %v, want one call with true", host.slideShuffleCalls)
+	}
+}
+
+// TestFavPreviewCheck_ReflectsHostValue checks both states of the seed, the
+// same reason TestShow_SeedsEveryControlFromHostWithoutRoundTripping checks
+// every other control against a non-default value - a check seeded from a
+// bool that only ever tested one branch (e.g. always false) wouldn't catch
+// Checked never actually being assigned.
+func TestFavPreviewCheck_ReflectsHostValue(t *testing.T) {
+	cases := []struct {
+		name string
+		want bool
+	}{
+		{"checked when host reports true", true},
+		{"unchecked when host reports false", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			host := &fakeHost{favPreview: tc.want}
+			w := New(testApp, host)
+			w.Show()
+			t.Cleanup(func() { w.win.Window().Close() })
+
+			if w.favPreviewCheck.Checked != tc.want {
+				t.Errorf("favPreviewCheck.Checked = %v, want %v (seeded from host.FavoritePreviewCache())", w.favPreviewCheck.Checked, tc.want)
+			}
+		})
+	}
+}
+
+func TestFavPreviewCheck_ChangeCallsSetFavoritePreviewCache(t *testing.T) {
+	host := &fakeHost{favPreview: false}
+	w := New(testApp, host)
+	w.Show()
+	t.Cleanup(func() { w.win.Window().Close() })
+
+	w.favPreviewCheck.SetChecked(true)
+
+	if len(host.favPreviewCalls) != 1 || !host.favPreviewCalls[0] {
+		t.Errorf("SetFavoritePreviewCache calls = %v, want one call with true", host.favPreviewCalls)
 	}
 }
 

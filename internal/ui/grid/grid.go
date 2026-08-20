@@ -775,6 +775,49 @@ func (g *Overview) Cached(u fyne.URI) bool {
 	return g.thumbs.Contains(u.String())
 }
 
+// CachedThumb returns u's cached thumbnail, if any. Get rather than
+// Contains - unlike Cached above, this is a real read on behalf of a
+// caller that's about to use the image (favthumbs' pre-warm pass skipping
+// its own decode), so the entry should be promoted to most-recently-used
+// like any other read.
+func (g *Overview) CachedThumb(u fyne.URI) (image.Image, bool) {
+	return g.thumbs.Get(u.String())
+}
+
+// StoreThumb offers thumb to the cache under u, reporting whether it was
+// actually stored. AddIfFits, not Add: this is the same speculative-write
+// situation preloadOne is in (see AddIfFits's own comment), so a preview
+// too big to fit the budget at all is refused outright rather than stored
+// and left to evict everything else.
+//
+// That refusal is the only bound this offers. Once the cache is merely
+// full, AddIfFits still evicts to make room - see ThumbCacheFull below for
+// why a pre-warm pass has to check that separately rather than read a
+// false return here as "the cache is full".
+func (g *Overview) StoreThumb(u fyne.URI, thumb image.Image) bool {
+	return g.thumbs.AddIfFits(u.String(), thumb)
+}
+
+// ThumbCacheFull reports whether the thumbnail cache has reached its byte
+// budget.
+//
+// This exists so a background pass can pre-warm the cache from
+// disk-persisted previews (internal/favthumbs) before the grid ever opens,
+// and StoreThumb's AddIfFits alone cannot bound that pass. AddIfFits only
+// refuses an entry that outweighs the *whole* budget by itself; once the
+// cache is merely full it evicts least-recently-used entries and stores
+// anyway (see evict's comment in internal/imaging/bytecache.go). So a
+// pre-warm that just called StoreThumb in list order over a favorite
+// bigger than the budget would evict its own earliest entries as it went,
+// finishing with only the *last* N thumbnails cached - while the grid
+// opens at the *first* file. Checking ThumbCacheFull between offers lets
+// the caller stop pre-warming at the budget instead, keeping the head of
+// the list warm and letting the tail decode on demand exactly as it does
+// today.
+func (g *Overview) ThumbCacheFull() bool {
+	return g.thumbs.Bytes() >= g.thumbs.Budget()
+}
+
 // SetCacheBytes retunes the thumbnail cache's byte budget and evicts down
 // to it right away - the settings window's binding, reached through
 // internal/ui's SetMaxThumbCacheMB. A setter rather than a New parameter

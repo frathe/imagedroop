@@ -44,6 +44,8 @@ func registerFeatures(view *viewer, application fyne.App, window fyne.Window, pr
 	view.SetMaxThumbCacheMB(prefs.MaxThumbCacheMB)
 	view.SetMaxFileSizeMB(prefs.MaxFileSizeMB)
 
+	view.SetFavoritePreviewCache(prefs.FavoritePreviewCache)
+
 	view.deletion = deletion.New(view)
 
 	// The export-format prompt (promptExport, export.go) is a bare

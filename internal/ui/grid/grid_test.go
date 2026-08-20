@@ -2,6 +2,7 @@ package grid
 
 import (
 	"fmt"
+	"image"
 	"image/color"
 	"os"
 	"testing"
@@ -892,6 +893,112 @@ func TestSetCacheBytes_RetunesTheThumbnailBudget(t *testing.T) {
 
 	if g.thumbs.Len() != 2 {
 		t.Errorf("cached thumbnails = %d after raising the budget, want 2", g.thumbs.Len())
+	}
+}
+
+// --- CachedThumb / StoreThumb / ThumbCacheFull -----------------------------
+
+func TestCachedThumb_MissesForUnstoredURI(t *testing.T) {
+	host := hostWith(t, "a.jpg")
+	g := newOverview(t, host)
+
+	if _, ok := g.CachedThumb(host.files[0]); ok {
+		t.Error("CachedThumb should miss for a URI that was never stored")
+	}
+}
+
+func TestStoreThumb_ThenCachedThumb_ReturnsWhatWasStored(t *testing.T) {
+	host := hostWith(t, "a.jpg")
+	g := newOverview(t, host)
+
+	thumb := image.NewRGBA(image.Rect(0, 0, 4, 4))
+
+	if ok := g.StoreThumb(host.files[0], thumb); !ok {
+		t.Fatal("StoreThumb should report true for a thumbnail well within budget")
+	}
+
+	got, ok := g.CachedThumb(host.files[0])
+	if !ok {
+		t.Fatal("CachedThumb should hit after StoreThumb")
+	}
+	if got != image.Image(thumb) {
+		t.Error("CachedThumb should return the same image that was stored")
+	}
+}
+
+// TestStoreThumb_TooBigForBudgetIsRefused covers AddIfFits's
+// never-evict-for-a-speculative-write rule (see its own comment in
+// internal/imaging/bytecache.go): an entry that alone outweighs the whole
+// budget is refused outright rather than stored and left to evict
+// everything else in the cache.
+func TestStoreThumb_TooBigForBudgetIsRefused(t *testing.T) {
+	host := hostWith(t, "a.jpg")
+	g := newOverview(t, host)
+	g.SetCacheBytes(100)
+
+	// A 100x100 RGBA thumbnail weighs 100*100*4 = 40000 bytes, comfortably
+	// over the 100-byte budget.
+	big := image.NewRGBA(image.Rect(0, 0, 100, 100))
+
+	if ok := g.StoreThumb(host.files[0], big); ok {
+		t.Error("StoreThumb should refuse a thumbnail that alone exceeds the whole budget")
+	}
+	if _, ok := g.CachedThumb(host.files[0]); ok {
+		t.Error("CachedThumb should still miss after a refused StoreThumb")
+	}
+}
+
+func TestThumbCacheFull_FalseUntilBudgetReached(t *testing.T) {
+	host := hostWith(t, "a.jpg")
+	g := newOverview(t, host)
+	g.SetCacheBytes(100)
+
+	if g.ThumbCacheFull() {
+		t.Error("a fresh overview's thumbnail cache should not report full")
+	}
+
+	// A 5x5 RGBA thumbnail weighs 5*5*4 = 100 bytes: exactly the budget.
+	full := image.NewRGBA(image.Rect(0, 0, 5, 5))
+	if ok := g.StoreThumb(host.files[0], full); !ok {
+		t.Fatal("StoreThumb should accept a thumbnail exactly at budget")
+	}
+
+	if !g.ThumbCacheFull() {
+		t.Error("the cache should report full once stored bytes reach the budget")
+	}
+}
+
+// TestStoreThumb_AloneDoesNotProtectTheHeadOfTheList is the eviction-churn
+// behavior ThumbCacheFull's doc comment warns about: a pre-warm pass that
+// only ever calls StoreThumb, with no ThumbCacheFull check between offers,
+// will happily evict the entries it stored first to make room for the
+// ones it stores last. A caller pre-warming a favorite's disk previews in
+// file-list order needs the *first* files warm when the grid opens at
+// index 0, not the last ones - which is exactly what this test shows
+// StoreThumb alone does not guarantee.
+func TestStoreThumb_AloneDoesNotProtectTheHeadOfTheList(t *testing.T) {
+	host := hostWith(t, "a.jpg", "b.jpg")
+	g := newOverview(t, host)
+
+	// A 5x5 RGBA thumbnail weighs 5*5*4 = 100 bytes, so a 100-byte budget
+	// fits exactly one.
+	g.SetCacheBytes(100)
+
+	first := image.NewRGBA(image.Rect(0, 0, 5, 5))
+	second := image.NewRGBA(image.Rect(0, 0, 5, 5))
+
+	if ok := g.StoreThumb(host.files[0], first); !ok {
+		t.Fatal("StoreThumb should accept the first thumbnail, which alone fits the budget")
+	}
+	if ok := g.StoreThumb(host.files[1], second); !ok {
+		t.Fatal("StoreThumb should accept the second thumbnail, which alone fits the budget")
+	}
+
+	if _, ok := g.CachedThumb(host.files[0]); ok {
+		t.Error("the first thumbnail should have been evicted by the second - StoreThumb alone does not protect the head of the list")
+	}
+	if _, ok := g.CachedThumb(host.files[1]); !ok {
+		t.Error("the second (most recently stored) thumbnail should still be cached")
 	}
 }
 

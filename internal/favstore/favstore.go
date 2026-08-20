@@ -36,6 +36,15 @@ func ValidName(name string) bool {
 		!strings.ContainsAny(name, `/\:*?"<>|`)
 }
 
+// Dir returns the directory holding the favorite named name, or "" when
+// name is not a valid favorite name.
+func Dir(dir, name string) string {
+	if !ValidName(name) {
+		return ""
+	}
+	return filepath.Join(dir, name)
+}
+
 // Exists reports whether a favorite with name exists.
 func Exists(dir, name string) bool {
 	if !ValidName(name) {

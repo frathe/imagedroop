@@ -55,6 +55,9 @@ func TestLoadPreferences_NothingSavedReturnsDefaults(t *testing.T) {
 	if got.ExifWindow != (WindowGeometry{}) {
 		t.Errorf("ExifWindow = %+v, want zero value", got.ExifWindow)
 	}
+	if !got.FavoritePreviewCache {
+		t.Error("FavoritePreviewCache = false, want true (default is on)")
+	}
 }
 
 func TestSavePreferences_RoundTrip(t *testing.T) {
@@ -183,6 +186,26 @@ func TestSavePreferences_ZeroWindowSizeDoesNotOverwritePreviouslySaved(t *testin
 
 	if got := Load(app).WindowSize; got != fyne.NewSize(800, 600) {
 		t.Errorf("WindowSize = %v, want 800x600 (should survive a zero-value Save)", got)
+	}
+}
+
+func TestSavePreferences_FavoritePreviewCacheFalseRoundTrips(t *testing.T) {
+	app := test.NewApp()
+
+	Save(app, State{FavoritePreviewCache: false})
+
+	if got := Load(app).FavoritePreviewCache; got {
+		t.Error("FavoritePreviewCache = true, want false to round-trip (must be written unconditionally, unlike the zero-sentinel fields)")
+	}
+}
+
+func TestSavePreferences_FavoritePreviewCacheTrueRoundTrips(t *testing.T) {
+	app := test.NewApp()
+
+	Save(app, State{FavoritePreviewCache: true})
+
+	if got := Load(app).FavoritePreviewCache; !got {
+		t.Error("FavoritePreviewCache = false, want true to round-trip")
 	}
 }
 

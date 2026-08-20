@@ -82,6 +82,7 @@
    "Caps how many images a single recursive folder scan will gather": "Begrenzt, wie viele Bilder ein rekursiver Ordner-Scan sammelt",
    "Merge newly dropped files into the current set": "Neu abgelegte Dateien mit der aktuellen Auswahl zusammenführen",
    "Shuffle picture-frame order": "Diashow-Reihenfolge zufällig mischen",
+   "Cache favorite previews on disk": "Vorschaubilder von Favoriten auf der Festplatte speichern",
    "Max window width": "Maximale Fensterbreite",
    "Max window height": "Maximale Fensterhöhe",
    "Max image cache (MB)": "Maximaler Bildcache (MB)",

@@ -341,3 +341,45 @@ func TestWindowSizeTracker_RecordsResizes(t *testing.T) {
 		t.Errorf("windowSize after resize = %v, want %v", got, want)
 	}
 }
+
+// TestFavoritePreviewCache_DefaultsToTrueOnStartup checks the startup-restore
+// path: preferences.Load already defaults FavoritePreviewCache to true (Stage
+// 6a), so a viewer built with nothing ever saved must read the same default
+// once features.go wires it through.
+func TestFavoritePreviewCache_DefaultsToTrueOnStartup(t *testing.T) {
+	v := newTestViewer(t)
+
+	if !v.FavoritePreviewCache() {
+		t.Error("FavoritePreviewCache() = false, want true (the shipped default)")
+	}
+}
+
+// TestCurrentPreferences_DefaultFavoritePreviewCacheIsTrue guards the trap
+// documented in favorites_disk_thumbnail_cache.md's Stage 6b: Save writes
+// FavoritePreviewCache unconditionally, so any currentPreferences() literal
+// that forgets to set it from the viewer would carry the zero value, false,
+// straight to disk on every shutdown.
+func TestCurrentPreferences_DefaultFavoritePreviewCacheIsTrue(t *testing.T) {
+	v := newTestViewer(t)
+
+	if !v.currentPreferences().FavoritePreviewCache {
+		t.Error("currentPreferences().FavoritePreviewCache = false, want true - run.go's literal must set it from the viewer")
+	}
+}
+
+// TestSetFavoritePreviewCache_UpdatesGetterAndCurrentPreferences checks the
+// settings window's binding end to end: a user turning the checkbox off must
+// be reflected both immediately (FavoritePreviewCache) and at the next
+// shutdown save (currentPreferences).
+func TestSetFavoritePreviewCache_UpdatesGetterAndCurrentPreferences(t *testing.T) {
+	v := newTestViewer(t)
+
+	v.SetFavoritePreviewCache(false)
+
+	if v.FavoritePreviewCache() {
+		t.Error("FavoritePreviewCache() = true after SetFavoritePreviewCache(false)")
+	}
+	if v.currentPreferences().FavoritePreviewCache {
+		t.Error("currentPreferences().FavoritePreviewCache = true after SetFavoritePreviewCache(false)")
+	}
+}

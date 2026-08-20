@@ -40,6 +40,12 @@ type Host interface {
 	FileAt(i int) fyne.URI
 	OpenFiles(files []fyne.URI)
 	ShowToast(msg string)
+
+	// SyncFavoritePreviews brings the previews stored under favDir in line
+	// with files, in the background. This feature knows nothing about
+	// thumbnails or caches; it only reports that a favorite's file list is
+	// now this, and leaves what that costs to the host.
+	SyncFavoritePreviews(favDir string, files []fyne.URI)
 }
 
 // Feature owns the Favorites menu and its dialogs.
@@ -206,6 +212,14 @@ func (f *Feature) writeFavorite(name string) {
 		f.reportError(lang.L("could not save favorite %q: %v"), name, err)
 		return
 	}
+
+	// Reported as soon as the list is on disk, so the host can act on it
+	// while the favorite sits unopened rather than only when someone
+	// eventually opens it. Placed above refreshMenu because the two are
+	// independent: a menu that could not be rebuilt is no reason to leave
+	// the favorite just written unprepared.
+	f.host.SyncFavoritePreviews(favstore.Dir(f.dir, name), files)
+
 	if !f.refreshMenu() {
 		return
 	}
@@ -218,6 +232,11 @@ func (f *Feature) openFavorite(name string) {
 		f.reportError(lang.L("could not open favorite %q: %v"), name, err)
 		return
 	}
+
+	// Reported before the files are handed over, so whatever the host does
+	// with the list in the background starts alongside the scan this open
+	// triggers rather than behind it.
+	f.host.SyncFavoritePreviews(favstore.Dir(f.dir, name), files)
 	f.host.OpenFiles(files)
 }
 

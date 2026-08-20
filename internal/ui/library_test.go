@@ -208,6 +208,7 @@ func drain(t *testing.T, v *viewer) {
 	v.scanLifecycle.invalidate()
 	v.sortLifecycle.invalidate()
 	v.vectorLifecycle.invalidate()
+	v.favThumbLifecycle.invalidate()
 	v.slides.Exit()
 
 	// Vector re-renders: spawned by any effective-scale change, so a test
@@ -228,6 +229,7 @@ func drain(t *testing.T, v *viewer) {
 		{"clipboard copy", v.clipboardDone},
 		{"file chooser", v.chooserDone},
 		{"wallpaper", v.wallpaperDone},
+		{"favorite previews", v.favThumbDone},
 	} {
 		if c.ch == nil {
 			continue

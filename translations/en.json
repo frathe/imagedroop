@@ -82,6 +82,7 @@
    "Caps how many images a single recursive folder scan will gather": "Caps how many images a single recursive folder scan will gather",
    "Merge newly dropped files into the current set": "Merge newly dropped files into the current set",
    "Shuffle picture-frame order": "Shuffle picture-frame order",
+   "Cache favorite previews on disk": "Cache favorite previews on disk",
    "Max window width": "Max window width",
    "Max window height": "Max window height",
    "Max image cache (MB)": "Max image cache (MB)",

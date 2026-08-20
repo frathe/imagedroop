@@ -129,6 +129,13 @@ type viewer struct {
 	// set during a merge-mode folder scan cannot strand scan UI state.
 	scanLifecycle requestLifecycle
 
+	// favThumbLifecycle owns the background favorite-preview pass
+	// (favthumbs.go). Independent of every lifecycle above it: the pass
+	// belongs to a favorite rather than to whatever is on screen, so it
+	// outlives the navigation that started it and is superseded only by
+	// the next favorite opened or saved.
+	favThumbLifecycle requestLifecycle
+
 	// baseTitle is the window title without the "[merge] " prefix applyTitle
 	// adds while merge mode is on, so toggling M can refresh the title
 	// immediately without recomputing it.
@@ -354,6 +361,11 @@ type viewer struct {
 	chooserDone   chan struct{}
 	wallpaperDone chan struct{}
 
+	// favThumbDone is the same for SyncFavoritePreviews' pass over a
+	// favorite's previews (favthumbs.go). Replaced on every pass, so a test
+	// reads it after triggering one rather than holding one across two.
+	favThumbDone chan struct{}
+
 	// wallpaperDir is where setAsWallpaper (wallpaper.go) writes the PNG it
 	// hands to the OS - defaultWallpaperDir in production, a t.TempDir() in
 	// tests, which is why it is a field rather than a package-level
@@ -379,6 +391,12 @@ type viewer struct {
 	// holds their getter/setter pairs and converts each to the byte budget
 	// its consumer actually enforces.
 	imgCacheMB, thumbCacheMB, maxFileMB int
+
+	// favPreviewCache is the settings window's "Cache favorite previews on
+	// disk" checkbox - see favthumbs.go for its getter/setter pair. Restored
+	// from preferences.State.FavoritePreviewCache in features.go and read
+	// back into it by currentPreferences (run.go).
+	favPreviewCache bool
 
 	// keyModifiers reports the keyboard modifiers currently held -
 	// defaultKeyModifiers (keys.go) in production, stubbed by tests (the

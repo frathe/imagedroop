@@ -1,11 +1,11 @@
 // Package preferences persists and restores standing UI preferences - sort
 // order, merge mode, the picture-frame slideshow's interval and shuffle
-// order, and window size and position - across launches, via Fyne's
-// app-scoped Preferences store. Unlike internal/session (which persists
-// the transient dropped file set), everything here is a setting the user
-// deliberately chose and expects to stick, so it belongs in
-// fyne.Preferences: unlike the app cache, it's meant for this and survives
-// cache clearing.
+// order, window size and position, and whether favorite previews are cached
+// to disk - across launches, via Fyne's app-scoped Preferences store. Unlike
+// internal/session (which persists the transient dropped file set),
+// everything here is a setting the user deliberately chose and expects to
+// stick, so it belongs in fyne.Preferences: unlike the app cache, it's meant
+// for this and survives cache clearing.
 package preferences
 
 import (
@@ -30,6 +30,8 @@ const (
 	keyWindowPosX      = "windowPosX"
 	keyWindowPosY      = "windowPosY"
 	keyWindowPosSet    = "windowPosSet"
+
+	keyFavoritePreviewCache = "favoritePreviewCache"
 )
 
 // geometryKeys names the five preference keys one secondary window's
@@ -113,6 +115,17 @@ type State struct {
 	// window that wants to be remembered adds another - see WindowGeometry.
 	SettingsWindow WindowGeometry
 	ExifWindow     WindowGeometry
+
+	// FavoritePreviewCache is the one preference in this struct whose
+	// default is true rather than the zero value: favorites/disk thumbnail
+	// caching ships on, so a fresh install with nothing saved yet must still
+	// read true. Every other bool field above defaults to false and reads
+	// back with plain p.Bool, but that would make a fresh install read this
+	// one false too - Load instead uses p.BoolWithFallback(key, true), and
+	// Save writes it unconditionally (never gated behind an "only if set"
+	// check) so that a user who explicitly turns it off can have that
+	// choice persist.
+	FavoritePreviewCache bool
 }
 
 // WindowGeometry is one secondary window's remembered position and size -
@@ -138,6 +151,7 @@ func Save(app fyne.App, s State) {
 	p.SetString(keySortMode, s.SortMode)
 	p.SetBool(keyMergeMode, s.MergeMode)
 	p.SetBool(keySlideShuffle, s.SlideShuffle)
+	p.SetBool(keyFavoritePreviewCache, s.FavoritePreviewCache)
 
 	if s.SlideInterval > 0 {
 		p.SetFloat(keySlideIntervalS, s.SlideInterval.Seconds())
@@ -208,6 +222,7 @@ func loadGeometry(p fyne.Preferences, k geometryKeys) WindowGeometry {
 // saved yet - and internal/filesort's FromPref falls back to the same
 // default for any value it doesn't recognize, so a preferences file
 // written by a newer build with a since-removed mode still loads cleanly.
+// FavoritePreviewCache defaults to true - see its field comment on State.
 // Every other field defaults to its zero value, which callers already treat
 // as "use the built-in default" (a zero SlideInterval falls back to
 // slideshow.DefaultInterval, a zero WindowSize to internal/ui's
@@ -229,10 +244,11 @@ func Load(app fyne.App) State {
 			float32(p.Float(keyWindowWidth)),
 			float32(p.Float(keyWindowHeight)),
 		),
-		WindowPosX:        p.Int(keyWindowPosX),
-		WindowPosY:        p.Int(keyWindowPosY),
-		WindowPositionSet: p.Bool(keyWindowPosSet),
-		SettingsWindow:    loadGeometry(p, settingsWinKeys),
-		ExifWindow:        loadGeometry(p, exifWinKeys),
+		WindowPosX:           p.Int(keyWindowPosX),
+		WindowPosY:           p.Int(keyWindowPosY),
+		WindowPositionSet:    p.Bool(keyWindowPosSet),
+		SettingsWindow:       loadGeometry(p, settingsWinKeys),
+		ExifWindow:           loadGeometry(p, exifWinKeys),
+		FavoritePreviewCache: p.BoolWithFallback(keyFavoritePreviewCache, true),
 	}
 }

@@ -257,3 +257,25 @@ func TestRemoveRejectsInvalidNameAndPropagatesError(t *testing.T) {
 		t.Errorf("Remove error = %v, want %v", err, wantErr)
 	}
 }
+
+func TestDirJoinsNameOntoBaseDirectory(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	want := filepath.Join(dir, "Trip")
+	if got := Dir(dir, "Trip"); got != want {
+		t.Errorf("Dir(%q, %q) = %q, want %q", dir, "Trip", got, want)
+	}
+}
+
+func TestDirRejectsInvalidName(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	if got := Dir(dir, "../escape"); got != "" {
+		t.Errorf(`Dir(dir, "../escape") = %q, want ""`, got)
+	}
+	if got := Dir(dir, ""); got != "" {
+		t.Errorf(`Dir(dir, "") = %q, want ""`, got)
+	}
+}

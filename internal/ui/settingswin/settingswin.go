@@ -1,9 +1,10 @@
 // Package settingswin is the Settings window, reachable from the File menu:
 // one place to see and change every standing preference the app has - sort
 // order, merge mode, picture-frame shuffle and interval, the folder-scan
-// cap, the window-size cap, and the three memory limits (image cache,
-// thumbnail cache, maximum file size) - instead of only discovering them by
-// stumbling onto their keyboard shortcuts.
+// cap, the window-size cap, the three memory limits (image cache, thumbnail
+// cache, maximum file size), and whether favorite previews are cached to
+// disk - instead of only discovering them by stumbling onto their keyboard
+// shortcuts.
 //
 // Every control applies live, through its own OnChanged, the same
 // immediate-effect behavior the S/M/Shift+P keys already give their own
@@ -76,6 +77,9 @@ type Host interface {
 
 	MaxFileSizeMB() int
 	SetMaxFileSizeMB(int)
+
+	FavoritePreviewCache() bool
+	SetFavoritePreviewCache(bool)
 }
 
 // Window is the settings panel. At most one is open at a time (widgets.
@@ -94,6 +98,7 @@ type Window struct {
 	// drive that confirmation card's widgets.
 	sortSelect                    *widget.Select
 	mergeCheck, shuffleCheck      *widget.Check
+	favPreviewCheck               *widget.Check
 	intervalEntry, maxScanEntry   *widget.Entry
 	maxWidthEntry, maxHeightEntry *widget.Entry
 	imgCacheEntry, thumbCacheEntry,
@@ -111,6 +116,7 @@ func (w *Window) Show() {
 	w.win.Show(w.app, lang.L("Settings"), fyne.NewSize(windowW, windowH), w.build, func() {
 		w.sortSelect = nil
 		w.mergeCheck, w.shuffleCheck = nil, nil
+		w.favPreviewCheck = nil
 		w.intervalEntry, w.maxScanEntry = nil, nil
 		w.maxWidthEntry, w.maxHeightEntry = nil, nil
 		w.imgCacheEntry, w.thumbCacheEntry, w.maxFileSizeEntry = nil, nil, nil
@@ -261,5 +267,8 @@ func (w *Window) build() fyne.CanvasObject {
 	w.shuffleCheck = widget.NewCheck(lang.L("Shuffle picture-frame order"), w.host.SetSlideShuffle)
 	w.shuffleCheck.Checked = w.host.SlideShuffle()
 
-	return container.NewPadded(container.NewVBox(form, widget.NewSeparator(), w.mergeCheck, w.shuffleCheck))
+	w.favPreviewCheck = widget.NewCheck(lang.L("Cache favorite previews on disk"), w.host.SetFavoritePreviewCache)
+	w.favPreviewCheck.Checked = w.host.FavoritePreviewCache()
+
+	return container.NewPadded(container.NewVBox(form, widget.NewSeparator(), w.mergeCheck, w.shuffleCheck, w.favPreviewCheck))
 }
