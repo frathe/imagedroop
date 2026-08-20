@@ -8,6 +8,14 @@
 // the per-feature split. It also dissolves a mutual dependency that used
 // to exist between the About window and the manual window, since the About
 // box links to the manual: both are methods on one type here.
+//
+// Help also owns the Hypno Spiral easter egg (internal/ui/spiral), reached
+// only by typing a secret phrase into the manual's search box (see
+// manual.go's secretPhrase and manualView.submit). That doesn't cost this
+// package the "needs nothing from the viewer" property above: the spiral
+// only needs the fyne.App this package already holds, not a callback back
+// into the app. So don't be surprised to find a full-screen shader window
+// living in the help package - the manual is the only door to it.
 package help
 
 import (
@@ -15,6 +23,7 @@ import (
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/lang"
 
+	"github.com/frathe/picfetch/internal/ui/spiral"
 	"github.com/frathe/picfetch/internal/ui/widgets"
 )
 
@@ -33,12 +42,17 @@ type Help struct {
 	manualWin widgets.Singleton
 	aboutWin  widgets.Singleton
 	manual    *manualView
+
+	// spiral is the Hypno Spiral easter egg, reached only from the manual's
+	// search box (see manual.go's secretPhrase). Built unconditionally here
+	// since spiral.New is cheap - it opens no window until Show is called.
+	spiral *spiral.Spiral
 }
 
 // New returns the help UI for application, showing title as the app's name
 // and art as the About box's illustration.
 func New(application fyne.App, title string, art []byte) *Help {
-	return &Help{app: application, title: title, art: art}
+	return &Help{app: application, title: title, art: art, spiral: spiral.New(application)}
 }
 
 // Menu is the app's Help menu: the manual, and an About screen below a

@@ -12,14 +12,16 @@
   is reached.
 - the manual has a search bar at the top of the window ("Search for..."). Enter highlights matches and scrolls
   the first into view; Enter again on the same term walks to the next match. Help → Manual shows the F1 key.
+- the manual's search box has a hidden trigger: submitting one exact phrase searches for nothing and instead
+  opens a full-screen animated shader window with two patterns (N), status/help/FPS overlays, mouse-follow (F)
+  and a slider panel. Escape closes just that window, leaving the app running. Ported from
+  ../golang_course/spiral/ into internal/ui/spiral; the phrase itself is `secretPhrase` in
+  internal/ui/help/manual.go, left unwritten here so it stays worth finding.
 
 ## ACTIVE DEVELOPMENT
 
 ## TODO
 
- - We need an easter egg! When searching the manual for "please hypnotize me" a full screen window should be opened 
-   The project code for the spiral easter egg is in the folder ../golang_course/spiral/ adapt it so it can live in
-   this repository.
  - favorites disk thumbnail cache
    Generate preview images in the background under each favorite's cache
    directory. When a favorite is loaded, let the grid read those previews and

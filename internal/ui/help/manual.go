@@ -51,9 +51,17 @@ var currentManual = func() string {
 	return manualMD
 }
 
+// secretPhrase opens the Hypno Spiral easter egg (internal/ui/spiral) when
+// typed into the manual's search box. Deliberately not lang.L: it's meant to
+// be one exact phrase in every locale, not translated text - a translated
+// trigger would be a magic word nobody could ever guess or find, which
+// defeats the point of an easter egg whose only door is this search box.
+const secretPhrase = "please hypnotize me"
+
 // manualView is the search-enabled manual page: a fixed entry above the
 // scrollable markdown. Submit (Enter) highlights matches and scrolls the
 // current hit into view; a repeated submit of the same query walks forward.
+// Submitting secretPhrase instead opens the Hypno Spiral via onSecret.
 type manualView struct {
 	source  string
 	text    *widget.RichText
@@ -61,16 +69,20 @@ type manualView struct {
 	entry   *widget.Entry
 	state   searchState
 	current *widget.TextSegment
+
+	// onSecret fires when submit sees secretPhrase exactly. nil is a valid
+	// no-op, which is what the search-only tests in this package pass.
+	onSecret func()
 }
 
-func newManualView(source string) *manualView {
+func newManualView(source string, onSecret func()) *manualView {
 	text := widget.NewRichTextFromMarkdown(source)
 	text.Wrapping = fyne.TextWrapWord
 	scroll := container.NewScroll(text)
 	entry := widget.NewEntry()
 	entry.SetPlaceHolder(lang.L("Search for..."))
 
-	v := &manualView{source: source, text: text, scroll: scroll, entry: entry}
+	v := &manualView{source: source, text: text, scroll: scroll, entry: entry, onSecret: onSecret}
 	entry.OnSubmitted = v.submit
 
 	return v
@@ -82,6 +94,18 @@ func (v *manualView) content() fyne.CanvasObject {
 
 func (v *manualView) submit(q string) {
 	q = normalizeQuery(q)
+
+	if strings.EqualFold(q, secretPhrase) {
+		v.entry.SetText("")
+		v.state = searchState{}
+		v.current = nil
+		if v.onSecret != nil {
+			v.onSecret()
+		}
+
+		return
+	}
+
 	v.text.ParseMarkdown(v.source)
 
 	if q == "" {
@@ -141,7 +165,7 @@ func (v *manualView) scrollTo(loc *widget.TextSegment) {
 // duplicate (see widgets.Singleton).
 func (h *Help) ShowManual() {
 	h.manualWin.Show(h.app, lang.L("PicFetch Manual"), fyne.NewSize(manualW, manualH), func() fyne.CanvasObject {
-		h.manual = newManualView(currentManual())
+		h.manual = newManualView(currentManual(), h.spiral.Show)
 
 		return h.manual.content()
 	}, func() {

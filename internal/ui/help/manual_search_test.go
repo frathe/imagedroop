@@ -12,14 +12,14 @@ import (
 const searchFixture = "alpha one\n\nbeta two\n\nalpha three"
 
 func TestNewManualView_SearchBarPlaceholder(t *testing.T) {
-	v := newManualView(searchFixture)
+	v := newManualView(searchFixture, nil)
 	if v.entry.PlaceHolder != "Search for..." {
 		t.Errorf("placeholder = %q, want %q", v.entry.PlaceHolder, "Search for...")
 	}
 }
 
 func TestNewManualView_EnterHighlightsAndAdvances(t *testing.T) {
-	v := newManualView(searchFixture)
+	v := newManualView(searchFixture, nil)
 
 	v.entry.SetText("alpha")
 	v.submit(v.entry.Text)
@@ -42,7 +42,7 @@ func TestNewManualView_EnterHighlightsAndAdvances(t *testing.T) {
 }
 
 func TestNewManualView_EmptyQueryClearsHighlights(t *testing.T) {
-	v := newManualView(searchFixture)
+	v := newManualView(searchFixture, nil)
 	v.entry.SetText("alpha")
 	v.submit(v.entry.Text)
 
@@ -55,7 +55,7 @@ func TestNewManualView_EmptyQueryClearsHighlights(t *testing.T) {
 }
 
 func TestNewManualView_ChangedQueryRestartsAtFirst(t *testing.T) {
-	v := newManualView(searchFixture)
+	v := newManualView(searchFixture, nil)
 	v.entry.SetText("alpha")
 	v.submit(v.entry.Text)
 	v.submit(v.entry.Text)
@@ -73,7 +73,7 @@ func TestNewManualView_ScrollPutsCurrentMatchInViewport(t *testing.T) {
 	t.Cleanup(a.Quit)
 
 	body := strings.Repeat("padding paragraph goes here\n\n", 50) + "unique-tail"
-	v := newManualView(body)
+	v := newManualView(body, nil)
 	w := a.NewWindow("")
 	w.SetContent(v.content())
 	w.Resize(fyne.NewSize(manualW, 280))
@@ -97,7 +97,7 @@ func TestNewManualView_ScrollPutsCurrentMatchInViewport(t *testing.T) {
 
 func TestNewManualView_ScrollMovesOnLaterMatch(t *testing.T) {
 	body := "first-hit\n\n" + strings.Repeat("padding paragraph\n\n", 40) + "second-hit"
-	v := newManualView(body)
+	v := newManualView(body, nil)
 	v.scroll.Resize(fyne.NewSize(manualW, 200))
 	v.text.Resize(v.text.MinSize())
 
