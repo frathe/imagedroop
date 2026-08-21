@@ -71,9 +71,26 @@ func TestViewerShow_AnimatesGIF(t *testing.T) {
 func TestViewerShow_NavigatingAwayStopsAnimation(t *testing.T) {
 	v := newTestViewer(t)
 
+	// 10s per frame, the same parking trick TestInvalidateLoad_WakesAnimateImmediately
+	// uses, and load-bearing here rather than merely convenient: animate is
+	// left asleep in its frame-delay select for the whole test, so the
+	// ShowImage below supersedes it while it is parked. It then wakes on
+	// token.context().Done() and returns *without* entering its fyne.Do,
+	// which is what keeps it away from displayFrames/displayFrameIdx - the
+	// two fields ShowImage's own finishLoad writes from this goroutine.
+	// With short delays the two genuinely raced: the fyne test driver runs
+	// fyne.Do inline on the calling goroutine instead of marshaling onto one
+	// UI goroutine, so nothing serialized animate's frame write against
+	// finishLoad's. Production is serialized (see animate's own comment) and
+	// so has no such race, which is why the fix belongs here and not there.
+	//
+	// What this test can no longer claim is that the animation was actively
+	// cycling frames at the instant of navigation. Exercising that safely
+	// would need a frame-clock seam on animate itself; superseding a parked
+	// goroutine still proves what this test is named for.
 	animURI := storage.NewFileURI(uitest.WriteTempFile(t, "anim.gif", uitest.EncodeAnimatedGIF(t, 4, 4,
 		[]color.Color{color.RGBA{R: 255, A: 255}, color.RGBA{B: 255, A: 255}},
-		[]int{2, 2})))
+		[]int{1000, 1000})))
 	staticURI := uitest.TempJPEGURI(t, "static.jpg", 4, 4, color.RGBA{G: 255, A: 255})
 
 	dropAndWait(t, v, animURI, staticURI)
