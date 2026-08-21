@@ -85,9 +85,9 @@ func buildViewer(application fyne.App, startup startupState) (*viewer, fyne.Wind
 		stopWinPosPoll: noPollerStop,
 	}
 
-	view.vectorDebounce = defaultVectorDebounce
-	view.vectorRasterize = func(vec *imaging.Vector, w, h int) (image.Image, error) { return vec.RasterAt(w, h) }
-	view.vectorAfter = time.After
+	view.vector.debounce = defaultVectorDebounce
+	view.vector.rasterize = func(vec *imaging.Vector, w, h int) (image.Image, error) { return vec.RasterAt(w, h) }
+	view.vector.after = time.After
 
 	// Seeded here for the same reason imgCache's budget is: buildViewer
 	// applies the saved preference directly rather than through the

@@ -86,8 +86,8 @@ func (v *viewer) applyRotationLayout() {
 	// measures a vector against its logical size rather than its raster -
 	// so that size has to turn with it, or fit scale is computed against
 	// the wrong axis.
-	if v.vector != nil {
-		logical := v.vectorLogical
+	if v.vector.svg != nil {
+		logical := v.vector.logical
 		if v.rotation%2 != 0 {
 			logical = fyne.NewSize(logical.Height, logical.Width)
 		}
@@ -120,6 +120,6 @@ func (v *viewer) applyRotationLayout() {
 	// fixed by reordering. Production is safe (fyne.Do serializes onto the
 	// UI goroutine, so the goroutine's write cannot overlap this read); a
 	// test that opens the info overlay while rotating a vector must first
-	// wait out vectorPending.
+	// wait out v.vector.pending.
 	v.updateInfoOverlay()
 }

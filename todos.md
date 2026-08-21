@@ -70,9 +70,55 @@
    declaration's code is byte-identical, verified by comparing comment-free
    per-declaration hashes across the whole package before and after.
 
+ - fixed a `-race` failure in `TestShow_TracksAnimatedGIFLoopDuration`
+   The test loaded a GIF with 50ms/100ms frame delays and then called
+   `ShowImage` on the test goroutine, so `finishLoad`'s writes to
+   `displayFrames`/`displayFrameIdx` raced the still-cycling `animate`
+   goroutine's own write and `redrawRotatedFrame`'s read of the same two
+   fields. Test-driver-only: the real driver marshals every `fyne.Do` onto
+   the one UI goroutine, which serializes `animate`'s frame write against
+   `finishLoad` (and against `slideshow`'s `Advance`, which is itself always
+   inside a `fyne.Do`) — the fyne test driver runs the callback inline on
+   the calling goroutine instead, so nothing serialized them. Fixed the way
+   `TestCanSaveRotation_FalseForAnimatedImage` and
+   `TestCanExport_TrueForAnimatedImage` already do it: multi-second frame
+   delays park `animate` in its frame-delay `select` for the whole test, so
+   its goroutine never touches those fields. Nothing here depended on the
+   animation actually playing, only on the delays summing.
+
 ## ACTIVE DEVELOPMENT
 
 ## TODO
+
+## `clearToDropzone` leaves a running scan's flag and widgets behind
+
+`viewer.clearToDropzone` calls `v.scanLifecycle.invalidate()` but never
+clears `v.scanning` and never hides the scan art/spinner/label — unlike
+`cancelScan`, which does all three. Reachable through File ▸ Close Files
+while a recursive folder scan is running: `keys.go`'s Escape branch checks
+`v.scanning` *before* the reset branch, so the keyboard path can't get there,
+but the menu item has no such guard. The scan's own completion closure won't
+clean up either — it finds its token stale and returns early, and the comment
+on `scanning` explains why that is normally fine ("the newer scan already
+owns the flag by the time the stale one's closure would run") — but here
+there is no newer scan. Needs checking against what `clearToDropzone`
+repaints afterward before deciding whether anything is actually left visible.
+
+## `TestViewerShow_NavigatingAwayStopsAnimation` has the race that was just
+   fixed in `TestShow_TracksAnimatedGIFLoopDuration`
+
+Same shape: a 20ms-per-frame GIF, then `v.ShowImage(1)` on the test
+goroutine while `animate` is still cycling, so both write
+`displayFrames`/`displayFrameIdx` with nothing serializing them under the
+test driver. It captures `oldAnimStopped` before navigating and waits on it
+afterwards, but the race happens *during* `ShowImage`, before that wait.
+Confirmed to actually fire, not just latent: a full `go test -race ./...`
+reported it once the other one was fixed, so the suite is still
+intermittently red until this is dealt with.
+Unlike the test just fixed, this one cannot simply park the animation — a
+live animation superseded by a navigation is precisely its subject — so it
+needs an actual decision about how to exercise that safely rather than the
+long-frame-delay trick.
 
 ## Group the `viewer` struct's field clusters into sub-structs
 
@@ -99,6 +145,17 @@ just flattened into one namespace:
 Each cluster can move independently — three small, separately verifiable
 commits rather than one big one.
 
+## 4. RAW support via embedded preview extraction — L
+
+Camera RAW files (CR2/CR3, NEF, ARW, DNG…) all embed full-size JPEG
+previews. Extracting those is pure-Go-feasible (TIFF/IFD walking —
+`internal/imaging/exif.go` already has the walker) and turns "drop the
+memory card folder" into a supported workflow without shipping a demosaic
+engine. Scope guard: viewer-only — no RAW decode, no editing; the info
+overlay/title marks it as "(preview)". Extends `imaging.IsSupportedImage`
+and the loader; EXIF window works as-is since the metadata lives in the
+same IFDs.
+
 ## not deemed worth implementing (edge cases)
 
 - There is a bug in the Windows Version: WHen in Gridview, multiselect via
@@ -107,3 +164,4 @@ commits rather than one big one.
   instead opens it. Observation, when pushing the Ctrl key at exactly the same time
   as clicking on the image, it actually works, and the image is selected.
   (this seems to be a bug in fyne, created an issue, sorry Windows users)
+

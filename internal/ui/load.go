@@ -202,10 +202,10 @@ func (v *viewer) finishLoad(token requestToken, _ int, u fyne.URI, loaded *imagi
 		// the byte weight ByteCache computed for it.
 		v.displayFrames = []image.Image{loaded.Frames[0]}
 
-		v.vector = loaded.Vector
-		v.vectorLogical = fyne.NewSize(float32(b.Dx()), float32(b.Dy()))
-		v.vectorRaster = image.Pt(b.Dx(), b.Dy())
-		v.zoom.SetLogicalSize(v.vectorLogical)
+		v.vector.svg = loaded.Vector
+		v.vector.logical = fyne.NewSize(float32(b.Dx()), float32(b.Dy()))
+		v.vector.raster = image.Pt(b.Dx(), b.Dy())
+		v.zoom.SetLogicalSize(v.vector.logical)
 	}
 
 	v.displayFrameIdx = 0

@@ -80,9 +80,9 @@ func newTestUI(t *testing.T) (v *viewer, win fyne.Window, closed func() bool) {
 
 	// Vector re-renders fire from every effective-scale change (a key, a
 	// scroll, or a window resize), and the production debounce would leave
-	// them still pending when a test asserts on vectorRaster/vectorPending
+	// them still pending when a test asserts on v.vector.raster/v.vector.pending
 	// moments later - zeroed here the same way the toast's duration is.
-	v.vectorDebounce = 0
+	v.vector.debounce = 0
 
 	// setAsWallpaper writes a PNG it then hands to the OS, and unlike every
 	// other file this suite produces that one is meant to outlive the
@@ -132,7 +132,7 @@ func drain(t *testing.T, v *viewer) {
 	v.invalidateLoad()
 	v.scanLifecycle.invalidate()
 	v.sortLifecycle.invalidate()
-	v.vectorLifecycle.invalidate()
+	v.vector.lifecycle.invalidate()
 	v.favThumbLifecycle.invalidate()
 	v.slides.Exit()
 
@@ -142,7 +142,7 @@ func drain(t *testing.T, v *viewer) {
 	// can still land in finishLoad (whose resize triggers a scale change)
 	// and no slideshow advance can start a load is this Wait racing no
 	// further Add.
-	v.vectorPending.Wait()
+	v.vector.pending.Wait()
 
 	for _, c := range []struct {
 		name string

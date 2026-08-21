@@ -247,7 +247,7 @@ func (z *Zoom) native() fyne.Size {
 // (the common case after any In/Out step) without touching img.Image, and
 // the s==z.lastScale guard below silences a no-op secondary layout at
 // the same scale. onScaleChanged itself (requestVectorRender) already
-// returns immediately when v.vector==nil.
+// returns immediately when v.vector.svg==nil.
 func (z *Zoom) notifyScale() {
 	if z.onScaleChanged == nil {
 		return

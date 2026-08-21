@@ -80,7 +80,7 @@ func registerShutdown(application fyne.App, view *viewer) {
 		view.scanLifecycle.invalidate()
 		view.loadLifecycle.invalidate()
 		view.sortLifecycle.invalidate()
-		view.vectorLifecycle.invalidate()
+		view.vector.lifecycle.invalidate()
 
 		session.Save(application, view.state.unsortedFiles)
 		preferences.Save(application, view.currentPreferences())

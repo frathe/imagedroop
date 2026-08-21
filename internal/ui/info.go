@@ -78,18 +78,18 @@ func (v *viewer) updateInfoOverlay() {
 // directly would make the reported dimensions climb as the user zooms in -
 // an internal implementation detail (how sharp the current raster happens
 // to be) leaking into a field that is supposed to answer "how big is this
-// image". v.vectorLogical is what the window and the title are already
+// image". v.vector.logical is what the window and the title are already
 // built on, so it's what this reports too. A local copy has its axes
 // swapped on a 90/270 rotation, exactly as applyRotationLayout's does for
-// zoom - v.vectorLogical itself is never mutated, since the re-render
+// zoom - v.vector.logical itself is never mutated, since the re-render
 // target in vector.go is built from it in unrotated space.
 func (v *viewer) displayedDimensions() (w, h int) {
-	if v.vector == nil {
+	if v.vector.svg == nil {
 		b := v.img.Image.Bounds()
 		return b.Dx(), b.Dy()
 	}
 
-	lw, lh := v.vectorLogical.Width, v.vectorLogical.Height
+	lw, lh := v.vector.logical.Width, v.vector.logical.Height
 	if v.rotation%2 != 0 {
 		lw, lh = lh, lw
 	}

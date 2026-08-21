@@ -36,10 +36,10 @@ func TestSVGDisplaysAtLogicalSize(t *testing.T) {
 	v, _, _ := newTestUI(t)
 	dropAndWait(t, v, uitest.TempSVGURI(t, "icon.svg", 24, 24))
 
-	if v.vector == nil {
+	if v.vector.svg == nil {
 		t.Fatal("a loaded SVG must leave a Vector on the viewer")
 	}
-	if got := v.vectorLogical; got.Width != 340 || got.Height != 340 {
+	if got := v.vector.logical; got.Width != 340 || got.Height != 340 {
 		t.Fatalf("logical size = %v, want 340x340", got)
 	}
 	if b := v.img.Image.Bounds(); b.Dx() != 340 || b.Dy() != 340 {
@@ -51,23 +51,23 @@ func TestSVGReRendersAtHigherDensityOnZoom(t *testing.T) {
 	v, _, _ := newTestUI(t)
 	dropAndWait(t, v, uitest.TempSVGURI(t, "icon.svg", 24, 24))
 
-	before := v.vectorRaster
+	before := v.vector.raster
 
 	for range 6 { // 1.25^6 ~= 3.8x
 		v.zoom.In()
 	}
-	v.vectorPending.Wait()
+	v.vector.pending.Wait()
 
-	if v.vectorRaster.X <= before.X {
-		t.Fatalf("raster stayed at %v after zooming in from %v", v.vectorRaster, before)
+	if v.vector.raster.X <= before.X {
+		t.Fatalf("raster stayed at %v after zooming in from %v", v.vector.raster, before)
 	}
-	if b := v.img.Image.Bounds(); b.Dx() != v.vectorRaster.X {
-		t.Fatalf("displayed image is %dx%d, out of step with vectorRaster %v", b.Dx(), b.Dy(), v.vectorRaster)
+	if b := v.img.Image.Bounds(); b.Dx() != v.vector.raster.X {
+		t.Fatalf("displayed image is %dx%d, out of step with vector.raster %v", b.Dx(), b.Dy(), v.vector.raster)
 	}
 
 	// The logical size must not move - it is what the window, the title and
 	// the info overlay are all built on.
-	if got := v.vectorLogical; got.Width != 340 || got.Height != 340 {
+	if got := v.vector.logical; got.Width != 340 || got.Height != 340 {
 		t.Fatalf("logical size drifted to %v", got)
 	}
 }
@@ -86,7 +86,7 @@ func TestSVGReRenderNeverMutatesTheCachedEntry(t *testing.T) {
 	for range 6 {
 		v.zoom.In()
 	}
-	v.vectorPending.Wait()
+	v.vector.pending.Wait()
 
 	if got := cached.Frames[0].Bounds(); got != cachedBefore {
 		t.Fatalf("re-render mutated the cached frame: %v -> %v", cachedBefore, got)
@@ -97,7 +97,7 @@ func TestSVGReRenderNeverMutatesTheCachedEntry(t *testing.T) {
 }
 
 // TestZoomKeysDriveVectorRerenders pins the zoom-to-request wiring and the
-// frame/vectorRaster consistency after a run of key presses. It does NOT
+// frame/vector.raster consistency after a run of key presses. It does NOT
 // pin coalescing - a rasterization per press would also pass here; that
 // guarantee is TestRasterizeVectorCoalescesABurst's job below.
 func TestZoomKeysDriveVectorRerenders(t *testing.T) {
@@ -115,28 +115,28 @@ func TestZoomKeysDriveVectorRerenders(t *testing.T) {
 	//
 	// That matters because the invariant this test relies on is: no
 	// foreground read of img.Image may follow the last surviving spawn
-	// before vectorPending.Wait() is called. Every press up to and
+	// before vector.pending.Wait() is called. Every press up to and
 	// including the 12th here is itself the trigger for a spawn (or is
 	// superseded by one later in the loop), so nothing reads img.Image
 	// after the winning goroutine exists; that goroutine's eventual write,
-	// synchronized against this test goroutine only via vectorPending's
+	// synchronized against this test goroutine only via vector.pending's
 	// Done-then-Wait edge, lands while the test is safely blocked inside
 	// Wait(). A 13th press would read img.Image (in zoom.apply, for its own
 	// layout math) without spawning anything - an unsynchronized read that
 	// could run concurrently with the earlier goroutine's write under the
 	// fake test driver, which (unlike production) never marshals fyne.Do
 	// onto a single goroutine, so nothing here would order the two.
-	before := v.vectorLifecycle.currentRevision()
+	before := v.vector.lifecycle.currentRevision()
 	for range 12 {
 		v.zoom.In()
 	}
-	v.vectorPending.Wait()
+	v.vector.pending.Wait()
 
-	if v.vectorLifecycle.currentRevision() <= before {
+	if v.vector.lifecycle.currentRevision() <= before {
 		t.Fatal("zooming must request re-renders")
 	}
-	if b := v.img.Image.Bounds(); b.Dx() != v.vectorRaster.X {
-		t.Fatalf("final raster %dx%d out of step with %v", b.Dx(), b.Dy(), v.vectorRaster)
+	if b := v.img.Image.Bounds(); b.Dx() != v.vector.raster.X {
+		t.Fatalf("final raster %dx%d out of step with %v", b.Dx(), b.Dy(), v.vector.raster)
 	}
 }
 
@@ -155,11 +155,11 @@ func TestRasterizeVectorCoalescesABurst(t *testing.T) {
 	var rasterized atomic.Int32
 
 	// All three writes happen before the drop - the write-once rule for
-	// fields a background goroutine reads (see viewer.vectorDebounce).
-	v.vectorDebounce = time.Hour // >0 routes through vectorAfter; the duration itself is never waited
-	v.vectorAfter = func(time.Duration) <-chan time.Time { return release }
-	inner := v.vectorRasterize
-	v.vectorRasterize = func(vec *imaging.Vector, w, h int) (image.Image, error) {
+	// fields a background goroutine reads (see viewer.vector.debounce).
+	v.vector.debounce = time.Hour // >0 routes through vector.after; the duration itself is never waited
+	v.vector.after = func(time.Duration) <-chan time.Time { return release }
+	inner := v.vector.rasterize
+	v.vector.rasterize = func(vec *imaging.Vector, w, h int) (image.Image, error) {
 		rasterized.Add(1)
 		return inner(vec, w, h)
 	}
@@ -171,22 +171,22 @@ func TestRasterizeVectorCoalescesABurst(t *testing.T) {
 	}
 
 	close(release)
-	v.vectorPending.Wait()
+	v.vector.pending.Wait()
 
 	if got := rasterized.Load(); got != 1 {
 		t.Fatalf("a burst of 5 scale changes rasterized %d times, want exactly 1", got)
 	}
-	if b := v.img.Image.Bounds(); b.Dx() != v.vectorRaster.X {
-		t.Fatalf("frame %dx%d out of step with vectorRaster %v", b.Dx(), b.Dy(), v.vectorRaster)
+	if b := v.img.Image.Bounds(); b.Dx() != v.vector.raster.X {
+		t.Fatalf("frame %dx%d out of step with vector.raster %v", b.Dx(), b.Dy(), v.vector.raster)
 	}
 }
 
 // TestRasterizeVectorStopsOnShutdownSignal exercises the lifecycle-context arm
 // of rasterizeVector's debounce select: shutdown invalidation cuts a parked
 // goroutine out of its wait. Most tests here leave
-// vectorDebounce at the zero newTestUI sets it to and skip the select
+// vector.debounce at the zero newTestUI sets it to and skip the select
 // entirely; TestRasterizeVectorCoalescesABurst enters it too, but through
-// the vectorAfter seam rather than a real timer, and never touches the
+// the vector.after seam rather than a real timer, and never touches the
 // stop arm.
 func TestRasterizeVectorStopsOnShutdownSignal(t *testing.T) {
 	v, _, _ := newTestUI(t)
@@ -197,25 +197,25 @@ func TestRasterizeVectorStopsOnShutdownSignal(t *testing.T) {
 	// rule: the drop currently spawns nothing (a fresh SVG's fit scale is
 	// <= 1), but a write after it would have no happens-before edge to any
 	// goroutine the drop could spawn.
-	v.vectorDebounce = 20 * time.Millisecond
+	v.vector.debounce = 20 * time.Millisecond
 
 	dropAndWait(t, v, uitest.TempSVGURI(t, "icon.svg", 24, 24))
 
-	before := v.vectorRaster
+	before := v.vector.raster
 
 	v.requestVectorRender(2) // comfortably past vectorSharpenRatio, so it spawns
 
 	// Closed while the spawned goroutine is still parked in its debounce
 	// select - the same shutdown signal run.go's SetOnStopped sends in
-	// production. vectorPending.Wait(), not a sleep, is what proves the
+	// production. vector.pending.Wait(), not a sleep, is what proves the
 	// goroutine actually exited: a sleep here would itself be racing the
 	// 20ms debounce instead of deterministically observing the goroutine's
 	// own exit.
-	v.vectorLifecycle.invalidate()
-	v.vectorPending.Wait()
+	v.vector.lifecycle.invalidate()
+	v.vector.pending.Wait()
 
-	if v.vectorRaster != before {
-		t.Fatal("invalidating vectorLifecycle must not let a rasterization land")
+	if v.vector.raster != before {
+		t.Fatal("invalidating vector.lifecycle must not let a rasterization land")
 	}
 }
 
@@ -223,11 +223,11 @@ func TestRasterFormatKeepsNoVectorState(t *testing.T) {
 	v, _, _ := newTestUI(t)
 	dropAndWait(t, v, uitest.TempJPEGURI(t, "photo.jpg", 40, 30, color.White))
 
-	if v.vector != nil {
+	if v.vector.svg != nil {
 		t.Fatal("a JPEG must leave no Vector behind")
 	}
-	if got := v.vectorLogical; got != (fyne.Size{}) {
-		t.Fatalf("vectorLogical = %v, want zero", got)
+	if got := v.vector.logical; got != (fyne.Size{}) {
+		t.Fatalf("vector.logical = %v, want zero", got)
 	}
 }
 
@@ -236,7 +236,7 @@ func TestSVGThenRasterClearsVectorState(t *testing.T) {
 	dropAndWait(t, v, uitest.TempSVGURI(t, "icon.svg", 24, 24))
 	dropAndWait(t, v, uitest.TempJPEGURI(t, "photo.jpg", 40, 30, color.White))
 
-	if v.vector != nil {
+	if v.vector.svg != nil {
 		t.Fatal("navigating from an SVG to a JPEG must clear the Vector")
 	}
 }
@@ -246,7 +246,7 @@ func TestSVGRotationSwapsLogicalAxes(t *testing.T) {
 	dropAndWait(t, v, uitest.TempSVGURI(t, "wide.svg", 200, 100)) // logical 520x260
 
 	v.rotateBy(1)
-	v.vectorPending.Wait()
+	v.vector.pending.Wait()
 
 	// The source is wider than it is tall, so a quarter turn must leave the
 	// displayed frame taller than it is wide.
@@ -264,7 +264,7 @@ func TestSVGRotationSwapsTheLogicalSizeZoomMeasuresAgainst(t *testing.T) {
 	}
 
 	v.rotateBy(1)
-	v.vectorPending.Wait()
+	v.vector.pending.Wait()
 
 	// The quarter turn has to reach zoom, or fit scale is computed against
 	// the wrong axis. Nothing downstream can reveal this: requestVectorRender
@@ -276,8 +276,8 @@ func TestSVGRotationSwapsTheLogicalSizeZoomMeasuresAgainst(t *testing.T) {
 
 	// ...while the field itself must stay unrotated, since the raster target
 	// is built from it in unrotated space.
-	if got := v.vectorLogical; got.Width != 520 || got.Height != 260 {
-		t.Fatalf("vectorLogical moved to %v, must stay the unrotated 520x260", got)
+	if got := v.vector.logical; got.Width != 520 || got.Height != 260 {
+		t.Fatalf("vector.logical moved to %v, must stay the unrotated 520x260", got)
 	}
 
 	v.rotateBy(1) // 180 degrees: back to the original axes
@@ -302,7 +302,7 @@ func TestRotatedNonSquareSVGKeepsItsAspectRatio(t *testing.T) {
 	for range 6 {
 		v.zoom.In()
 	}
-	v.vectorPending.Wait()
+	v.vector.pending.Wait()
 
 	// displayFrames[0] is the raster before rotation is applied, so it must
 	// still be twice as wide as it is tall.
@@ -321,10 +321,10 @@ func TestSVGReRendersAfterRotation(t *testing.T) {
 	for range 6 {
 		v.zoom.In()
 	}
-	v.vectorPending.Wait()
+	v.vector.pending.Wait()
 
-	if b := v.img.Image.Bounds(); b.Dx() != v.vectorRaster.X {
-		t.Fatalf("rotated frame %dx%d out of step with vectorRaster %v", b.Dx(), b.Dy(), v.vectorRaster)
+	if b := v.img.Image.Bounds(); b.Dx() != v.vector.raster.X {
+		t.Fatalf("rotated frame %dx%d out of step with vector.raster %v", b.Dx(), b.Dy(), v.vector.raster)
 	}
 }
 
@@ -346,7 +346,7 @@ func TestSVGReRendersAfterRotation(t *testing.T) {
 // unlike production, where fyne.Do genuinely marshals onto one UI goroutine
 // - runs a fyne.Do callback inline on whichever goroutine calls it (see
 // ARCHITECTURE.md's concurrency invariant). The final check, once
-// vectorPending.Wait() has drained every goroutine spawned by the rotation
+// vector.pending.Wait() has drained every goroutine spawned by the rotation
 // too, has nothing left to race and does go through the real v.infoText.
 func TestInfoOverlayReportsLogicalSizeNotLiveRaster(t *testing.T) {
 	v, _, _ := newTestUI(t)
@@ -359,7 +359,7 @@ func TestInfoOverlayReportsLogicalSizeNotLiveRaster(t *testing.T) {
 	for range 6 {
 		v.zoom.In()
 	}
-	v.vectorPending.Wait()
+	v.vector.pending.Wait()
 
 	// Confirm the raster actually grew, or the assertion below would pass
 	// vacuously no matter which way the bug went.
@@ -371,7 +371,7 @@ func TestInfoOverlayReportsLogicalSizeNotLiveRaster(t *testing.T) {
 	}
 
 	v.rotateBy(1)
-	v.vectorPending.Wait()
+	v.vector.pending.Wait()
 
 	w, h := v.displayedDimensions()
 	if w != 260 || h != 520 {
@@ -392,7 +392,7 @@ func TestCloseFilesClearsVector(t *testing.T) {
 
 	v.closeFiles()
 
-	if v.vector != nil {
+	if v.vector.svg != nil {
 		t.Fatal("closing files must clear the vector state")
 	}
 }
@@ -434,7 +434,7 @@ func TestRotatingAZoomedSVGSizesTheWindowFromItsLogicalSize(t *testing.T) {
 	dropAndWait(t, v, uitest.TempSVGURI(t, "wide.svg", 200, 100)) // logical 520x260
 
 	v.rotateBy(1)
-	v.vectorPending.Wait()
+	v.vector.pending.Wait()
 
 	unzoomed := win.Canvas().Size()
 
@@ -443,15 +443,15 @@ func TestRotatingAZoomedSVGSizesTheWindowFromItsLogicalSize(t *testing.T) {
 	for range 6 { // ~3.8x, well inside zoom's maxScale clamp
 		v.zoom.In()
 	}
-	v.vectorPending.Wait()
+	v.vector.pending.Wait()
 
-	if v.vectorRaster.X <= int(v.vectorLogical.Width) {
+	if v.vector.raster.X <= int(v.vector.logical.Width) {
 		t.Fatalf("raster is %v, expected zooming to have made it denser than the logical %v - "+
-			"the rest of this test proves nothing otherwise", v.vectorRaster, v.vectorLogical)
+			"the rest of this test proves nothing otherwise", v.vector.raster, v.vector.logical)
 	}
 
 	v.rotateBy(1)
-	v.vectorPending.Wait()
+	v.vector.pending.Wait()
 
 	if got := win.Canvas().Size(); got != unzoomed {
 		t.Fatalf("rotating a zoomed SVG sized the window to %v, want %v - the same window "+

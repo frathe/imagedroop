@@ -6,7 +6,6 @@ import (
 	"slices"
 	"sync"
 	"sync/atomic"
-	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -420,42 +419,9 @@ type viewer struct {
 	// through the closure registerFeatures hands it.
 	keyModifiers func() fyne.KeyModifier
 
-	// vector is the parsed SVG behind the image on screen, nil for every
-	// raster format. Non-nil is what makes a scale change mean anything.
-	vector *imaging.Vector
-
-	// vectorLogical is the size the app treats that vector as being - what
-	// the window, the title and the info overlay are built on. Fixed for
-	// the lifetime of the loaded image; the raster behind it is not.
-	vectorLogical fyne.Size
-
-	// vectorRaster is the pixel size of the raster currently on screen,
-	// which requestVectorRender compares a new target against.
-	vectorRaster image.Point
-
-	// vectorLifecycle owns debounce and rasterization for the latest SVG
-	// render request. A newer scale, image change, clear, or shutdown cancels
-	// the previous token and wakes it out of the debounce immediately.
-	vectorLifecycle requestLifecycle
-
-	// vectorPending is waited on by the test suite's drain, per the
-	// module's concurrency invariant.
-	vectorPending sync.WaitGroup
-
-	// vectorDebounce coalesces a burst of scroll-driven scale changes into
-	// one rasterization. A per-viewer field rather than a package var
-	// (concurrency invariant: the viewer has no mutable package state),
-	// which is also the seam that lets tests set it to zero.
-	vectorDebounce time.Duration
-
-	// vectorRasterize and vectorAfter are RasterAt and time.After behind
-	// per-viewer seams (the concurrency invariant forbids mutable package
-	// state), so the coalescing test can count rasterizations and release
-	// a parked burst deterministically. Production never overrides them.
-	// Like vectorDebounce, they are write-once: set at construction, and
-	// by a test only before its first drop.
-	vectorRasterize func(vec *imaging.Vector, w, h int) (image.Image, error)
-	vectorAfter     func(time.Duration) <-chan time.Time
+	// vector is the whole state of the SVG re-render - see vector.go's
+	// vectorView for what it holds and why it's a value field.
+	vector vectorView
 }
 
 // ForceRepaint refreshes the window's root content object, which has been
