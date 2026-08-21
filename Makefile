@@ -164,7 +164,7 @@ release: ## Full release: verify, bump version, commit, tag, push (PART=major|mi
 	git push origin "$$tag"; \
 	echo "Pushed $$tag - .github/workflows/release.yml now builds and publishes the artifacts."; \
 	if command -v gh >/dev/null 2>&1; then \
-		gh run watch --exit-status
+		gh run watch --exit-status; \
 	fi
 
 help: ## Show this help
