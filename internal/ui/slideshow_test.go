@@ -215,14 +215,24 @@ func TestAdvance_WrapsAroundAtTheEnd(t *testing.T) {
 func TestShow_TracksAnimatedGIFLoopDuration(t *testing.T) {
 	v := newTestViewer(t)
 
+	// Two different multi-second frame delays, the same trick
+	// TestCanSaveRotation_FalseForAnimatedImage and
+	// TestCanExport_TrueForAnimatedImage use: nothing here depends on the
+	// animation actually playing, only on the delays summing, so parking
+	// animate in its frame-delay select for the whole test keeps its
+	// goroutine away from displayFrames/displayFrameIdx entirely. The
+	// ShowImage below runs on this goroutine and writes both, and the fyne
+	// test driver runs fyne.Do inline rather than marshaling onto one UI
+	// goroutine, so a still-cycling animation would genuinely race it -
+	// which is what short delays here used to do.
 	animURI := storage.NewFileURI(uitest.WriteTempFile(t, "anim.gif", uitest.EncodeAnimatedGIF(t, 4, 4,
 		[]color.Color{color.RGBA{R: 255, A: 255}, color.RGBA{B: 255, A: 255}},
-		[]int{5, 10}))) // 50ms + 100ms = 150ms total loop
+		[]int{1000, 2000}))) // 10s + 20s = 30s total loop, in centiseconds
 	staticURI := uitest.TempJPEGURI(t, "static.jpg", 4, 4, color.RGBA{G: 255, A: 255})
 
 	dropAndWait(t, v, animURI, staticURI)
 
-	if got, want := v.slides.AnimDuration(), 150*time.Millisecond; got != want {
+	if got, want := v.slides.AnimDuration(), 30*time.Second; got != want {
 		t.Errorf("AnimDuration after loading the gif = %v, want %v", got, want)
 	}
 
