@@ -163,9 +163,7 @@ release: ## Full release: verify, bump version, commit, tag, push (PART=major|mi
 	git push origin "$(RELEASE_BRANCH)"; \
 	git push origin "$$tag"; \
 	echo "Pushed $$tag - .github/workflows/release.yml now builds and publishes the artifacts."; \
-	if command -v gh >/dev/null 2>&1; then \
-		gh run watch --exit-status; \
-	fi
+	scripts/watch_release.sh "$$tag"
 
 help: ## Show this help
 	@grep -E '^[a-zA-Z_-]+:.*##' $(MAKEFILE_LIST) | awk 'BEGIN {FS = ":.*##"}; {printf "  %-16s %s\n", $$1, $$2}'

@@ -7,6 +7,10 @@
 [![Downloads](https://img.shields.io/github/downloads/frathe/picfetch/total)](https://github.com/frathe/picfetch/releases)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-donate-yellow.svg?logo=buy-me-a-coffee&logoColor=white)](https://buymeacoffee.com/gcobnk0grj)
+[![macOS](https://img.shields.io/badge/macOS-000000?logo=apple&logoColor=white)](https://github.com/frathe/picfetch/releases/latest)
+[![Windows](https://img.shields.io/badge/Windows-0078D6?logo=windows&logoColor=white)](https://github.com/frathe/picfetch/releases/latest)
+[![Linux](https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black)](https://github.com/frathe/picfetch/releases/latest)
+[![Website](https://img.shields.io/badge/website-frathe.github.io-55309e)](https://frathe.github.io/picfetch/)
 
 ![Header](assets/header.jpg)
 
@@ -35,6 +39,7 @@ set with the keyboard.
   compositing each frame per its disposal method (a partial-region update
   won't leave stale pixels or wrongly clear the whole frame); playback stops
   automatically as soon as you navigate away
+
 - EXIF orientation correction for JPEGs (auto-rotate/flip per the file's
   orientation tag)
 - EXIF data window (`E`, or a link in the info overlay) showing camera
@@ -214,7 +219,10 @@ matches `origin/main`; it also refuses if the tag it would create already
 exists locally or on the remote. After a confirmation prompt (`YES=1` skips
 it) it runs `make verify`, bumps `Version`/`Build` in
 [FyneApp.toml](FyneApp.toml), commits that as `Release vX.Y.Z`, tags the
-commit, and pushes the branch and the tag.
+commit, and pushes the branch and the tag. If the GitHub CLI (`gh`) is
+installed it then finds the Release workflow run for that tag (without
+prompting you to pick among the simultaneous CI run on `main`) and
+follows it until the artifacts are published.
 
 Pushing the tag is what publishes: [`.github/workflows/release.yml`](.github/workflows/release.yml)
 re-runs the full CI suite as a gate, then packages macOS, Windows, and Linux
