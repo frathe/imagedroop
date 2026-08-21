@@ -253,7 +253,7 @@ func TestE2E_EscapeQuitsWhenNothingLoaded(t *testing.T) {
 // ahead of it, this would otherwise hit the "nothing loaded" branch above
 // and close the window out from under a scan the user meant to cancel.
 // v.scanning is set directly rather than racing a real background scan -
-// see TestHandleDrop_SupersededScanGoroutineExits in library_test.go for why.
+// see TestHandleDrop_SupersededScanGoroutineExits in drop_test.go for why.
 func TestE2E_EscapeCancelsScanInsteadOfClosing(t *testing.T) {
 	v, _, closed := newTestUI(t)
 

@@ -230,7 +230,7 @@ func TestFavoriteShortcutOpensStoredFilesThroughViewer(t *testing.T) {
 // TestWireSaveShortcut_SavesTheCurrentRotation, save_test.go). The dialog is
 // a real fyne.Window overlay (dialog.NewCustom), not one of this app's own
 // stacked cards, so its presence shows up on the canvas's own overlay stack -
-// the same signal TestHandleDrop_EmptyDrop (library_test.go) checks for "no
+// the same signal TestHandleDrop_EmptyDrop (drop_test.go) checks for "no
 // dialog open".
 func TestWireManageFavoritesShortcut_OpensTheDialog(t *testing.T) {
 	v := newTestViewer(t)
@@ -371,7 +371,7 @@ func TestCloseFiles_NeverClosesTheWindow(t *testing.T) {
 }
 
 // TestCloseFiles_CancelsScanInProgress mirrors
-// TestCancelScan_CancelsInFlightScanWithNoFilesYet (library_test.go): it
+// TestCancelScan_CancelsInFlightScanWithNoFilesYet (drop_test.go): it
 // drives cancelScan's target state directly rather than racing handleDrop's
 // own background goroutine.
 func TestCloseFiles_CancelsScanInProgress(t *testing.T) {

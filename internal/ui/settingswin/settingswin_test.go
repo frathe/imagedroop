@@ -14,7 +14,7 @@ import (
 )
 
 // testApp is shared across every test below, mirroring internal/ui's own
-// testApp (library_test.go): test.NewApp() resets process-global caches
+// testApp (harness_test.go): test.NewApp() resets process-global caches
 // (font shaping, theme), so building one per test would pay that cost on
 // every single test instead of once for the package.
 var testApp fyne.App

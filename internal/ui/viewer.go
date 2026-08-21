@@ -286,7 +286,7 @@ type viewer struct {
 	// small-worker-pool shape internal/ui/grid gives thumbnails - without
 	// it, rapid navigation could stack an unbounded number of full-size
 	// decode goroutines. preloadPending counts them, mirroring
-	// thumbPending below: waitUntilLoaded (library_test.go) waits it out
+	// thumbPending below: waitUntilLoaded (harness_test.go) waits it out
 	// after every load so a preload goroutine never outlives the test
 	// whose navigation spawned it.
 	preloading     sync.Map

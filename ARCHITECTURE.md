@@ -106,7 +106,7 @@ request lifecycles' cancellable contexts, and the grid's and viewer's
 `pending`/`preloadPending`/`vectorPending` WaitGroups for thumbnail, neighbor-preload, and vector-rasterization decodes. Under Fyne's test driver `fyne.Do`
 runs a goroutine's callback inline rather than marshaling it to a UI thread, so the test suite leans on those signals
 (`settleToast`/`settleThumbs`/`settleSlideshow`/`settleChooser` and the
-`waitFor*`/`dropAndWait` channel helpers in `library_test.go`) instead of ever letting a background goroutine's UI work
+`waitFor*`/`dropAndWait` channel helpers in `harness_test.go`) instead of ever letting a background goroutine's UI work
 overlap the test goroutine's own. `newTestUI`'s `drain` cleanup waits out all of them at the end of every test, so work
 a test deliberately abandoned can't run on into the next one — if you add a background operation, give it a signal and
 add it there.
@@ -576,7 +576,7 @@ Use `errcheck` command to check for unhadled errors.
   override) + `load.go` (name, dimensions and position counter for the image on screen) + `viewer.go`'s
   `HighlightChanged` (the file the grid overview's ring is on)
 - "How do I write a test that needs an image / a viewer?" → `internal/uitest` for the fixtures, `newTestViewer(t)`/
-  `newTestUI(t)` + `dropAndWait` in `library_test.go` for the viewer and its wait discipline
+  `newTestUI(t)` + `dropAndWait` in `harness_test.go` for the viewer and its wait discipline
 - "How do I add or translate a user-visible string?" → wrap it in `lang.L` where it's drawn, then add the same key to
   every bundle in `translations/` — see Translations above
 - "Why isn't feature X its own package?" → the ownership and cross-feature-composition rules in the `internal/ui`

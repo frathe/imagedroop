@@ -35,7 +35,7 @@ type toast struct {
 	// rather than a package var so tests inject their own: the test
 	// constructor sets it to an hour, so a pending timer never fires
 	// mid-suite - tests drive the hide synchronously via settleToast
-	// (library_test.go) instead of waiting out real time, which is also
+	// (harness_test.go) instead of waiting out real time, which is also
 	// what keeps the auto-hide goroutine from ever touching widgets
 	// concurrently with a test goroutine under the fyne test driver's
 	// inline fyne.Do.

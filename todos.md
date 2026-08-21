@@ -42,9 +42,57 @@
    disabled choice runs and dismisses nothing, from a click or the
    keyboard) to support this.
 
+ - split `internal/ui/library_test.go` into per-feature test files
+   The 2,428-line monolith's 69 tests now sit beside the code they exercise —
+   `drop_test.go`, `sort_test.go`, `load_test.go`, `imgcache_test.go`,
+   `animate_test.go`, `info_test.go`, `filestate_test.go`,
+   `memlimits_test.go`, `windowsize_test.go`, `windowtrack_test.go` and
+   `reset_test.go` — each opening with a header saying what it owns and what
+   deliberately lives elsewhere. What remained is `harness_test.go`, reached
+   by `git mv` rather than a fresh file so `git blame` survives on the 20
+   helpers that 21 of the package's test files depend on. Pure motion: every
+   declaration's code is byte-identical, verified by comparing comment-free
+   per-declaration hashes across the whole package before and after.
+
 ## ACTIVE DEVELOPMENT
 
 ## TODO
+
+## Rebranding new Mascott Trane
+
+- new app icon: assets/trane/appicon.png
+- website & readme changes:
+  - favicons: [Favicons (TaneWithFrame)](assets/trane/Favicons%20%28TaneWithFrame%29)
+  - Readme and website header: ![header.jpg](assets/trane/header.jpg)
+- add changes also please resize the images to the actual size that is needed in the app:
+  - [placeholder.webp](internal/ui/assets/placeholder.webp) -> [trane_sad.webp](assets/trane/trane_sad.webp)
+  - [welcome.webp](internal/ui/assets/welcome.webp) -> [trane_wags.webp](assets/trane/trane_wags.webp)
+  - new: logo displayed while loading spinner is shown: [trane_digging.webp](assets/trane/trane_digging.webp)
+
+## Group the `viewer` struct's field clusters into sub-structs
+
+`internal/ui/viewer.go`'s `viewer` has ~70 fields and 111 methods across
+the package. ARCHITECTURE.md is explicit that a general controller
+extraction is not wanted — and this isn't that. Several field clusters are
+already de-facto modules with their own files and single-writer contracts,
+just flattened into one namespace:
+
+- **Vector view** (`vector`, `vectorLogical`, `vectorRaster`,
+  `vectorLifecycle`, `vectorPending`, `vectorDebounce`, `vectorRasterize`,
+  `vectorAfter` — 8 fields, all consumed by `vector.go`): fold into a
+  `vectorView` struct field. The write-once test seams travel with it.
+- **Scan UI and sort UI are the same shape** (`scanLifecycle`/`scanning`/
+  `scanDone`/`scanSpinner`/`scanLabel` vs `sortLifecycle`/`sorting`/
+  `sortDone`/`sortSpinner`/`sortLabel`): one `asyncOpUI` type
+  {lifecycle, active flag, done channel, spinner, label} used twice, with
+  begin/finish/cancel methods that keep flag-vs-token bookkeeping in one
+  place instead of spread across drop.go, sort.go and keys.go.
+- **Settings-backed limits** (`maxScan`, `maxWinW`/`maxWinH`,
+  `imgCacheMB`/`thumbCacheMB`/`maxFileMB`, `favPreviewCache`): a `limits`
+  struct, so the settings window's Host surface reads as one concern.
+
+Each cluster can move independently — three small, separately verifiable
+commits rather than one big one.
 
 ## not deemed worth implementing (edge cases)
 
