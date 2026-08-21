@@ -11,6 +11,8 @@
 [![Windows](https://img.shields.io/badge/Windows-0078D6?logo=windows&logoColor=white)](https://github.com/frathe/picfetch/releases/latest)
 [![Linux](https://img.shields.io/badge/Linux-FCC624?logo=linux&logoColor=black)](https://github.com/frathe/picfetch/releases/latest)
 [![Website](https://img.shields.io/badge/website-frathe.github.io-55309e)](https://frathe.github.io/picfetch/)
+[![English](https://img.shields.io/badge/lang-en-blue.svg)](translations/en.json)
+[![Deutsch](https://img.shields.io/badge/lang-de-red.svg)](translations/de.json)
 
 ![Header](assets/header.jpg)
 

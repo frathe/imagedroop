@@ -1,463 +1,586 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>PicFetch — a small, fast image viewer for macOS, Windows and Linux</title>
-<meta name="description" content="PicFetch is a small multi-platform desktop app for quickly viewing and browsing images. Drop one or more images onto the window and step through them with the keyboard.">
-<link rel="icon" type="image/png" sizes="32x32" href="https://raw.githubusercontent.com/frathe/picfetch/main/assets/trane/Favicons%20%28TaneWithFrame%29/favicon-32.png">
-<link rel="apple-touch-icon" sizes="180x180" href="https://raw.githubusercontent.com/frathe/picfetch/main/assets/trane/Favicons%20%28TaneWithFrame%29/favicon-180-precomposed.png">
-<link rel="shortcut icon" href="https://raw.githubusercontent.com/frathe/picfetch/main/assets/trane/Favicons%20%28TaneWithFrame%29/favicon.ico">
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>PicFetch — a small, fast image viewer for macOS, Windows and Linux</title>
+    <meta name="description"
+          content="PicFetch is a small multi-platform desktop app for quickly viewing and browsing images. Drop one or more images onto the window and step through them with the keyboard.">
+    <link rel="icon" type="image/png" sizes="32x32"
+          href="https://raw.githubusercontent.com/frathe/picfetch/main/assets/trane/Favicons%20%28TaneWithFrame%29/favicon-32.png">
+    <link rel="icon" type="image/png" sizes="36x36"
+          href="https://raw.githubusercontent.com/frathe/picfetch/main/assets/trane/Favicons%20%28TaneWithFrame%29/favicon-36.png">
+    <link rel="icon" type="image/png" sizes="48x48"
+          href="https://raw.githubusercontent.com/frathe/picfetch/main/assets/trane/Favicons%20%28TaneWithFrame%29/favicon-48.png">
+    <link rel="icon" type="image/png" sizes="72x72"
+          href="https://raw.githubusercontent.com/frathe/picfetch/main/assets/trane/Favicons%20%28TaneWithFrame%29/favicon-72.png">
+    <link rel="icon" type="image/png" sizes="96x96"
+          href="https://raw.githubusercontent.com/frathe/picfetch/main/assets/trane/Favicons%20%28TaneWithFrame%29/favicon-96.png">
+    <link rel="icon" type="image/png" sizes="144x144"
+          href="https://raw.githubusercontent.com/frathe/picfetch/main/assets/trane/Favicons%20%28TaneWithFrame%29/favicon-144-precomposed.png">
+    <link rel="icon" type="image/png" sizes="192x192"
+          href="https://raw.githubusercontent.com/frathe/picfetch/main/assets/trane/Favicons%20%28TaneWithFrame%29/favicon-192.png">
+    <link rel="apple-touch-icon" sizes="180x180"
+          href="https://raw.githubusercontent.com/frathe/picfetch/main/assets/trane/Favicons%20%28TaneWithFrame%29/favicon-180-precomposed.png">
+    <link rel="shortcut icon" href="./favicon.ico">
+    <link rel="manifest" href="./manifest.json">
 
-<meta property="og:type" content="website">
-<meta property="og:title" content="PicFetch — a small, fast image viewer">
-<meta property="og:description" content="Drop one or more images onto the window and step through them with the keyboard. Free and open source, for macOS, Windows and Linux.">
-<meta property="og:image" content="https://raw.githubusercontent.com/frathe/picfetch/main/assets/social_logo.jpg">
-<meta name="twitter:card" content="summary_large_image">
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="PicFetch — a small, fast image viewer">
+    <meta property="og:description"
+          content="Drop one or more images onto the window and step through them with the keyboard. Free and open source, for macOS, Windows and Linux.">
+    <meta property="og:image" content="https://raw.githubusercontent.com/frathe/picfetch/main/assets/social_logo.jpg">
+    <meta name="twitter:card" content="summary_large_image">
 
-<style>
-/* Palette picked from the header artwork: deep indigo, warm tan accent. */
-:root {
-  --bg:       #ffffff;
-  --bg-soft:  #f6f5fa;
-  --fg:       #1b1726;
-  --fg-muted: #5c5470;
-  --border:   #e3e0ec;
-  --accent:   #55309e;
-  --accent-fg:#ffffff;
-  --note-bg:  #fdf6e7;
-  --note-br:  #e0c583;
-  --shadow:   0 1px 2px rgb(27 23 38 / 6%), 0 8px 24px rgb(27 23 38 / 8%);
-  --overlay:  rgb(246 245 250 / 60%);
-}
+    <style>
+        /* Palette picked from the header artwork: deep indigo, warm tan accent. */
+        :root {
+            --bg: #ffffff;
+            --bg-soft: #f6f5fa;
+            --fg: #1b1726;
+            --fg-muted: #5c5470;
+            --border: #e3e0ec;
+            --accent: #55309e;
+            --accent-fg: #ffffff;
+            --note-bg: #fdf6e7;
+            --note-br: #e0c583;
+            --shadow: 0 1px 2px rgb(27 23 38 / 6%), 0 8px 24px rgb(27 23 38 / 8%);
+            --overlay: rgb(246 245 250 / 60%);
+        }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg:       #14101f;
-    --bg-soft:  #1d1830;
-    --fg:       #ece9f5;
-    --fg-muted: #a49dbd;
-    --border:   #2f2846;
-    --accent:   #a98bf0;
-    --accent-fg:#14101f;
-    --note-bg:  #241d33;
-    --note-br:  #6b5730;
-    --shadow:   0 1px 2px rgb(0 0 0 / 30%), 0 8px 24px rgb(0 0 0 / 35%);
-    --overlay:  rgb(29 24 48 / 60%);
-  }
-}
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --bg: #14101f;
+                --bg-soft: #1d1830;
+                --fg: #ece9f5;
+                --fg-muted: #a49dbd;
+                --border: #2f2846;
+                --accent: #a98bf0;
+                --accent-fg: #14101f;
+                --note-bg: #241d33;
+                --note-br: #6b5730;
+                --shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 8px 24px rgb(0 0 0 / 35%);
+                --overlay: rgb(29 24 48 / 60%);
+            }
+        }
 
-*, *::before, *::after { box-sizing: border-box; }
+        *, *::before, *::after {
+            box-sizing: border-box;
+        }
 
-body {
-  margin: 0;
-  padding: 0 1.25rem 4rem;
-  background: var(--bg);
-  color: var(--fg);
-  font: 16px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  -webkit-text-size-adjust: 100%;
-}
+        body {
+            margin: 0;
+            padding: 0 1.25rem 4rem;
+            background: var(--bg);
+            color: var(--fg);
+            font: 16px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            -webkit-text-size-adjust: 100%;
+        }
 
-.wrap { max-width: 960px; margin: 0 auto; }
+        .wrap {
+            max-width: 960px;
+            margin: 0 auto;
+        }
 
-a { color: var(--accent); }
-a:hover { text-decoration: none; }
+        a {
+            color: var(--accent);
+        }
 
-:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-  border-radius: 4px;
-}
+        a:hover {
+            text-decoration: none;
+        }
 
-h1, h2, h3 { line-height: 1.25; }
+        :focus-visible {
+            outline: 2px solid var(--accent);
+            outline-offset: 2px;
+            border-radius: 4px;
+        }
 
-h2 {
-  margin: 3.5rem 0 1.25rem;
-  font-size: 1.5rem;
-  padding-bottom: .5rem;
-  border-bottom: 1px solid var(--border);
-}
+        h1, h2, h3 {
+            line-height: 1.25;
+        }
 
-img { max-width: 100%; height: auto; display: block; }
+        h2 {
+            margin: 3.5rem 0 1.25rem;
+            font-size: 1.5rem;
+            padding-bottom: .5rem;
+            border-bottom: 1px solid var(--border);
+        }
 
-/* --- hero ------------------------------------------------------------ */
+        img {
+            max-width: 100%;
+            height: auto;
+            display: block;
+        }
 
-.banner {
-  margin: 2rem 0 0;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  overflow: hidden;
-  box-shadow: var(--shadow);
-}
-.banner img { width: 100%; }
+        /* --- hero ------------------------------------------------------------ */
 
-.tagline {
-  margin: 1.75rem 0 0;
-  font-size: 1.3rem;
-  color: var(--fg-muted);
-  max-width: 46ch;
-}
+        .banner {
+            margin: 2rem 0 0;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: var(--shadow);
+        }
 
-.cta { display: flex; flex-wrap: wrap; gap: .75rem; margin: 1.75rem 0 0; }
+        .banner img {
+            width: 100%;
+        }
 
-.btn {
-  display: inline-block;
-  padding: .7rem 1.35rem;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  font-weight: 600;
-  text-decoration: none;
-  color: var(--fg);
-  background: var(--bg-soft);
-}
-.btn:hover { border-color: var(--accent); }
+        .tagline {
+            margin: 1.75rem 0 0;
+            font-size: 1.3rem;
+            color: var(--fg-muted);
+            max-width: 46ch;
+        }
 
-.btn-primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-fg);
-}
-.btn-primary:hover { filter: brightness(1.1); }
+        .cta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .75rem;
+            margin: 1.75rem 0 0;
+        }
 
-/* --- generic cards --------------------------------------------------- */
+        .btn {
+            display: inline-block;
+            padding: .7rem 1.35rem;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            font-weight: 600;
+            text-decoration: none;
+            color: var(--fg);
+            background: var(--bg-soft);
+        }
 
-.grid {
-  display: grid;
-  gap: 1rem;
-  grid-template-columns: repeat(auto-fit, minmax(255px, 1fr));
-  padding: 0;
-  margin: 0;
-  list-style: none;
-}
+        .btn:hover {
+            border-color: var(--accent);
+        }
 
-.card {
-  background: var(--bg-soft);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 1.1rem 1.25rem;
-}
-.card h3 { margin: 0 0 .4rem; font-size: 1rem; }
-.card p  { margin: 0; color: var(--fg-muted); font-size: .94rem; }
+        .btn-primary {
+            background: var(--accent);
+            border-color: var(--accent);
+            color: var(--accent-fg);
+        }
 
-/* --- screenshots ------------------------------------------------------ */
+        .btn-primary:hover {
+            filter: brightness(1.1);
+        }
 
-.screens { grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
+        /* --- generic cards --------------------------------------------------- */
 
-.shot {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  overflow: hidden;
-  background: var(--bg-soft);
-  box-shadow: var(--shadow);
-}
-.shot img { width: 100%; cursor: pointer; }
-.shot p { margin: 0; padding: .65rem .9rem; color: var(--fg-muted); font-size: .88rem; }
+        .grid {
+            display: grid;
+            gap: 1rem;
+            grid-template-columns: repeat(auto-fit, minmax(255px, 1fr));
+            padding: 0;
+            margin: 0;
+            list-style: none;
+        }
 
-/* --- lightbox ----------------------------------------------------------- */
+        .card {
+            background: var(--bg-soft);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 1.1rem 1.25rem;
+        }
 
-.lightbox {
-  display: none;
-  position: fixed;
-  inset: 0;
-  align-items: center;
-  justify-content: center;
-  padding: 3rem 1.5rem;
-  background: var(--overlay);
-  z-index: 100;
-}
-.lightbox.open { display: flex; }
+        .card h3 {
+            margin: 0 0 .4rem;
+            font-size: 1rem;
+        }
 
-.lightbox-frame {
-  position: relative;
-  max-width: min(90vw, 960px);
-  max-height: 90vh;
-}
+        .card p {
+            margin: 0;
+            color: var(--fg-muted);
+            font-size: .94rem;
+        }
 
-.lightbox-frame img {
-  display: block;
-  max-width: 100%;
-  max-height: 90vh;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  box-shadow: var(--shadow);
-}
+        /* --- screenshots ------------------------------------------------------ */
 
-.lightbox-close {
-  position: absolute;
-  top: -.85rem;
-  right: -.85rem;
-  width: 2.25rem;
-  height: 2.25rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--border);
-  border-radius: 50%;
-  background: var(--bg-soft);
-  color: var(--fg);
-  font-size: 1.2rem;
-  line-height: 1;
-  cursor: pointer;
-  box-shadow: var(--shadow);
-}
-.lightbox-close:hover { border-color: var(--accent); }
+        .screens {
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+        }
 
-kbd {
-  font: 600 .8em/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-bottom-width: 2px;
-  border-radius: 4px;
-  padding: .18em .42em;
-  white-space: nowrap;
-  color: var(--fg);
-}
+        .shot {
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            overflow: hidden;
+            background: var(--bg-soft);
+            box-shadow: var(--shadow);
+        }
 
-/* --- download -------------------------------------------------------- */
+        .shot img {
+            width: 100%;
+            cursor: pointer;
+        }
 
-.dl h3 { display: flex; align-items: baseline; gap: .5rem; }
-.dl ul { list-style: none; margin: .6rem 0 0; padding: 0; }
-.dl li { margin: .35rem 0; }
-.dl a  { font-size: .94rem; }
+        .shot p {
+            margin: 0;
+            padding: .65rem .9rem;
+            color: var(--fg-muted);
+            font-size: .88rem;
+        }
 
-.note {
-  background: var(--note-bg);
-  border: 1px solid var(--note-br);
-  border-radius: 10px;
-  padding: 1rem 1.25rem;
-  margin: 1.5rem 0 0;
-}
-.note h3 { margin: 0 0 .5rem; font-size: 1rem; }
-.note p  { margin: .5rem 0 0; font-size: .94rem; }
-.note code {
-  font: .88em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  padding: .1em .4em;
-}
+        /* --- lightbox ----------------------------------------------------------- */
 
-/* --- footer ---------------------------------------------------------- */
+        .lightbox {
+            display: none;
+            position: fixed;
+            inset: 0;
+            align-items: center;
+            justify-content: center;
+            padding: 3rem 1.5rem;
+            background: var(--overlay);
+            z-index: 100;
+        }
 
-footer { margin-top: 3.5rem; border-top: 1px solid var(--border); padding-top: 1.5rem; }
+        .lightbox.open {
+            display: flex;
+        }
 
-.links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: .5rem 1.5rem;
-  padding: 0;
-  margin: 0 0 1.5rem;
-  list-style: none;
-  font-weight: 500;
-}
+        .lightbox-frame {
+            position: relative;
+            max-width: min(90vw, 960px);
+            max-height: 90vh;
+        }
 
-.colophon { color: var(--fg-muted); font-size: .9rem; margin: 0; }
-</style>
+        .lightbox-frame img {
+            display: block;
+            max-width: 100%;
+            max-height: 90vh;
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            box-shadow: var(--shadow);
+        }
+
+        .lightbox-close {
+            position: absolute;
+            top: -.85rem;
+            right: -.85rem;
+            width: 2.25rem;
+            height: 2.25rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--border);
+            border-radius: 50%;
+            background: var(--bg-soft);
+            color: var(--fg);
+            font-size: 1.2rem;
+            line-height: 1;
+            cursor: pointer;
+            box-shadow: var(--shadow);
+        }
+
+        .lightbox-close:hover {
+            border-color: var(--accent);
+        }
+
+        kbd {
+            font: 600 .8em/1 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-bottom-width: 2px;
+            border-radius: 4px;
+            padding: .18em .42em;
+            white-space: nowrap;
+            color: var(--fg);
+        }
+
+        /* --- download -------------------------------------------------------- */
+
+        .dl h3 {
+            display: flex;
+            align-items: baseline;
+            gap: .5rem;
+        }
+
+        .dl ul {
+            list-style: none;
+            margin: .6rem 0 0;
+            padding: 0;
+        }
+
+        .dl li {
+            margin: .35rem 0;
+        }
+
+        .dl a {
+            font-size: .94rem;
+        }
+
+        .note {
+            background: var(--note-bg);
+            border: 1px solid var(--note-br);
+            border-radius: 10px;
+            padding: 1rem 1.25rem;
+            margin: 1.5rem 0 0;
+        }
+
+        .note h3 {
+            margin: 0 0 .5rem;
+            font-size: 1rem;
+        }
+
+        .note p {
+            margin: .5rem 0 0;
+            font-size: .94rem;
+        }
+
+        .note code {
+            font: .88em ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+            background: var(--bg);
+            border: 1px solid var(--border);
+            border-radius: 4px;
+            padding: .1em .4em;
+        }
+
+        /* --- footer ---------------------------------------------------------- */
+
+        footer {
+            margin-top: 3.5rem;
+            border-top: 1px solid var(--border);
+            padding-top: 1.5rem;
+        }
+
+        .links {
+            display: flex;
+            flex-wrap: wrap;
+            gap: .5rem 1.5rem;
+            padding: 0;
+            margin: 0 0 1.5rem;
+            list-style: none;
+            font-weight: 500;
+        }
+
+        .colophon {
+            color: var(--fg-muted);
+            font-size: .9rem;
+            margin: 0;
+        }
+    </style>
 </head>
 
 <body>
 <div class="wrap">
 
-<header>
-  <div class="banner">
-    <img src="https://raw.githubusercontent.com/frathe/picfetch/main/assets/header.jpg"
-         alt="PicFetch — the app window showing a 'Drop images here' prompt beside the mascot artwork">
-  </div>
+    <header>
+        <div class="banner">
+            <img src="https://raw.githubusercontent.com/frathe/picfetch/main/assets/header.jpg"
+                 alt="PicFetch — the app window showing a 'Drop images here' prompt beside the mascot artwork">
+        </div>
 
-  <p class="tagline">
-    A small desktop app for quickly viewing and browsing images. Drop one or
-    more onto the window, and step through the set with the keyboard.
-  </p>
+        <p class="tagline">
+            A small desktop app for quickly viewing and browsing images. Drop one or
+            more onto the window, and step through the set with the keyboard.
+        </p>
 
-  <div class="cta">
-    <a class="btn btn-primary" href="#downloads">Download</a>
-    <a class="btn" href="https://github.com/frathe/picfetch">View on GitHub</a>
-  </div>
-</header>
+        <div class="cta">
+            <a class="btn btn-primary" href="#downloads">Download</a>
+            <a class="btn" href="https://github.com/frathe/picfetch">View on GitHub</a>
+        </div>
+    </header>
 
-<main>
+    <main>
 
-  <h2>See it in action</h2>
-  <div>
-    <div style="padding:66% 0 0 0;position:relative;"><iframe src="https://player.vimeo.com/video/1220283616?badge=0&amp;autopause=0&amp;player_id=0&amp;app_id=58479&amp;autoplay=1&amp;muted=1&amp;loop=1" frameborder="0" allow="autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media; web-share" referrerpolicy="strict-origin-when-cross-origin" style="position:absolute;top:0;left:0;width:100%;height:100%;" title="PicFetch"></iframe></div><script src="https://player.vimeo.com/api/player.js"></script>
-  </div>
+        <h2>See it in action</h2>
+        <div>
+            <div style="padding:66% 0 0 0;position:relative;">
+                <iframe src="https://player.vimeo.com/video/1220283616?badge=0&amp;autopause=0&amp;player_id=0&amp;app_id=58479&amp;autoplay=1&amp;muted=1&amp;loop=1"
+                        frameborder="0"
+                        allow="autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media; web-share"
+                        referrerpolicy="strict-origin-when-cross-origin"
+                        style="position:absolute;top:0;left:0;width:100%;height:100%;" title="PicFetch"></iframe>
+            </div>
+            <script src="https://player.vimeo.com/api/player.js"></script>
+        </div>
 
-  <h2>Screenshots</h2>
-  <ul class="grid screens">
-    <li class="shot">
-      <img src="https://raw.githubusercontent.com/frathe/picfetch/main/assets/screens/main_screen.png"
-           alt="PicFetch's main window showing the 'Drop images here' prompt before any images are loaded"
-           loading="lazy">
-      <p>Drop images onto the window to get started</p>
-    </li>
-    <li class="shot">
-      <img src="https://raw.githubusercontent.com/frathe/picfetch/main/assets/screens/picture_galery.png"
-           alt="Thumbnail grid view showing dozens of photos at once, with the current image highlighted"
-           loading="lazy">
-      <p>The thumbnail grid for finding an image by sight</p>
-    </li>
-    <li class="shot">
-      <img src="https://raw.githubusercontent.com/frathe/picfetch/main/assets/screens/viewer.png"
-           alt="A zoomed-in photo with the file info overlay and the EXIF data window open, showing camera, aperture, focal length and capture date"
-           loading="lazy">
-      <p>Zoomed in, with file info and EXIF data on show</p>
-    </li>
-  </ul>
+        <h2>Screenshots</h2>
+        <ul class="grid screens">
+            <li class="shot">
+                <img src="https://raw.githubusercontent.com/frathe/picfetch/main/assets/screens/main_screen.png"
+                     alt="PicFetch's main window showing the 'Drop images here' prompt before any images are loaded"
+                     loading="lazy">
+                <p>Drop images onto the window to get started</p>
+            </li>
+            <li class="shot">
+                <img src="https://raw.githubusercontent.com/frathe/picfetch/main/assets/screens/picture_galery.png"
+                     alt="Thumbnail grid view showing dozens of photos at once, with the current image highlighted"
+                     loading="lazy">
+                <p>The thumbnail grid for finding an image by sight</p>
+            </li>
+            <li class="shot">
+                <img src="https://raw.githubusercontent.com/frathe/picfetch/main/assets/screens/viewer.png"
+                     alt="A zoomed-in photo with the file info overlay and the EXIF data window open, showing camera, aperture, focal length and capture date"
+                     loading="lazy">
+                <p>Zoomed in, with file info and EXIF data on show</p>
+            </li>
+        </ul>
 
-  <h2>Features</h2>
-  <ul class="grid">
-    <li class="card">
-      <h3>Drop almost anything</h3>
-      <p>JPEG, PNG, GIF, WebP, BMP, TIFF, ICO, XPM, SVG, HEIC, AVIF and camera
-      RAW (embedded JPEG preview). HEIC and
-      AVIF decode through embedded WASM, so they need no system libraries.</p>
-    </li>
-    <li class="card">
-      <h3>Keyboard browsing</h3>
-      <p>Step through a set with the arrow keys (wrapping at both ends), or
-      jump straight to the ends with <kbd>Home</kbd> and <kbd>End</kbd>.</p>
-    </li>
-    <li class="card">
-      <h3>Thumbnail grid</h3>
-      <p><kbd>G</kbd> opens a full-window grid for finding an image by sight.
-      Thumbnails load lazily, so a folder of several thousand files stays
-      responsive.</p>
-    </li>
-    <li class="card">
-      <h3>Zoom and pan</h3>
-      <p><kbd>+</kbd> <kbd>−</kbd> <kbd>1</kbd> <kbd>0</kbd>, or scroll to zoom
-      at the cursor. Click-drag or <kbd>Shift</kbd>+scroll to pan once zoomed
-      in.</p>
-    </li>
-    <li class="card">
-      <h3>Animated GIFs</h3>
-      <p>Played back frame by frame at their encoded speed, composited
-      correctly per frame so partial updates never leave stale pixels.</p>
-    </li>
-    <li class="card">
-      <h3>EXIF aware</h3>
-      <p>JPEGs auto-rotate to their orientation tag, and <kbd>E</kbd> shows
-      camera, lens, exposure, aperture, ISO, capture date and coordinates
-      &mdash; plus a
-      collapsible OpenStreetMap view pinned at the spot a GPS-tagged photo
-      was taken, collapsed until you ask for it.</p>
-    </li>
-    <li class="card">
-      <h3>Sorting that makes sense</h3>
-      <p>Natural name order by default, so <code>IMG_2</code> comes before
-      <code>IMG_10</code>. <kbd>S</kbd> cycles through capture date, modified
-      time, size and raw drop order.</p>
-    </li>
-    <li class="card">
-      <h3>Folders and merging</h3>
-      <p>Drop folders to scan them recursively, with a live counter for large
-      trees. <kbd>M</kbd> makes further drops add to the set instead of
-      replacing it.</p>
-    </li>
-    <li class="card">
-      <h3>Named favorites</h3>
-      <p>Save the current file list as a collection and reopen it from the
-      Favorites menu after a restart. The first ten are one shortcut away with
-      <kbd>Cmd/Ctrl</kbd>+<kbd>1</kbd>–<kbd>9</kbd> and
-      <kbd>Cmd/Ctrl</kbd>+<kbd>0</kbd>.</p>
-    </li>
-  </ul>
+        <h2>Features</h2>
+        <ul class="grid">
+            <li class="card">
+                <h3>Drop almost anything</h3>
+                <p>JPEG, PNG, GIF, WebP, BMP, TIFF, ICO, XPM, SVG, HEIC, AVIF and camera
+                    RAW (embedded JPEG preview). HEIC and
+                    AVIF decode through embedded WASM, so they need no system libraries.</p>
+            </li>
+            <li class="card">
+                <h3>Keyboard browsing</h3>
+                <p>Step through a set with the arrow keys (wrapping at both ends), or
+                    jump straight to the ends with <kbd>Home</kbd> and <kbd>End</kbd>.</p>
+            </li>
+            <li class="card">
+                <h3>Thumbnail grid</h3>
+                <p><kbd>G</kbd> opens a full-window grid for finding an image by sight.
+                    Thumbnails load lazily, so a folder of several thousand files stays
+                    responsive.</p>
+            </li>
+            <li class="card">
+                <h3>Zoom and pan</h3>
+                <p><kbd>+</kbd> <kbd>−</kbd> <kbd>1</kbd> <kbd>0</kbd>, or scroll to zoom
+                    at the cursor. Click-drag or <kbd>Shift</kbd>+scroll to pan once zoomed
+                    in.</p>
+            </li>
+            <li class="card">
+                <h3>Animated GIFs</h3>
+                <p>Played back frame by frame at their encoded speed, composited
+                    correctly per frame so partial updates never leave stale pixels.</p>
+            </li>
+            <li class="card">
+                <h3>EXIF aware</h3>
+                <p>JPEGs auto-rotate to their orientation tag, and <kbd>E</kbd> shows
+                    camera, lens, exposure, aperture, ISO, capture date and coordinates
+                    &mdash; plus a
+                    collapsible OpenStreetMap view pinned at the spot a GPS-tagged photo
+                    was taken, collapsed until you ask for it.</p>
+            </li>
+            <li class="card">
+                <h3>Sorting that makes sense</h3>
+                <p>Natural name order by default, so <code>IMG_2</code> comes before
+                    <code>IMG_10</code>. <kbd>S</kbd> cycles through capture date, modified
+                    time, size and raw drop order.</p>
+            </li>
+            <li class="card">
+                <h3>Folders and merging</h3>
+                <p>Drop folders to scan them recursively, with a live counter for large
+                    trees. <kbd>M</kbd> makes further drops add to the set instead of
+                    replacing it.</p>
+            </li>
+            <li class="card">
+                <h3>Named favorites</h3>
+                <p>Save the current file list as a collection and reopen it from the
+                    Favorites menu after a restart. The first ten are one shortcut away with
+                    <kbd>Cmd/Ctrl</kbd>+<kbd>1</kbd>–<kbd>9</kbd> and
+                    <kbd>Cmd/Ctrl</kbd>+<kbd>0</kbd>.</p>
+            </li>
+        </ul>
 
-  <h2 id="downloads">Download</h2>
-  <p>
-    Pre-built binaries, no Go toolchain required — the links below always
-    fetch the newest release. Prefer to build from source? The
-    <a href="https://github.com/frathe/picfetch#building">build instructions</a>
-    are in the repository.
-  </p>
+        <h2 id="downloads">Download</h2>
+        <p>
+            Pre-built binaries, no Go toolchain required — the links below always
+            fetch the newest release. Prefer to build from source? The
+            <a href="https://github.com/frathe/picfetch#building">build instructions</a>
+            are in the repository.
+        </p>
 
-  <ul class="grid dl">
-    <li class="card">
-      <h3>macOS</h3>
-      <ul>
-        <li><a href="https://github.com/frathe/picfetch/releases/latest/download/picfetch-macos-arm64.zip">Apple Silicon (arm64)</a></li>
-        <li><a href="https://github.com/frathe/picfetch/releases/latest/download/picfetch-macos-x86_64.zip">Intel (x86_64)</a></li>
-      </ul>
-    </li>
-    <li class="card">
-      <h3>Windows</h3>
-      <ul>
-        <li><a href="https://github.com/frathe/picfetch/releases/latest/download/picfetch-windows-amd64.zip">x64 (amd64)</a></li>
-        <li><a href="https://github.com/frathe/picfetch/releases/latest/download/picfetch-windows-arm64.zip">ARM64</a></li>
-      </ul>
-    </li>
-    <li class="card">
-      <h3>Linux</h3>
-      <ul>
-        <li><a href="https://github.com/frathe/picfetch/releases/latest/download/picfetch-linux-amd64.tar.gz">x64 (amd64)</a></li>
-        <li><a href="https://github.com/frathe/picfetch/releases/latest/download/picfetch-linux-arm64.tar.gz">ARM64</a></li>
-      </ul>
-    </li>
-  </ul>
+        <ul class="grid dl">
+            <li class="card">
+                <h3>macOS</h3>
+                <ul>
+                    <li><a href="https://github.com/frathe/picfetch/releases/latest/download/picfetch-macos-arm64.zip">Apple
+                        Silicon (arm64)</a></li>
+                    <li><a href="https://github.com/frathe/picfetch/releases/latest/download/picfetch-macos-x86_64.zip">Intel
+                        (x86_64)</a></li>
+                </ul>
+            </li>
+            <li class="card">
+                <h3>Windows</h3>
+                <ul>
+                    <li>
+                        <a href="https://github.com/frathe/picfetch/releases/latest/download/picfetch-windows-amd64.zip">x64
+                            (amd64)</a></li>
+                    <li>
+                        <a href="https://github.com/frathe/picfetch/releases/latest/download/picfetch-windows-arm64.zip">ARM64</a>
+                    </li>
+                </ul>
+            </li>
+            <li class="card">
+                <h3>Linux</h3>
+                <ul>
+                    <li>
+                        <a href="https://github.com/frathe/picfetch/releases/latest/download/picfetch-linux-amd64.tar.gz">x64
+                            (amd64)</a></li>
+                    <li>
+                        <a href="https://github.com/frathe/picfetch/releases/latest/download/picfetch-linux-arm64.tar.gz">ARM64</a>
+                    </li>
+                </ul>
+            </li>
+        </ul>
 
-  <div class="note">
-    <h3>macOS: “app is damaged” warning</h3>
-    <p>
-      The release build isn’t signed with an Apple Developer ID or notarized,
-      so Gatekeeper quarantines it after download and claims it’s damaged. It
-      isn’t — to open it anyway, either right-click (Control-click)
-      <code>PicFetch.app</code> and choose <strong>Open</strong>, confirming
-      the dialog that appears, or run
-      <code>xattr -cr "/path/to/PicFetch.app"</code> in Terminal to clear the
-      quarantine flag and then open it normally.
-    </p>
-  </div>
+        <div class="note">
+            <h3>macOS: “app is damaged” warning</h3>
+            <p>
+                The release build isn’t signed with an Apple Developer ID or notarized,
+                so Gatekeeper quarantines it after download and claims it’s damaged. It
+                isn’t — to open it anyway, either right-click (Control-click)
+                <code>PicFetch.app</code> and choose <strong>Open</strong>, confirming
+                the dialog that appears, or run
+                <code>xattr -cr "/path/to/PicFetch.app"</code> in Terminal to clear the
+                quarantine flag and then open it normally.
+            </p>
+        </div>
 
-</main>
+    </main>
 
-<footer>
-  <ul class="links">
-    <li><a href="https://github.com/frathe/picfetch">Source code</a></li>
-    <li><a href="https://github.com/frathe/picfetch/releases">Releases</a></li>
-    <li><a href="https://github.com/frathe/picfetch/issues">Issues</a></li>
-    <li><a href="https://github.com/frathe/picfetch/blob/main/internal/ui/help/manual.md">Manual</a></li>
-    <li><a href="https://github.com/frathe/picfetch/blob/main/.github/CONTRIBUTING.md">Contributing</a></li>
-    <li><a href="https://github.com/frathe/picfetch/blob/main/.github/SECURITY.md">Security</a></li>
-    <li><a href="https://github.com/frathe/picfetch/blob/main/LICENSE">License</a></li>
-    <li><a href="https://buymeacoffee.com/gcobnk0grj">Buy me a coffee</a></li>
-  </ul>
+    <footer>
+        <ul class="links">
+            <li><a href="https://github.com/frathe/picfetch">Source code</a></li>
+            <li><a href="https://github.com/frathe/picfetch/releases">Releases</a></li>
+            <li><a href="https://github.com/frathe/picfetch/issues">Issues</a></li>
+            <li><a href="https://github.com/frathe/picfetch/blob/main/internal/ui/help/manual.md">Manual</a></li>
+            <li><a href="https://github.com/frathe/picfetch/blob/main/.github/CONTRIBUTING.md">Contributing</a></li>
+            <li><a href="https://github.com/frathe/picfetch/blob/main/.github/SECURITY.md">Security</a></li>
+            <li><a href="https://github.com/frathe/picfetch/blob/main/LICENSE">License</a></li>
+            <li><a href="https://buymeacoffee.com/gcobnk0grj">Buy me a coffee</a></li>
+        </ul>
 
-  <p class="colophon">
-    PicFetch is free and open source under the
-    <a href="https://github.com/frathe/picfetch/blob/main/LICENSE">MIT licence</a>,
-    and built with <a href="https://fyne.io/">Fyne</a>.
-  </p>
-</footer>
+        <p class="colophon">
+            PicFetch is free and open source under the
+            <a href="https://github.com/frathe/picfetch/blob/main/LICENSE">MIT licence</a>,
+            and built with <a href="https://fyne.io/">Fyne</a>.
+        </p>
+    </footer>
 
 </div>
 
 <div class="lightbox" id="lightbox">
-  <div class="lightbox-frame">
-    <button class="lightbox-close" id="lightboxClose" aria-label="Close">&times;</button>
-    <img id="lightboxImg" src="" alt="">
-  </div>
+    <div class="lightbox-frame">
+        <button class="lightbox-close" id="lightboxClose" aria-label="Close">&times;</button>
+        <img id="lightboxImg" src="" alt="">
+    </div>
 </div>
 
 <script>
-(() => {
-  const lightbox = document.getElementById('lightbox');
-  const lightboxImg = document.getElementById('lightboxImg');
+    (() => {
+        const lightbox = document.getElementById('lightbox');
+        const lightboxImg = document.getElementById('lightboxImg');
 
-  document.querySelectorAll('.shot img').forEach((img) => {
-    img.addEventListener('click', () => {
-      lightboxImg.src = img.src;
-      lightboxImg.alt = img.alt;
-      lightbox.classList.add('open');
-    });
-  });
+        document.querySelectorAll('.shot img').forEach((img) => {
+            img.addEventListener('click', () => {
+                lightboxImg.src = img.src;
+                lightboxImg.alt = img.alt;
+                lightbox.classList.add('open');
+            });
+        });
 
-  const closeLightbox = () => lightbox.classList.remove('open');
+        const closeLightbox = () => lightbox.classList.remove('open');
 
-  document.getElementById('lightboxClose').addEventListener('click', closeLightbox);
-  lightbox.addEventListener('click', (e) => {
-    if (e.target === lightbox) closeLightbox();
-  });
-})();
+        document.getElementById('lightboxClose').addEventListener('click', closeLightbox);
+        lightbox.addEventListener('click', (e) => {
+            if (e.target === lightbox) closeLightbox();
+        });
+    })();
 </script>
 </body>
 </html>
