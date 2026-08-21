@@ -55,6 +55,20 @@ func New(application fyne.App, title string, art []byte) *Help {
 	return &Help{app: application, title: title, art: art, spiral: spiral.New(application)}
 }
 
+// OpenSpiral opens the Hypno Spiral on the pattern the given gesture
+// direction selects - the easter egg's second door, for the user who swirls
+// the main window in a spiral rather than typing the manual's secret phrase
+// (the gesture itself lives in internal/wingesture, wired up in
+// internal/ui/gesture.go). Which direction picks which pattern is
+// internal/ui/spiral's own business; this only passes the direction on.
+//
+// It exists so that internal/ui can reach the easter egg without reaching
+// past this package to the *spiral.Spiral it owns: both doors then raise
+// the same window rather than each building one.
+func (h *Help) OpenSpiral(clockwise bool) {
+	h.spiral.ShowForGesture(clockwise)
+}
+
 // Menu is the app's Help menu: the manual, and an About screen below a
 // separator (the usual place for it in a Help menu). Returns the *fyne.Menu
 // itself rather than a whole *fyne.MainMenu, so internal/ui can combine it

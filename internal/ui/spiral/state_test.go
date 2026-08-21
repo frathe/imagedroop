@@ -159,3 +159,28 @@ func TestCenterOffsetRoundTrip(t *testing.T) {
 		t.Errorf("centerOffset() = (%f, %f); want (-100.25, 200.5)", x, y)
 	}
 }
+
+// setPreset is togglePreset's absolute counterpart, added for the drag
+// gesture, which knows the pattern it wants outright rather than as a flip
+// away from wherever the last session left the spiral.
+func TestSetPresetSelectsRatherThanToggles(t *testing.T) {
+	st := newState()
+
+	st.setPreset(true)
+	st.setPreset(true)
+
+	if !st.preset() {
+		t.Error("preset() = false; setPreset(true) twice should select, not toggle back")
+	}
+}
+
+func TestSetPresetSelectsTheRipple(t *testing.T) {
+	st := newState()
+	st.setPreset(true)
+
+	st.setPreset(false)
+
+	if st.preset() {
+		t.Error("preset() = true, want false after setPreset(false)")
+	}
+}

@@ -15,6 +15,7 @@ import (
 	"github.com/frathe/picfetch/internal/ui/slideshow"
 	"github.com/frathe/picfetch/internal/ui/widgets"
 	"github.com/frathe/picfetch/internal/ui/zoom"
+	"github.com/frathe/picfetch/internal/wingesture"
 )
 
 // registerFeatures constructs every feature in dependency order. It only
@@ -22,6 +23,12 @@ import (
 // widgets compose, and menu.go still decides how their menus compose.
 func registerFeatures(view *viewer, application fyne.App, window fyne.Window, prefs preferences.State) {
 	view.help = help.New(application, appTitle, assets.WelcomeWebP)
+
+	// The window-drag easter egg (gesture.go): the detector is fed by the
+	// position poller, and a recognised spiral goes to the same Help that
+	// owns the manual's secret-phrase door, so both raise one window.
+	view.spiralDrag = wingesture.New(wingesture.Config{})
+	view.spiralGesture = view.help.OpenSpiral
 	view.exif = exifwin.New(application, func() (fyne.URI, bool) {
 		return view.displayedFile()
 	})

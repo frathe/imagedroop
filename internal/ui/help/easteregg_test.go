@@ -110,3 +110,44 @@ func TestHelp_SecretPhraseInManualOpensSpiral(t *testing.T) {
 		t.Fatal("submitting the secret phrase did not open the spiral window")
 	}
 }
+
+// OpenSpiral is the second door into the easter egg: internal/ui calls it
+// when the user swirls the main window in a spiral (internal/wingesture).
+// It goes through the Help-owned *spiral.Spiral rather than building a
+// second one, so both doors raise the same window.
+func TestHelp_OpenSpiralOpensTheSpiralWindow(t *testing.T) {
+	a := test.NewApp()
+	t.Cleanup(a.Quit)
+
+	h := New(a, "PicFetch", nil)
+	t.Cleanup(func() {
+		h.spiral.Close()
+		h.spiral.Settle()
+	})
+
+	h.OpenSpiral(true)
+
+	if !h.spiral.Open() {
+		t.Fatal("OpenSpiral did not open the spiral window")
+	}
+}
+
+func TestHelp_OpenSpiralTwiceKeepsOneWindow(t *testing.T) {
+	a := test.NewApp()
+	t.Cleanup(a.Quit)
+
+	h := New(a, "PicFetch", nil)
+	t.Cleanup(func() {
+		h.spiral.Close()
+		h.spiral.Settle()
+	})
+
+	h.OpenSpiral(true)
+	first := h.spiral
+
+	h.OpenSpiral(false)
+
+	if h.spiral != first || !h.spiral.Open() {
+		t.Error("a second gesture should re-aim the open spiral, not replace it")
+	}
+}

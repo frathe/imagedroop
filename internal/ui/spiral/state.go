@@ -120,6 +120,14 @@ func (s *state) togglePreset() {
 
 // presetName returns the display name of the currently active preset, for
 // the status/help overlays.
+// setPreset selects a pattern outright: true is the Nautilus, false the
+// Ripple. togglePreset above is the N key's relative flip; this is for a
+// caller that knows the pattern it wants - the drag gesture, which picks
+// one by the direction the spiral was drawn.
+func (s *state) setPreset(nautilus bool) {
+	s.activePreset.Store(nautilus)
+}
+
 func (s *state) presetName() string {
 	if s.activePreset.Load() {
 		return lang.L("Nautilus")

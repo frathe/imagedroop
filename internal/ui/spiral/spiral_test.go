@@ -462,3 +462,60 @@ func TestRunReturnsOnStaleGeneration(t *testing.T) {
 		t.Fatalf("run() with a stale generation did not return within %s", settleTimeout)
 	}
 }
+
+// ShowForGesture is what the window-drag gesture (internal/wingesture)
+// opens the easter egg through, and the only thing it adds over Show is
+// which of the two patterns comes up: a spiral swirled clockwise brings up
+// the Nautilus, counter-clockwise the Ripple.
+
+func TestShowForGestureClockwiseOpensTheNautilus(t *testing.T) {
+	s := newTestSpiral(t)
+
+	s.ShowForGesture(true)
+
+	if !s.st.preset() {
+		t.Error("preset() = false; a clockwise gesture should select the Nautilus")
+	}
+	assertUniform(t, s, "preset", 1)
+}
+
+func TestShowForGestureCounterClockwiseOpensTheRipple(t *testing.T) {
+	s := newTestSpiral(t)
+
+	s.ShowForGesture(false)
+
+	if s.st.preset() {
+		t.Error("preset() = true; a counter-clockwise gesture should select the Ripple")
+	}
+	assertUniform(t, s, "preset", 0)
+}
+
+// Drawing the opposite spiral at an already-open window must switch the
+// pattern in place: the uniform is seeded from the state when the shader is
+// built, so a second Show alone would raise the old window unchanged.
+func TestShowForGestureOnAnOpenWindowSwitchesPatternInPlace(t *testing.T) {
+	s := newTestSpiral(t)
+	s.ShowForGesture(true)
+
+	s.ShowForGesture(false)
+
+	assertUniform(t, s, "preset", 0)
+	if !s.Open() {
+		t.Error("Open() = false; ShowForGesture on an open window should have kept it open")
+	}
+}
+
+// Whichever pattern a gesture last selected, the manual's secret phrase
+// opens whatever the spiral was left showing - Show is unchanged, and in
+// particular does not reset the pattern (TestKeyNTogglesPresetUniform
+// covers its default on a fresh spiral).
+func TestShowAfterAGestureKeepsThatPattern(t *testing.T) {
+	s := newTestSpiral(t)
+	s.ShowForGesture(true)
+	s.Close()
+	waitSettled(t, s)
+
+	s.Show()
+
+	assertUniform(t, s, "preset", 1)
+}

@@ -24,6 +24,7 @@ import (
 	"github.com/frathe/picfetch/internal/ui/slideshow"
 	"github.com/frathe/picfetch/internal/ui/widgets"
 	"github.com/frathe/picfetch/internal/ui/zoom"
+	"github.com/frathe/picfetch/internal/wingesture"
 	"github.com/frathe/picfetch/internal/winpos"
 )
 
@@ -163,6 +164,19 @@ type viewer struct {
 	// value field, never copied: its state is atomic because the poller
 	// reads and writes it off the UI goroutine.
 	winPos winpos.Tracker
+
+	// spiralDrag recognises the window being swirled around the desktop in
+	// a spiral - the easter egg's second, wordless door (see gesture.go).
+	// It is fed from the same poller that keeps winPos current.
+	spiralDrag *wingesture.Detector
+
+	// spiralGesture is what a recognised spiral does, taking whether it was
+	// drawn clockwise - which selects the pattern the easter egg opens on.
+	// registerFeatures points it at help.OpenSpiral; it is
+	// a field so tests can watch the gesture fire without opening a real
+	// full-screen shader window, and so this file needs to know nothing
+	// about what the gesture is for.
+	spiralGesture func(clockwise bool)
 
 	// stopWinPosPoll stops startWindowPosPolling's background ticker
 	// goroutine; initialized to noPollerStop by buildViewer, replaced by

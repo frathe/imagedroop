@@ -39,12 +39,18 @@ func noPollerStop() {}
 
 // startWindowPosPolling keeps v.winPos current for the lifetime of the app -
 // the position equivalent of windowSizeTracker above, and the app's binding
-// of winpos.Poll, which owns the loop itself and every reason it has to be
+// of winpos.PollAt, which owns the loop itself and every reason it has to be
 // a poller at all. What is this package's own is the skip rule: no reading
 // while the slideshow is active, since picture-frame mode full-screens the
 // window and a full-screen reading is not the manually-placed position this
 // preference is for - it would clobber the value the slideshow captured on
 // the way in for its own exit to restore (see internal/ui/slideshow).
+//
+// It samples at winpos.GestureInterval rather than the leisurely
+// winpos.PollInterval a remembered position alone would need, because the
+// readings feed the spiral drag gesture too (gesture.go), which cares about
+// the path the window took and not just where it stopped. One poller serves
+// both: v.recordWindowPosition is where the single reading fans out.
 //
 // The returned func stops the poller goroutine; Run's SetOnStopped calls it
 // just before the final preferences save, so at shutdown the goroutine
@@ -55,7 +61,7 @@ func startWindowPosPolling(v *viewer, win fyne.Window) (stop func()) {
 	if v.slides == nil {
 		panic("ui: startWindowPosPolling called before slideshow construction")
 	}
-	return winpos.Poll(win, &v.winPos, v.slides.Active)
+	return winpos.PollAt(win, winpos.GestureInterval, v.slides.Active, v.recordWindowPosition)
 }
 
 // widgetGeometry and prefGeometry translate one secondary window's geometry

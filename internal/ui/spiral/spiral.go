@@ -131,6 +131,35 @@ func (s *Spiral) Open() bool {
 // full-screen one. Mirrors widgets.Singleton.Show's raise behaviour - the
 // easter egg is a single window, and finding it a second time should bring
 // the one already up to the front rather than stack another on top of it.
+// ShowForGesture opens the spiral on the pattern the user's gesture asked
+// for, and is the window-drag gesture's way in (internal/wingesture, wired
+// up in internal/ui/gesture.go): swirling the window clockwise brings up the
+// Nautilus, counter-clockwise the Ripple. The manual's secret phrase goes on
+// using plain Show, which opens whichever pattern the spiral was last left
+// on - the same as the N key's own toggle.
+//
+// Which direction maps to which pattern is arbitrary and lives here rather
+// than at the call site, since knowing what presets exist is this package's
+// business and not internal/ui/help's.
+//
+// The uniform has to be written as well as the state whenever a window is
+// already open: newShader seeds the uniforms from the state once, when the
+// shader is built, so on an already-open spiral Show alone would raise the
+// old window and change nothing.
+func (s *Spiral) ShowForGesture(clockwise bool) {
+	s.st.setPreset(clockwise)
+
+	if s.win != nil {
+		preset := float32(0)
+		if clockwise {
+			preset = 1
+		}
+		s.setUniform(s.win, "preset", preset)
+	}
+
+	s.Show()
+}
+
 func (s *Spiral) Show() {
 	if s.win != nil {
 		s.win.Show()
