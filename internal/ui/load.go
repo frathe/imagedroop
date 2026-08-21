@@ -118,7 +118,7 @@ func (v *viewer) attemptLoad(token requestToken, i int, done chan struct{}) {
 				// closing the grid first.
 				if token.current() && !v.slides.Active() && !v.grid.Visible() {
 					v.undoGridMaximize()
-					resizeToImage(v.win, bounds, v.maxWinW, v.maxWinH)
+					resizeToImage(v.win, bounds, v.settings.maxWinW, v.settings.maxWinH)
 				}
 			})
 		}
@@ -248,7 +248,7 @@ func (v *viewer) finishLoad(token requestToken, _ int, u fyne.URI, loaded *imagi
 	// would shrink that window while the grid is still drawn over it.
 	if !v.slides.Active() && !v.grid.Visible() {
 		v.undoGridMaximize()
-		resizeToImage(v.win, b, v.maxWinW, v.maxWinH)
+		resizeToImage(v.win, b, v.settings.maxWinW, v.settings.maxWinH)
 	}
 
 	title := fmt.Sprintf("%s — %d x %d", u.Name(), b.Dx(), b.Dy())
@@ -475,7 +475,8 @@ func (v *viewer) animate(token requestToken, frames []image.Image, delays []time
 // defaultMaxWindowWidth/defaultMaxWindowHeight cap how large the window is
 // ever allowed to auto-grow to fit a loaded image, until the settings
 // window (internal/ui/settingswin) changes them - see the viewer's
-// maxWinW/maxWinH fields and MaxWindowWidth/MaxWindowHeight below.
+// settings.maxWinW/maxWinH fields (memlimits.go) and
+// MaxWindowWidth/MaxWindowHeight below.
 const (
 	defaultMaxWindowWidth  = 1500.0
 	defaultMaxWindowHeight = 950.0
@@ -483,8 +484,8 @@ const (
 
 // MaxWindowWidth/MaxWindowHeight report the current window-size cap - the
 // settings window's getters.
-func (v *viewer) MaxWindowWidth() float32  { return v.maxWinW }
-func (v *viewer) MaxWindowHeight() float32 { return v.maxWinH }
+func (v *viewer) MaxWindowWidth() float32  { return v.settings.maxWinW }
+func (v *viewer) MaxWindowHeight() float32 { return v.settings.maxWinH }
 
 // SetMaxWindowWidth/SetMaxWindowHeight set the window-size cap directly -
 // the settings window's binding. Floored at the drop-zone size
@@ -496,14 +497,14 @@ func (v *viewer) SetMaxWindowWidth(w float32) {
 	if w < startW {
 		w = startW
 	}
-	v.maxWinW = w
+	v.settings.maxWinW = w
 }
 
 func (v *viewer) SetMaxWindowHeight(h float32) {
 	if h < startH {
 		h = startH
 	}
-	v.maxWinH = h
+	v.settings.maxWinH = h
 }
 
 // syncWindowToZoom resizes the main window to track the image at the
@@ -532,12 +533,12 @@ func (v *viewer) syncWindowToZoom() {
 	w, h := v.displayedDimensions()
 	if v.zoom.Fitting() {
 		v.undoGridMaximize()
-		resizeToImage(v.win, image.Rect(0, 0, w, h), v.maxWinW, v.maxWinH)
+		resizeToImage(v.win, image.Rect(0, 0, w, h), v.settings.maxWinW, v.settings.maxWinH)
 		return
 	}
 	s := v.zoom.Scale()
 	v.undoGridMaximize()
-	resizeToImage(v.win, image.Rect(0, 0, int(float32(w)*s+0.5), int(float32(h)*s+0.5)), v.maxWinW, v.maxWinH)
+	resizeToImage(v.win, image.Rect(0, 0, int(float32(w)*s+0.5), int(float32(h)*s+0.5)), v.settings.maxWinW, v.settings.maxWinH)
 }
 
 // resizeToImage resizes w to fit b, scaled down (preserving aspect ratio)

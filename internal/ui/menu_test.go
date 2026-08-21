@@ -153,13 +153,13 @@ func TestBuildMainMenu_SettingsItemOpensTheSettingsWindow(t *testing.T) {
 	v := newTestViewer(t)
 	menu := buildMainMenu(v)
 
-	if v.settings.Open() {
+	if v.settingsWin.Open() {
 		t.Fatal("settings window should not be open yet")
 	}
 
 	menu.Items[0].Items[6].Action()
 
-	if !v.settings.Open() {
+	if !v.settingsWin.Open() {
 		t.Error("the Settings… action should open the settings window")
 	}
 }
@@ -377,19 +377,19 @@ func TestCloseFiles_NeverClosesTheWindow(t *testing.T) {
 func TestCloseFiles_CancelsScanInProgress(t *testing.T) {
 	v := newTestViewer(t)
 
-	v.scanLifecycle.begin()
-	v.scanning = true
-	v.scanSpinner.Show()
-	v.scanLabel.Show()
+	v.scanOp.lifecycle.begin()
+	v.scanOp.active = true
+	v.scanOp.spinner.Show()
+	v.scanOp.label.Show()
 	v.dropzone.Hide()
 	v.welcomeArt.Hide()
 
 	v.closeFiles()
 
-	if v.scanning {
+	if v.scanOp.active {
 		t.Error("closeFiles should cancel a scan in progress")
 	}
-	if v.scanSpinner.Visible() || v.scanLabel.Visible() {
+	if v.scanOp.spinner.Visible() || v.scanOp.label.Visible() {
 		t.Error("scan spinner/label should be hidden after closeFiles cancels a scan")
 	}
 	if !v.dropzone.Visible() || !v.welcomeArt.Visible() {

@@ -164,15 +164,28 @@ it exists to prove — so it needs an actual decision about how to exercise
 that safely under a driver that runs `fyne.Do` inline. Logged in `todos.md`,
 deliberately not fixed inside this refactor.
 
-**Consequence for the gate:** until that is resolved, every stage's primary
-verification is
+**Resolved.** It was fixed in commit `b39d7ad`, once CI made the decision for
+us — a plain `go test -race ./...` was the only thing standing between the
+Stage 1 commit and a green pipeline. Parking the animation preserved the
+test's subject after all: `ShowImage` still supersedes the goroutine, which
+wakes on `token.context().Done()` inside its frame-delay `select` and returns
+*without* entering its `fyne.Do`, so it never touches the two contended
+fields. What the test gave up is the claim that the animation was mid-cycle
+at the instant of navigation.
+
+**The gate from stage 2a onward is therefore the plain, unskipped**
 
 ```
-go test -race ./... -skip 'TestViewerShow_NavigatingAwayStopsAnimation'
+go test -race ./...
 ```
 
-which must be fully green, plus a plain `go test -race ./...` whose only
-permitted failure is that one test.
+fully green. No `-skip`, no known-bad test, no permitted failures. A failure
+a stage sees is that stage's own.
+
+Both fixes had to park the animation because `animate` sleeps on a bare
+`time.After` with no seam, so no test can step it. That is now its own
+`todos.md` entry (a frame-clock seam, in the mould of `vector.after`) and is
+deliberately outside this refactor.
 
 ## Stages
 
@@ -443,7 +456,13 @@ from the local, as it does today.
 `openfiles_test.go` (1).
 
 **Definition of done:**
-- Zero hits for `grep -rn "v\.scanLifecycle\|v\.scanning\b\|v\.scanDone\|v\.scanSpinner\|v\.scanLabel\|v\.scanArt\|view\.scan[A-Z]" --include="*.go" internal/`
+- Zero hits for
+  `grep -rnE "v\.scan(Lifecycle|Done|Spinner|Label|Art)\b|v\.scanning\b|view\.scan(Lifecycle|Done|Spinner|Label|Art)\b" --include="*.go" internal/`
+
+  Note the shape: a naive `view\.scan[A-Z]` also matches `view.scanOp`, which
+  this stage's own construction and bare-lifecycle lines legitimately
+  contain — stage 2a hit exactly that false positive with `view.sortOp` and
+  had to disambiguate by inspection. Enumerate the old suffixes instead.
 - The two `asyncOpUI` instances are the type's only users; no third appears.
 - `ARCHITECTURE.md`'s `drop.go` and `components.go` rows rewritten, new
   `asyncop.go` row added to the file table, placed beside `drop.go`/`sort.go`

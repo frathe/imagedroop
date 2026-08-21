@@ -75,11 +75,11 @@ func registerShutdown(application fyne.App, view *viewer) {
 		// about to wind down. The secondary windows only have one running
 		// if they're still open right now, and StopTracking says so itself.
 		view.stopWinPosPoll()
-		view.settings.StopTracking()
+		view.settingsWin.StopTracking()
 		view.exif.StopTracking()
-		view.scanLifecycle.invalidate()
+		view.scanOp.lifecycle.invalidate()
 		view.loadLifecycle.invalidate()
-		view.sortLifecycle.invalidate()
+		view.sortOp.lifecycle.invalidate()
 		view.vector.lifecycle.invalidate()
 
 		session.Save(application, view.state.unsortedFiles)
@@ -108,18 +108,18 @@ func (v *viewer) currentPreferences() preferences.State {
 		MergeMode:            v.state.MergeMode(),
 		SlideInterval:        v.slides.Interval(),
 		SlideShuffle:         v.slides.Shuffle(),
-		MaxScanFiles:         v.maxScan,
-		MaxWindowWidth:       v.maxWinW,
-		MaxWindowHeight:      v.maxWinH,
-		MaxImageCacheMB:      v.imgCacheMB,
-		MaxThumbCacheMB:      v.thumbCacheMB,
-		MaxFileSizeMB:        v.maxFileMB,
-		FavoritePreviewCache: v.favPreviewCache,
+		MaxScanFiles:         v.settings.maxScan,
+		MaxWindowWidth:       v.settings.maxWinW,
+		MaxWindowHeight:      v.settings.maxWinH,
+		MaxImageCacheMB:      v.settings.imgCacheMB,
+		MaxThumbCacheMB:      v.settings.thumbCacheMB,
+		MaxFileSizeMB:        v.settings.maxFileMB,
+		FavoritePreviewCache: v.settings.favPreviewCache,
 		WindowSize:           v.windowSize,
 		WindowPosX:           posX,
 		WindowPosY:           posY,
 		WindowPositionSet:    posSet,
-		SettingsWindow:       prefGeometry(v.settings.Geometry()),
+		SettingsWindow:       prefGeometry(v.settingsWin.Geometry()),
 		ExifWindow:           prefGeometry(v.exif.Geometry()),
 	}
 }

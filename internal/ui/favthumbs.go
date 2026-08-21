@@ -18,7 +18,7 @@ import (
 // FavoritePreviewCache/SetFavoritePreviewCache are the settings window's
 // getter/setter pair for the preference, the same shape memlimits.go uses
 // for the three memory limits.
-func (v *viewer) FavoritePreviewCache() bool { return v.favPreviewCache }
+func (v *viewer) FavoritePreviewCache() bool { return v.settings.favPreviewCache }
 
 // SetFavoritePreviewCache applies the preference, and switching it off also
 // abandons any pass still in flight. Guarding only the *start* of a pass
@@ -27,7 +27,7 @@ func (v *viewer) FavoritePreviewCache() bool { return v.favPreviewCache }
 // during that while the app would keep decoding and keep writing preview
 // files to disk after the user asked it to stop doing exactly that.
 func (v *viewer) SetFavoritePreviewCache(on bool) {
-	v.favPreviewCache = on
+	v.settings.favPreviewCache = on
 
 	if !on {
 		v.favThumbLifecycle.invalidate()
@@ -47,7 +47,7 @@ func (v *viewer) SetFavoritePreviewCache(on bool) {
 func (v *viewer) SyncFavoritePreviews(favDir string, files []fyne.URI) {
 	// favDir is empty when favstore.Dir was handed a name it rejects, which
 	// leaves nothing to write previews into or sweep.
-	if !v.favPreviewCache || favDir == "" {
+	if !v.settings.favPreviewCache || favDir == "" {
 		return
 	}
 

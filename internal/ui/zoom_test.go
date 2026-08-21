@@ -123,7 +123,7 @@ func windowSizeFor(t *testing.T, v *viewer, w, h int) (width, height float32) {
 
 	win := test.NewWindow(nil)
 	defer win.Close()
-	resizeToImage(win, image.Rect(0, 0, w, h), v.maxWinW, v.maxWinH)
+	resizeToImage(win, image.Rect(0, 0, w, h), v.settings.maxWinW, v.settings.maxWinH)
 	size := win.Canvas().Size()
 	return size.Width, size.Height
 }

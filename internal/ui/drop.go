@@ -13,7 +13,7 @@ import (
 	"github.com/frathe/picfetch/internal/imaging"
 )
 
-// cancelScan aborts a scan in progress (Escape while v.scanning is true).
+// cancelScan aborts a scan in progress (Escape while v.scanOp.active is true).
 // It invalidates the scan's own lifecycle, so the background goroutine in
 // handleDrop stops touching the filesystem without interrupting navigation,
 // preloading, or animation for an already-loaded merge-mode file set.
@@ -24,16 +24,9 @@ import (
 // (the first-ever drop) needs the drop zone put back the way handleDrop
 // found it.
 func (v *viewer) cancelScan() {
-	if !v.scanning {
+	if !v.scanOp.cancel() {
 		return
 	}
-
-	v.scanLifecycle.invalidate()
-	v.scanning = false
-
-	v.scanArt.Hide()
-	v.scanSpinner.Hide()
-	v.scanLabel.Hide()
 
 	if len(v.state.files) == 0 {
 		v.showWelcomeState()
@@ -57,7 +50,7 @@ func realPathOf(u fyne.URI) string {
 }
 
 // defaultMaxScannedFiles caps how many images a single recursive folder
-// scan will gather (the viewer's maxScan field, which tests shrink
+// scan will gather (the viewer's settings.maxScan field, which tests shrink
 // per-viewer instead of creating hundreds of thousands of temp files to
 // exercise the cap). It's a safety valve for pathological trees (a runaway
 // symlink cycle EvalSymlinks doesn't resolve to a repeat, or a genuinely
@@ -69,21 +62,21 @@ const defaultMaxScannedFiles = 200_000
 // MaxScan is the current recursive-folder-scan cap - the settings window's
 // getter for SetMaxScan below.
 func (v *viewer) MaxScan() int {
-	return v.maxScan
+	return v.settings.maxScan
 }
 
 // SetMaxScan sets the recursive-folder-scan cap directly - the settings
 // window's binding. Floored at 1 rather than 0, since a 0 cap would stop a
 // scan before it gathered anything at all - not a "no limit" the rest of
-// the scan path (n >= v.maxScan below) is written to understand. Applies to
-// the next scan; one already in flight keeps running under whatever cap it
-// started with.
+// the scan path (n >= v.settings.maxScan below) is written to understand.
+// Applies to the next scan; one already in flight keeps running under
+// whatever cap it started with.
 func (v *viewer) SetMaxScan(n int) {
 	if n < 1 {
 		n = 1
 	}
 
-	v.maxScan = n
+	v.settings.maxScan = n
 }
 
 // handleDrop starts an asynchronous scan for images, recursing into dropped
@@ -116,16 +109,10 @@ func (v *viewer) handleDrop(uris []fyne.URI) {
 	merging := v.state.MergeMode() && len(v.state.files) > 0
 
 	v.invalidateLoad()
-	token := v.scanLifecycle.begin()
-	v.scanning = true
+	token, scanDone := v.scanOp.begin()
 
-	scanDone := make(chan struct{})
-	v.scanDone = scanDone
-
-	v.scanLabel.SetText(lang.L("Scanning... 0 images"))
-	v.scanArt.Show()
-	v.scanSpinner.Show()
-	v.scanLabel.Show()
+	v.scanOp.label.SetText(lang.L("Scanning... 0 images"))
+	v.scanOp.show()
 	v.dropzone.Hide()
 	v.welcomeArt.Hide()
 	v.restoreLink.Hide()
@@ -221,7 +208,7 @@ func (v *viewer) handleDrop(uris []fyne.URI) {
 				images = append(images, u)
 				count++
 				n := count
-				if n >= v.maxScan {
+				if n >= v.settings.maxScan {
 					truncated = true
 				}
 				// update counter periodically to avoid flooding the UI thread
@@ -230,7 +217,7 @@ func (v *viewer) handleDrop(uris []fyne.URI) {
 						if !token.current() {
 							return
 						}
-						v.scanLabel.SetText(fmt.Sprintf(lang.L("Scanning... %d images"), n))
+						v.scanOp.label.SetText(fmt.Sprintf(lang.L("Scanning... %d images"), n))
 					})
 				}
 			}
@@ -284,10 +271,7 @@ func (v *viewer) applyScanResult(token requestToken, merging bool, uris, images 
 	if !token.current() {
 		return
 	}
-	v.scanning = false
-	v.scanArt.Hide()
-	v.scanSpinner.Hide()
-	v.scanLabel.Hide()
+	v.scanOp.finish()
 
 	if len(images) == 0 {
 		msg := fmt.Sprintf(lang.L("none of the %d dropped files is a supported image"), len(uris))
@@ -314,7 +298,7 @@ func (v *viewer) applyScanResult(token requestToken, merging bool, uris, images 
 	v.win.RequestFocus()
 
 	if truncated {
-		v.ShowToast(fmt.Sprintf(lang.L("stopped scanning after %d images - the dropped folder tree is very large"), v.maxScan))
+		v.ShowToast(fmt.Sprintf(lang.L("stopped scanning after %d images - the dropped folder tree is very large"), v.settings.maxScan))
 	}
 
 	// Deliberately last: applyScannedFiles hands the reorder to a background

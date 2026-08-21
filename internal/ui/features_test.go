@@ -15,7 +15,7 @@ func TestBuildViewer_RegistersAllEightFeatures(t *testing.T) {
 		{name: "grid", registered: view.grid != nil},
 		{name: "deletion", registered: view.deletion != nil},
 		{name: "slideshow", registered: view.slides != nil},
-		{name: "settings", registered: view.settings != nil},
+		{name: "settings", registered: view.settingsWin != nil},
 		{name: "favorites", registered: view.favorites != nil},
 	}
 

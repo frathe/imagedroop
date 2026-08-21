@@ -27,7 +27,7 @@ import (
 // rather than through openFileDialog: the latter runs it on its own
 // goroutine (see openfiles.go, mirroring how every native chooser is a
 // real, blocking subprocess call that must never block the UI goroutine),
-// but a background goroutine writing v.scanDone/v.loadDone with nothing
+// but a background goroutine writing v.scanOp.done/v.loadDone with nothing
 // synchronizing that write against this test goroutine reading them would
 // itself be a data race in the test, distinct from anything production code
 // does wrong. Calling the handler directly keeps this test on a single

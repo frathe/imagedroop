@@ -18,7 +18,7 @@ import (
 // per-OS dispatch. It always runs on its own goroutine since every backing
 // command blocks until the user closes the dialog.
 func (v *viewer) openFileDialog() {
-	// chooserDone mirrors clipboardDone/scanDone: closed once this pick's
+	// chooserDone mirrors clipboardDone/scanOp.done: closed once this pick's
 	// goroutine has fully finished, error toast included, so a test can
 	// wait for it rather than leave it running into the next one. That
 	// matters more than it looks: reportChooserError renders a toast, and
@@ -39,7 +39,7 @@ func (v *viewer) openFileDialog() {
 
 // runFileChooser is split out from openFileDialog so tests can call it
 // directly on the test goroutine - avoiding a data race on
-// v.scanDone/v.loadDone, which handleDrop below would otherwise write from
+// v.scanOp.done/v.loadDone, which handleDrop below would otherwise write from
 // a background goroutine with nothing synchronizing that write against a
 // test reading them, the same hazard documented on the zenity-specific
 // tests this replaced. Production always reaches it through the goroutine
@@ -94,8 +94,7 @@ func (v *viewer) reportChooserError(err error, goos string) {
 // reportClipboardError in clipboard.go, the same kind of chooser-adjacent
 // shell-out failure.
 func chooserErrorDetail(err error) string {
-	var exitErr *exec.ExitError
-	if errors.As(err, &exitErr) {
+	if exitErr, ok := errors.AsType[*exec.ExitError](err); ok {
 		if msg := strings.TrimSpace(string(exitErr.Stderr)); msg != "" {
 			return msg
 		}

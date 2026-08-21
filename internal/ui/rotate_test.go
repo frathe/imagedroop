@@ -55,7 +55,7 @@ func TestRotateBy_SwapsBoundsAndResizesWindow(t *testing.T) {
 
 	want := test.NewWindow(nil)
 	defer want.Close()
-	resizeToImage(want, image.Rect(0, 0, 200, 400), v.maxWinW, v.maxWinH)
+	resizeToImage(want, image.Rect(0, 0, 200, 400), v.settings.maxWinW, v.settings.maxWinH)
 
 	if got := v.win.Canvas().Size(); got != want.Canvas().Size() {
 		t.Errorf("window size after rotate = %v, want %v (resizeToImage against the rotated 200x400 bounds)", got, want.Canvas().Size())

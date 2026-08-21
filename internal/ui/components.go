@@ -149,10 +149,10 @@ func newScanUI() scanUI {
 // hands over. A dedicated pair rather than reusing scanUI's - a background
 // scan (a merge-mode drop) can still be in flight when a sort-mode change is
 // requested, since handleKeyEvent's S-key guard only checks
-// len(v.state.files)<2/v.loading, not v.scanning, and the two would otherwise
-// fight over one pair of widgets. Unlike scanUI's label, this one's text
-// never changes: the ask is only to show that a sort is running, not to
-// track its progress the way the scan counter does.
+// len(v.state.files)<2/v.loading, not v.scanOp.active, and the two would
+// otherwise fight over one pair of widgets. Unlike scanUI's label, this
+// one's text never changes: the ask is only to show that a sort is
+// running, not to track its progress the way the scan counter does.
 type sortUI struct {
 	spinner *widget.ProgressBarInfinite
 	label   *widget.Label

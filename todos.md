@@ -86,6 +86,51 @@
    its goroutine never touches those fields. Nothing here depended on the
    animation actually playing, only on the delays summing.
 
+ - fixed the same `-race` failure in `TestViewerShow_NavigatingAwayStopsAnimation`
+   The one CI was actually failing on (7 `DATA RACE` blocks, all tracing to
+   `animate_test.go`'s `v.ShowImage(1)`). Same two fields, same cause as the
+   entry above. This one could not just be skipped past: superseding a live
+   animation by navigating is its subject. Parking the animation keeps that
+   subject intact — `ShowImage` still bumps the lifecycle, and the parked
+   goroutine wakes on `token.context().Done()` inside its frame-delay
+   `select` and returns *without* entering its `fyne.Do`, so it never
+   touches `displayFrames`/`displayFrameIdx` at all. What the test no longer
+   claims is that the animation was mid-cycle at the instant of navigation;
+   the test comment says so, and the frame-clock seam below is what would
+   let it claim that again.
+
+ - grouped the `viewer` struct's field clusters into sub-structs
+   `viewer`'s ~70 flat fields lost three clusters that were already de-facto
+   modules — each with its own file and its own single-writer contract — so
+   the sub-struct is the type system catching up to a boundary the code
+   already had. Not a controller extraction: nothing moved between packages,
+   no `Host` interface changed, no feature gained or lost an owner.
+   `vectorView` (`vector.go`) took the eight `vector*` fields, and
+   `clearVector` split into `vectorView.clear` (its own state) plus the
+   `zoom.SetLogicalSize` call the app makes about it. `asyncOpUI`
+   (`asyncop.go`) turned out to fit twice: the folder scan and the background
+   reorder are the identical shape — one cancellable lifecycle, an active
+   flag, a per-request done channel, progress widgets — so they are two
+   instances (`scanOp`, `sortOp`) rather than two near-duplicate types, with
+   `begin`/`show`/`finish`/`invalidate`/`cancel` holding the flag-versus-token
+   bookkeeping that used to be spread across `drop.go`, `sort.go` and
+   `keys.go`. The type is deliberately viewer-independent: what a cancellation
+   *means* — restore the drop zone, repaint, toast — stays at the call sites.
+   `settings` (`memlimits.go`) took the seven fields the Settings window's
+   `Host` surface reads and writes, which also freed that name by renaming the
+   window field to `settingsWin`; storage only, every getter/setter stays
+   beside its consumer.
+
+   `vector`/`scanOp`/`sortOp` are value fields that must never be copied —
+   they hold a `WaitGroup` and a lifecycle mutex, and `go vet`'s `copylocks`
+   enforces it — following `winPos`'s precedent. `settings` carries no lock.
+   Behavior-preserving throughout, with one dead-store removal: `cancelSort`
+   used to hide its spinner and label a second time after `invalidateSort`
+   already had. Two things were deliberately left alone rather than silently
+   fixed: `clearToDropzone`'s bare `scanOp.lifecycle.invalidate()` (see the
+   entry above it) and `favThumbLifecycle`/`favThumbDone`, which are the same
+   lifecycle-plus-done-channel shape but have no progress UI to group with.
+
 ## ACTIVE DEVELOPMENT
 
 ## TODO
@@ -104,46 +149,25 @@ owns the flag by the time the stale one's closure would run") — but here
 there is no newer scan. Needs checking against what `clearToDropzone`
 repaints afterward before deciding whether anything is actually left visible.
 
-## `TestViewerShow_NavigatingAwayStopsAnimation` has the race that was just
-   fixed in `TestShow_TracksAnimatedGIFLoopDuration`
+## Give `animate` a frame-clock seam so animation timing is deterministic
 
-Same shape: a 20ms-per-frame GIF, then `v.ShowImage(1)` on the test
-goroutine while `animate` is still cycling, so both write
-`displayFrames`/`displayFrameIdx` with nothing serializing them under the
-test driver. It captures `oldAnimStopped` before navigating and waits on it
-afterwards, but the race happens *during* `ShowImage`, before that wait.
-Confirmed to actually fire, not just latent: a full `go test -race ./...`
-reported it once the other one was fixed, so the suite is still
-intermittently red until this is dealt with.
-Unlike the test just fixed, this one cannot simply park the animation — a
-live animation superseded by a navigation is precisely its subject — so it
-needs an actual decision about how to exercise that safely rather than the
-long-frame-delay trick.
+Two tests have now had to be fixed for the same race, and the fix both
+times was to park `animate` in a multi-second frame delay so its goroutine
+never runs during the test. That works, but it means no test can exercise
+an animation that is *actively cycling* — including the one case worth
+covering, a navigation superseding a live animation.
 
-## Group the `viewer` struct's field clusters into sub-structs
+The root of it: `animate` (load.go) sleeps on a bare
+`time.After(delays[idx])`, so a test cannot step it. Every other piece of
+background work in this package already has a per-viewer seam for exactly
+this reason (`vector.after` is the closest precedent, and `vector.debounce`
+alongside it). A `func(time.Duration) <-chan time.Time` field on `viewer`,
+defaulting to `time.After`, would let a test release frames one at a time
+and assert against a known frame index instead of racing or parking.
 
-`internal/ui/viewer.go`'s `viewer` has ~70 fields and 111 methods across
-the package. ARCHITECTURE.md is explicit that a general controller
-extraction is not wanted — and this isn't that. Several field clusters are
-already de-facto modules with their own files and single-writer contracts,
-just flattened into one namespace:
-
-- **Vector view** (`vector`, `vectorLogical`, `vectorRaster`,
-  `vectorLifecycle`, `vectorPending`, `vectorDebounce`, `vectorRasterize`,
-  `vectorAfter` — 8 fields, all consumed by `vector.go`): fold into a
-  `vectorView` struct field. The write-once test seams travel with it.
-- **Scan UI and sort UI are the same shape** (`scanLifecycle`/`scanning`/
-  `scanDone`/`scanSpinner`/`scanLabel` vs `sortLifecycle`/`sorting`/
-  `sortDone`/`sortSpinner`/`sortLabel`): one `asyncOpUI` type
-  {lifecycle, active flag, done channel, spinner, label} used twice, with
-  begin/finish/cancel methods that keep flag-vs-token bookkeeping in one
-  place instead of spread across drop.go, sort.go and keys.go.
-- **Settings-backed limits** (`maxScan`, `maxWinW`/`maxWinH`,
-  `imgCacheMB`/`thumbCacheMB`/`maxFileMB`, `favPreviewCache`): a `limits`
-  struct, so the settings window's Host surface reads as one concern.
-
-Each cluster can move independently — three small, separately verifiable
-commits rather than one big one.
+Worth doing before a third test hits this. Note the seam must be
+write-once/pre-first-drop like the vector ones, per the concurrency
+invariant.
 
 ## 4. RAW support via embedded preview extraction — L
 

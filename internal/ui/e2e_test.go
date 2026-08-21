@@ -249,18 +249,18 @@ func TestE2E_EscapeQuitsWhenNothingLoaded(t *testing.T) {
 
 // TestE2E_EscapeCancelsScanInsteadOfClosing checks the priority handleKeyEvent
 // gives Escape while a scan is in flight: len(v.state.files) == 0 is exactly the
-// state a first-ever drop's scan runs in, so without the v.scanning check
+// state a first-ever drop's scan runs in, so without the v.scanOp.active check
 // ahead of it, this would otherwise hit the "nothing loaded" branch above
 // and close the window out from under a scan the user meant to cancel.
-// v.scanning is set directly rather than racing a real background scan -
+// v.scanOp.active is set directly rather than racing a real background scan -
 // see TestHandleDrop_SupersededScanGoroutineExits in drop_test.go for why.
 func TestE2E_EscapeCancelsScanInsteadOfClosing(t *testing.T) {
 	v, _, closed := newTestUI(t)
 
-	v.scanLifecycle.begin()
-	v.scanning = true
-	v.scanSpinner.Show()
-	v.scanLabel.Show()
+	v.scanOp.lifecycle.begin()
+	v.scanOp.active = true
+	v.scanOp.spinner.Show()
+	v.scanOp.label.Show()
 	v.dropzone.Hide()
 	v.welcomeArt.Hide()
 
@@ -269,8 +269,8 @@ func TestE2E_EscapeCancelsScanInsteadOfClosing(t *testing.T) {
 	if closed() {
 		t.Error("Escape should cancel the in-flight scan, not close the window")
 	}
-	if v.scanning {
-		t.Error("scanning should be false after Escape cancels it")
+	if v.scanOp.active {
+		t.Error("scanOp.active should be false after Escape cancels it")
 	}
 	if !v.dropzone.Visible() || !v.welcomeArt.Visible() {
 		t.Error("drop zone/welcome art should be restored after Escape cancels the scan")

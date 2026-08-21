@@ -79,12 +79,13 @@ type viewer struct {
 	// while it's open keeps it in sync.
 	exif *exifwin.Window
 
-	// settings is the Settings window (File menu) - see
+	// settingsWin is the Settings window (File menu) - see
 	// internal/ui/settingswin, which reaches back through the Host
 	// interface this viewer satisfies (SortMode/MergeMode/SlideShuffle/
 	// SlideInterval/MaxScan/MaxWindowWidth/MaxWindowHeight and their
-	// setters).
-	settings *settingswin.Window
+	// setters). Named settingsWin, not settings, because that name belongs
+	// to the settings-backed state struct below.
+	settingsWin *settingswin.Window
 
 	// saveItem is the File menu's "Save Changes" item (save.go), exportItem
 	// its "Export image" one (export.go), wallpaperItem its "Set as
@@ -124,10 +125,6 @@ type viewer struct {
 	// probe/decode retries, neighbor preloads, and GIF animation. A newer
 	// navigation, drop, clear, or shutdown cancels and supersedes the token.
 	loadLifecycle requestLifecycle
-
-	// scanLifecycle is independent of navigation, so browsing the existing
-	// set during a merge-mode folder scan cannot strand scan UI state.
-	scanLifecycle requestLifecycle
 
 	// favThumbLifecycle owns the background favorite-preview pass
 	// (favthumbs.go). Independent of every lifecycle above it: the pass
@@ -184,34 +181,34 @@ type viewer struct {
 	// so the save still has a value).
 	stopWinPosPoll func()
 
-	scanArt     *canvas.Image
-	scanSpinner *widget.ProgressBarInfinite
-	scanLabel   *widget.Label
-
-	// scanning is true while a handleDrop scan (the current generation) is
-	// in flight, so Escape can cancel it - see cancelScan. Only ever set on
-	// the UI goroutine: true when handleDrop starts, false again once that
-	// same generation's completion closure runs, whether it finished,
-	// found nothing, or was cancelled. A scan superseded by a newer drop
-	// (stale gen) never touches it, since the newer scan already owns the
-	// flag by the time the stale one's closure would run.
-	scanning bool
-
-	// scanDone and loadDone are closed by handleDrop's and ShowImage's fyne.Do
-	// completion blocks respectively, once that call's generation has
-	// finished applying its result. Tests wait on them directly instead of
-	// polling widget state, which otherwise races with the fyne test
-	// driver's synchronous fyne.Do under -race. Each call replaces the
-	// field with a fresh channel before starting its async work; a stale
-	// request's own channel still gets closed, it just leaves the
+	// scanOp is the folder-scan progress UI - see asyncop.go's asyncOpUI for
+	// the shape it shares with the background reorder (sortOp below).
+	// scanOp.lifecycle is independent of navigation, so browsing the
+	// existing set during a merge-mode folder scan cannot strand scan UI
+	// state. scanOp.active is true while a handleDrop scan (the current
+	// generation) is in flight, so Escape can cancel it - see cancelScan.
+	// Only ever set on the UI goroutine: true when handleDrop starts, false
+	// again once that same generation's completion closure runs, whether it
+	// finished, found nothing, or was cancelled. A scan superseded by a
+	// newer drop (stale gen) never touches it, since the newer scan already
+	// owns the flag by the time the stale one's closure would run.
+	// scanOp.done is closed by handleDrop's fyne.Do completion block, once
+	// that call's generation has finished applying its result. Tests wait
+	// on it directly instead of polling widget state, which otherwise races
+	// with the fyne test driver's synchronous fyne.Do under -race. Each
+	// call replaces it with a fresh channel before starting its async work;
+	// a stale request's own channel still gets closed, it just leaves the
 	// shared state untouched.
-	scanDone chan struct{}
+	scanOp asyncOpUI
+
+	// loadDone mirrors scanOp.done: closed by ShowImage's fyne.Do
+	// completion block for the same reason and under the same discipline -
+	// see scanOp's own comment above.
 	loadDone chan struct{}
 
-	sortSpinner *widget.ProgressBarInfinite
-	sortLabel   *widget.Label
-
-	// sorting is true while the current sortLifecycle request is still
+	// sortOp is the background-reorder progress UI - see asyncop.go's
+	// asyncOpUI for the shape it shares with the scan. sortOp.active is
+	// true while the current sortOp.lifecycle request is still
 	// meaningfully pending, set by startSort and cleared by whichever of
 	// invalidateSort (a newer sort, Escape via cancelSort, RemoveFile,
 	// clearToDropzone) or finishSort landing that same token notices
@@ -220,21 +217,16 @@ type viewer struct {
 	// whatever it was tracking has been superseded, cancelled, or
 	// discarded. Used for two things: gating cancelSort (nothing to cancel
 	// if nothing's in flight) and handleKeyEvent's Escape case (keys.go) -
-	// a first-ever drop clears v.scanning before startSort has actually
-	// populated v.state.files, so without this Escape would see len(v.state.files) ==
-	// 0 and quit the window instead of cancelling the still-computing
-	// reorder.
-	sorting bool
-
-	// sortLifecycle owns the cancellable filesort.Order request. It stays
-	// separate from loadLifecycle so reordering cannot stop an unrelated
-	// decode, preload, or playing GIF.
-	sortLifecycle requestLifecycle
-
-	// sortDone is closed by finishSort once that request's reorder has
+	// a first-ever drop clears v.scanOp.active before startSort has actually
+	// populated v.state.files, so without this Escape would see
+	// len(v.state.files) == 0 and quit the window instead of cancelling
+	// the still-computing reorder. sortOp.lifecycle owns the cancellable
+	// filesort.Order request, staying separate from loadLifecycle so
+	// reordering cannot stop an unrelated decode, preload, or playing GIF.
+	// sortOp.done is closed by finishSort once that request's reorder has
 	// finished applying (or been discarded as stale), mirroring
-	// scanDone/loadDone so tests can wait on it deterministically.
-	sortDone chan struct{}
+	// scanOp.done/loadDone so tests can wait on it deterministically.
+	sortOp asyncOpUI
 
 	// animFrame counts every write to v.img.Image - attemptLoad's initial
 	// frame plus each one animate cycles to afterwards - and animStopped is
@@ -368,7 +360,7 @@ type viewer struct {
 
 	// clipboardDone is closed once copyImageToClipboard's background
 	// shell-out goroutine has fully finished, error reporting included -
-	// the same wait-channel discipline scanDone/loadDone give tests for
+	// the same wait-channel discipline scanOp.done/loadDone give tests for
 	// drops and loads. chooserDone is the same for openFileDialog's
 	// native-dialog goroutine, and wallpaperDone for setAsWallpaper's.
 	clipboardDone chan struct{}
@@ -387,30 +379,9 @@ type viewer struct {
 	// process, on the developer's own desktop.
 	wallpaperDir string
 
-	// maxScan caps how many images a single recursive folder scan will
-	// gather - see handleDrop (drop.go). A field rather than the package
-	// var it used to be, so tests shrink it per-viewer instead of
-	// mutating a global.
-	maxScan int
-
-	// maxWinW/maxWinH cap how large the window is ever allowed to
-	// auto-grow to fit a loaded image - see resizeToImage (load.go),
-	// which never resizes past them. Fields rather than the constants
-	// they used to be, so the settings window can change them per-viewer
-	// and tests can shrink/grow them without touching a global.
-	maxWinW, maxWinH float32
-
-	// imgCacheMB/thumbCacheMB/maxFileMB are the app's memory budget, in
-	// the megabytes the settings window shows - see memlimits.go, which
-	// holds their getter/setter pairs and converts each to the byte budget
-	// its consumer actually enforces.
-	imgCacheMB, thumbCacheMB, maxFileMB int
-
-	// favPreviewCache is the settings window's "Cache favorite previews on
-	// disk" checkbox - see favthumbs.go for its getter/setter pair. Restored
-	// from preferences.State.FavoritePreviewCache in features.go and read
-	// back into it by currentPreferences (run.go).
-	favPreviewCache bool
+	// settings is the whole settings-backed state - see memlimits.go's
+	// settings for what it holds and why it's grouped.
+	settings settings
 
 	// keyModifiers reports the keyboard modifiers currently held -
 	// defaultKeyModifiers (keys.go) in production, stubbed by tests (the
@@ -428,12 +399,12 @@ type viewer struct {
 // part of the canvas (and so already registered with it) since startup.
 // Fyne only registers an object with its canvas the first time it is
 // painted while visible, so calling Show()/Refresh() on a widget that has
-// spent its whole life hidden - like scanSpinner, scanLabel or loadingBar
-// between uses - can't find a canvas to mark dirty and silently fails to
-// schedule a repaint; it would otherwise only appear once some unrelated
-// event (e.g. a window resize, which marks the canvas dirty directly)
-// forces a full repaint. Refreshing an already-registered ancestor here
-// triggers that repaint immediately instead.
+// spent its whole life hidden - like scanOp.spinner, scanOp.label or
+// loadingBar between uses - can't find a canvas to mark dirty and silently
+// fails to schedule a repaint; it would otherwise only appear once some
+// unrelated event (e.g. a window resize, which marks the canvas dirty
+// directly) forces a full repaint. Refreshing an already-registered
+// ancestor here triggers that repaint immediately instead.
 func (v *viewer) ForceRepaint() {
 	v.win.Content().Refresh()
 }
@@ -507,8 +478,14 @@ func (v *viewer) clearToDropzone() {
 	v.resetFade()
 
 	v.invalidateLoad() // invalidate any decode/preload or animation still in flight
-	v.invalidateSort() // cancel a sort still in flight - see sortLifecycle's field comment
-	v.scanLifecycle.invalidate()
+	v.invalidateSort() // cancel a sort still in flight - see sortOp's field comment
+
+	// Deliberately the bare lifecycle, not v.scanOp.invalidate(): a scan
+	// still in flight here keeps its v.scanOp.active flag set and its
+	// spinner/art/label showing - a known, not-fixed-here bug, see
+	// todos.md's "clearToDropzone leaves a running scan's flag and widgets
+	// behind". Do not "tidy" this into the flag-aware call.
+	v.scanOp.lifecycle.invalidate()
 
 	v.state.clearFiles()
 	v.fileSetRevision.advance()
@@ -613,7 +590,7 @@ func (v *viewer) reset() {
 // in progress first - unlike Escape (handleKeyEvent), it never closes the
 // window, since File > Close is a distinct action from quitting the app.
 func (v *viewer) closeFiles() {
-	if v.scanning {
+	if v.scanOp.active {
 		v.cancelScan()
 	}
 	v.reset()
@@ -686,7 +663,7 @@ func (v *viewer) displayedFile() (fyne.URI, bool) {
 // no equivalent index to use, but any matching duplicate there is an
 // equally valid one to drop.
 func (v *viewer) RemoveFile(i int) {
-	v.invalidateSort() // cancel a sort still in flight - see sortLifecycle's field comment
+	v.invalidateSort() // cancel a sort still in flight - see sortOp's field comment
 
 	target := v.state.removeFile(i)
 	v.fileSetRevision.advance()

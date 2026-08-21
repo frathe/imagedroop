@@ -314,7 +314,7 @@ func TestHandleDrop_SymlinkCycleDoesNotHang(t *testing.T) {
 // files to hit it. A per-viewer field, so no global to save and restore.
 func TestHandleDrop_CapsFileCountForLargeTrees(t *testing.T) {
 	v := newTestViewer(t)
-	v.maxScan = 3
+	v.settings.maxScan = 3
 
 	root := t.TempDir()
 	for i := range 5 {
@@ -340,8 +340,9 @@ func TestHandleDrop_CapsFileCountForLargeTrees(t *testing.T) {
 }
 
 // TestMaxScanGetterSetter is MaxScan/SetMaxScan - the settings window's
-// binding for the same v.maxScan field TestHandleDrop_CapsFileCountForLargeTrees
-// above exercises by writing it directly.
+// binding for the same v.settings.maxScan field
+// TestHandleDrop_CapsFileCountForLargeTrees above exercises by writing it
+// directly.
 func TestMaxScanGetterSetter(t *testing.T) {
 	v := newTestViewer(t)
 
@@ -355,7 +356,7 @@ func TestMaxScanGetterSetter(t *testing.T) {
 	}
 }
 
-// TestSetMaxScan_FloorsAtOne guards the scan path's own n >= v.maxScan
+// TestSetMaxScan_FloorsAtOne guards the scan path's own n >= v.settings.maxScan
 // check (drop.go): a 0 or negative cap would stop a scan before it ever
 // gathered anything, which isn't what a settings-window typo should do.
 func TestSetMaxScan_FloorsAtOne(t *testing.T) {
@@ -380,11 +381,11 @@ func TestSetMaxScan_FloorsAtOne(t *testing.T) {
 // not bump gen or raise a spurious "cancelled scanning" toast.
 func TestCancelScan_NoOpWhenNotScanning(t *testing.T) {
 	v := newTestViewer(t)
-	revisionBefore := v.scanLifecycle.currentRevision()
+	revisionBefore := v.scanOp.lifecycle.currentRevision()
 
 	v.cancelScan()
 
-	if v.scanLifecycle.currentRevision() != revisionBefore {
+	if v.scanOp.lifecycle.currentRevision() != revisionBefore {
 		t.Error("cancelScan should not invalidate the scan lifecycle when nothing is scanning")
 	}
 	if v.toast.card.Visible() {
@@ -401,19 +402,19 @@ func TestCancelScan_NoOpWhenNotScanning(t *testing.T) {
 func TestCancelScan_CancelsInFlightScanWithNoFilesYet(t *testing.T) {
 	v := newTestViewer(t)
 
-	token := v.scanLifecycle.begin()
-	v.scanning = true
-	v.scanSpinner.Show()
-	v.scanLabel.Show()
+	token := v.scanOp.lifecycle.begin()
+	v.scanOp.active = true
+	v.scanOp.spinner.Show()
+	v.scanOp.label.Show()
 	v.dropzone.Hide()
 	v.welcomeArt.Hide()
 
 	v.cancelScan()
 
-	if v.scanning {
-		t.Error("scanning should be false after cancelScan")
+	if v.scanOp.active {
+		t.Error("scanOp.active should be false after cancelScan")
 	}
-	if v.scanSpinner.Visible() || v.scanLabel.Visible() {
+	if v.scanOp.spinner.Visible() || v.scanOp.label.Visible() {
 		t.Error("scan spinner/label should be hidden after cancelScan")
 	}
 	if !v.dropzone.Visible() || !v.welcomeArt.Visible() {
@@ -443,9 +444,9 @@ func TestCancelScan_PreservesExistingFilesInMergeMode(t *testing.T) {
 	v.state.unsortedFiles = []fyne.URI{existing}
 	v.dropzone.Hide()
 
-	v.scanning = true
-	v.scanSpinner.Show()
-	v.scanLabel.Show()
+	v.scanOp.active = true
+	v.scanOp.spinner.Show()
+	v.scanOp.label.Show()
 
 	v.cancelScan()
 
@@ -455,8 +456,8 @@ func TestCancelScan_PreservesExistingFilesInMergeMode(t *testing.T) {
 	if v.dropzone.Visible() {
 		t.Error("drop zone should stay hidden - an image was already loaded before the cancelled scan started")
 	}
-	if v.scanning {
-		t.Error("scanning should be false after cancelScan")
+	if v.scanOp.active {
+		t.Error("scanOp.active should be false after cancelScan")
 	}
 	settleToast(t, v)
 }
@@ -487,7 +488,7 @@ func TestHandleDrop_SupersededScanGoroutineExits(t *testing.T) {
 	}
 
 	v.handleDrop([]fyne.URI{storage.NewFileURI(rootA)})
-	scanDoneA := v.scanDone
+	scanDoneA := v.scanOp.done
 
 	jpegB := uitest.TempJPEGURI(t, "b.jpg", 4, 4, color.White)
 	dropAndWait(t, v, jpegB)
@@ -495,7 +496,7 @@ func TestHandleDrop_SupersededScanGoroutineExits(t *testing.T) {
 	select {
 	case <-scanDoneA:
 	case <-time.After(5 * time.Second):
-		t.Fatal("superseded scan's goroutine never exited - scanDone was never closed")
+		t.Fatal("superseded scan's goroutine never exited - scanOp.done was never closed")
 	}
 
 	if len(v.state.files) != 1 || v.state.files[0].String() != jpegB.String() {
@@ -505,7 +506,7 @@ func TestHandleDrop_SupersededScanGoroutineExits(t *testing.T) {
 
 // TestNavigationDoesNotInvalidateScan pins the lifecycle split: a user may
 // browse an existing set while a merge-mode directory scan is in flight, and
-// that navigation must not silently strand scanning=true or discard the scan.
+// that navigation must not silently strand scanOp.active=true or discard the scan.
 func TestNavigationDoesNotInvalidateScan(t *testing.T) {
 	v := newTestViewer(t)
 
@@ -513,8 +514,8 @@ func TestNavigationDoesNotInvalidateScan(t *testing.T) {
 	b := uitest.TempJPEGURI(t, "b.jpg", 4, 4, color.White)
 	dropAndWait(t, v, a, b)
 
-	scanToken := v.scanLifecycle.begin()
-	v.scanning = true
+	scanToken := v.scanOp.lifecycle.begin()
+	v.scanOp.active = true
 
 	v.ShowImage(1)
 	waitUntilLoaded(t, v)
@@ -522,7 +523,7 @@ func TestNavigationDoesNotInvalidateScan(t *testing.T) {
 	if !scanToken.current() {
 		t.Fatal("navigation invalidated an unrelated in-flight scan")
 	}
-	if !v.scanning {
+	if !v.scanOp.active {
 		t.Fatal("navigation cleared scanning before the scan completed")
 	}
 

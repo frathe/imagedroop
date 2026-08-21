@@ -80,6 +80,6 @@ func registerFeatures(view *viewer, application fyne.App, window fyne.Window, pr
 	}
 	view.slides.SetShuffle(prefs.SlideShuffle)
 
-	view.settings = settingswin.New(application, view)
+	view.settingsWin = settingswin.New(application, view)
 	view.favorites = favorites.New(view, window)
 }

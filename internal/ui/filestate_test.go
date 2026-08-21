@@ -132,8 +132,8 @@ func TestStaleFileStateCompletionsDoNotOverwriteNewerState(t *testing.T) {
 	v.state.files = append([]fyne.URI(nil), current...)
 	v.state.unsortedFiles = append([]fyne.URI(nil), current...)
 
-	staleScanToken := v.scanLifecycle.begin()
-	v.scanLifecycle.begin()
+	staleScanToken := v.scanOp.lifecycle.begin()
+	v.scanOp.lifecycle.begin()
 	scanDone := make(chan struct{})
 	v.applyScanResult(staleScanToken, false, stale, stale, false, scanDone)
 	<-scanDone
@@ -142,12 +142,12 @@ func TestStaleFileStateCompletionsDoNotOverwriteNewerState(t *testing.T) {
 		t.Errorf("files = %v, want newer scan state retained", got)
 	}
 
-	staleSortToken := v.sortLifecycle.begin()
-	newSortToken := v.sortLifecycle.begin()
+	staleSortToken := v.sortOp.lifecycle.begin()
+	newSortToken := v.sortOp.lifecycle.begin()
 	defer newSortToken.cancelContext()
-	v.sorting = true
-	v.sortSpinner.Show()
-	v.sortLabel.Show()
+	v.sortOp.active = true
+	v.sortOp.spinner.Show()
+	v.sortOp.label.Show()
 	sortDone := make(chan struct{})
 	called := false
 	v.finishSort(staleSortToken, stale, sortDone, func([]fyne.URI) {
@@ -158,10 +158,10 @@ func TestStaleFileStateCompletionsDoNotOverwriteNewerState(t *testing.T) {
 	if called {
 		t.Error("stale sort completion should not invoke its state-writing callback")
 	}
-	if !v.sorting {
+	if !v.sortOp.active {
 		t.Error("stale sort completion should not clear a newer sort's in-flight state")
 	}
-	if !v.sortSpinner.Visible() || !v.sortLabel.Visible() {
+	if !v.sortOp.spinner.Visible() || !v.sortOp.label.Visible() {
 		t.Error("stale sort completion should not hide the newer sort's progress UI")
 	}
 	assertEquivalentFileSlices(t, v)

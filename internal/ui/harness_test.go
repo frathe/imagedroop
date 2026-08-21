@@ -20,7 +20,7 @@ import (
 // happens to need it first.
 //
 // ShowImage and handleDrop decode and scan off the main goroutine and apply
-// their results via fyne.Do, closing loadDone/scanDone as the last thing
+// their results via fyne.Do, closing loadDone/scanOp.done as the last thing
 // their completion block does. Waiting on those channels - rather than
 // polling v.loading or a widget's visibility - gives the receive a proper
 // happens-before relationship with everything the producer goroutine wrote,
@@ -116,7 +116,7 @@ func newTestUI(t *testing.T) (v *viewer, win fyne.Window, closed func() bool) {
 
 // drain waits out every background operation this viewer may still have in
 // flight. Each wait is individually optional - a viewer that never scanned
-// has a nil scanDone - but the set is exhaustive on purpose: it is the
+// has a nil scanOp.done - but the set is exhaustive on purpose: it is the
 // backstop that keeps one test's goroutines out of the next one, whatever
 // that test happened to exercise.
 func drain(t *testing.T, v *viewer) {
@@ -130,8 +130,8 @@ func drain(t *testing.T, v *viewer) {
 	// slideshow is asked to stop for the same reason, on this goroutine,
 	// since leaving picture-frame mode touches the window.
 	v.invalidateLoad()
-	v.scanLifecycle.invalidate()
-	v.sortLifecycle.invalidate()
+	v.scanOp.lifecycle.invalidate()
+	v.sortOp.lifecycle.invalidate()
 	v.vector.lifecycle.invalidate()
 	v.favThumbLifecycle.invalidate()
 	v.slides.Exit()
@@ -148,8 +148,8 @@ func drain(t *testing.T, v *viewer) {
 		name string
 		ch   chan struct{}
 	}{
-		{"scan", v.scanDone},
-		{"sort", v.sortDone},
+		{"scan", v.scanOp.done},
+		{"sort", v.sortOp.done},
 		{"load", v.loadDone},
 		{"clipboard copy", v.clipboardDone},
 		{"file chooser", v.chooserDone},
@@ -220,7 +220,7 @@ func dropAndWait(t *testing.T, v *viewer, uris ...fyne.URI) {
 // dropAndWaitScan drops uris and waits only for the scan, for drops that
 // end with nothing displayable - an unsupported file, an empty folder, a
 // merge that adds nothing. Deliberately no waitForSort: applyScanResult
-// returns before ever reaching startSort in that case, so v.sortDone is left
+// returns before ever reaching startSort in that case, so v.sortOp.done is left
 // holding whatever channel some earlier call put there.
 func dropAndWaitScan(t *testing.T, v *viewer, uris ...fyne.URI) {
 	t.Helper()
@@ -260,7 +260,7 @@ func waitForScan(t *testing.T, v *viewer) {
 	t.Helper()
 
 	select {
-	case <-v.scanDone:
+	case <-v.scanOp.done:
 	case <-time.After(testTimeout):
 		t.Fatal("timed out waiting for scan to finish")
 	}
@@ -270,7 +270,7 @@ func waitForSort(t *testing.T, v *viewer) {
 	t.Helper()
 
 	select {
-	case <-v.sortDone:
+	case <-v.sortOp.done:
 	case <-time.After(testTimeout):
 		t.Fatal("timed out waiting for sort to finish")
 	}
@@ -306,7 +306,7 @@ func waitForAnimStopped(t *testing.T, v *viewer) {
 }
 
 // waitForCached polls imgCache - populated from preloadOne's background
-// goroutines, which run independently of loadDone/scanDone - until it holds
+// goroutines, which run independently of loadDone/scanOp.done - until it holds
 // an entry for u, the same polling-with-timeout style waitForAnimFrame uses
 // for animate's background writes.
 func waitForCached(t *testing.T, v *viewer, u fyne.URI) {

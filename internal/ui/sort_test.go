@@ -21,7 +21,7 @@ import (
 // Cancelling a sort is not one behavior but two, and conflating them was a
 // real bug: cancelling a first-ever drop's reorder has nothing loaded yet
 // to lose, but cancelling a resort of files already on screen must leave
-// that set and the displayed image alone. v.sorting is what tells the two
+// that set and the displayed image alone. v.sortOp.active is what tells the two
 // states apart - during a first drop's reorder, v.state.files reads
 // exactly like the empty "nothing to reset" state that Escape otherwise
 // closes the window on.
@@ -211,17 +211,17 @@ func TestSetSortMode_SafeWithNoFilesLoaded(t *testing.T) {
 func TestInvalidateSortCancelsAndFinalizesCurrentProgress(t *testing.T) {
 	v := newTestViewer(t)
 
-	token := v.sortLifecycle.begin()
-	v.sorting = true
-	v.sortSpinner.Show()
-	v.sortLabel.Show()
+	token := v.sortOp.lifecycle.begin()
+	v.sortOp.active = true
+	v.sortOp.spinner.Show()
+	v.sortOp.label.Show()
 
 	v.invalidateSort()
 
 	if token.current() || token.context().Err() == nil {
 		t.Fatal("invalidateSort should cancel and supersede the current sort token")
 	}
-	if v.sorting || v.sortSpinner.Visible() || v.sortLabel.Visible() {
+	if v.sortOp.active || v.sortOp.spinner.Visible() || v.sortOp.label.Visible() {
 		t.Fatal("invalidateSort should synchronously finalize the current sort progress UI")
 	}
 }
@@ -266,35 +266,35 @@ func TestSetSortMode_SnapshotDoesNotAliasUnsortedFiles(t *testing.T) {
 }
 
 // TestHandleKeyEvent_EscapeDuringFirstDropReorderDoesNotCloseWindow guards
-// keys.go's Escape branch: a first-ever drop's scan clears v.scanning back
+// keys.go's Escape branch: a first-ever drop's scan clears v.scanOp.active back
 // to false before applyScannedFiles's startSort (drop.go/sort.go) has
 // actually populated v.state.files, so for as long as that reorder is still
 // computing, v.state.files reads exactly like the "nothing left to reset" state
-// Escape otherwise closes the window on. v.sorting is what tells the two
-// apart. Drives the in-flight state directly - v.sorting true, v.state.files
-// still empty, and sortLifecycle armed - rather than racing a real drop's
+// Escape otherwise closes the window on. v.sortOp.active is what tells the two
+// apart. Drives the in-flight state directly - v.sortOp.active true, v.state.files
+// still empty, and sortOp.lifecycle armed - rather than racing a real drop's
 // background goroutine to reproduce that window, the same approach
 // TestCancelScan_CancelsInFlightScanWithNoFilesYet uses for the gathering
 // phase (drop_test.go).
 func TestHandleKeyEvent_EscapeDuringFirstDropReorderDoesNotCloseWindow(t *testing.T) {
 	v, _, closed := newTestUI(t)
 
-	v.sortLifecycle.begin()
-	v.sorting = true
+	v.sortOp.lifecycle.begin()
+	v.sortOp.active = true
 
 	v.handleKeyEvent(&fyne.KeyEvent{Name: fyne.KeyEscape})
 
 	if closed() {
 		t.Error("Escape should not close the window while a first-drop reorder is still in flight")
 	}
-	if v.sorting {
-		t.Error("Escape's cancelSort should clear v.sorting")
+	if v.sortOp.active {
+		t.Error("Escape's cancelSort should clear v.sortOp.active")
 	}
 }
 
 // TestHandleKeyEvent_EscapeDuringResortOfExistingFilesDoesNotClearThem is a
 // regression test: keys.go's Escape branch used to fall through to a plain
-// v.reset() whenever v.sorting was true, which is correct for a first-ever
+// v.reset() whenever v.sortOp.active was true, which is correct for a first-ever
 // drop's cancelled reorder (there's nothing loaded yet to lose) but wrong
 // for cancelling a resort of files that were already loaded and on
 // screen - v.reset() wipes the whole session, not just the pending sort.
@@ -311,8 +311,8 @@ func TestHandleKeyEvent_EscapeDuringResortOfExistingFilesDoesNotClearThem(t *tes
 	filesBefore := append([]fyne.URI(nil), v.state.files...)
 	indexBefore := v.state.index
 
-	v.sortLifecycle.begin()
-	v.sorting = true
+	v.sortOp.lifecycle.begin()
+	v.sortOp.active = true
 
 	v.handleKeyEvent(&fyne.KeyEvent{Name: fyne.KeyEscape})
 
@@ -330,7 +330,7 @@ func TestHandleKeyEvent_EscapeDuringResortOfExistingFilesDoesNotClearThem(t *tes
 	if v.img.Image == nil {
 		t.Error("the displayed image should not be cleared by cancelling a resort")
 	}
-	if v.sorting {
-		t.Error("Escape's cancelSort should clear v.sorting")
+	if v.sortOp.active {
+		t.Error("Escape's cancelSort should clear v.sortOp.active")
 	}
 }

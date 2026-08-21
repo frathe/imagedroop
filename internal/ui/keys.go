@@ -132,7 +132,7 @@ func (v *viewer) handleKeyEvent(ev *fyne.KeyEvent) {
 		// both the close and reset branches below: len(v.state.files) == 0 is
 		// exactly the state a first-ever drop's scan runs in, so without
 		// this check Escape would close the window out from under a scan
-		// the user meant to cancel instead. v.sorting takes the same
+		// the user meant to cancel instead. v.sortOp.active takes the same
 		// priority for the same reason, and for the same len(v.state.files) == 0
 		// risk during a first-ever drop's reorder - but unlike cancelScan,
 		// cancelSort (sort.go) never touches v.state.files/v.state.unsortedFiles at
@@ -144,9 +144,9 @@ func (v *viewer) handleKeyEvent(ev *fyne.KeyEvent) {
 		if v.slides.Active() {
 			v.slides.Exit()
 			v.resetFade()
-		} else if v.scanning {
+		} else if v.scanOp.active {
 			v.cancelScan()
-		} else if v.sorting {
+		} else if v.sortOp.active {
 			v.cancelSort()
 		} else if len(v.state.files) == 0 {
 			v.win.Close()

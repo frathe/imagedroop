@@ -52,34 +52,31 @@ func buildViewer(application fyne.App, startup startupState) (*viewer, fyne.Wind
 	loadingBar.Hide()
 
 	view = &viewer{
-		app:            application,
-		win:            window,
-		img:            img,
-		hint:           dz.hint,
-		dropzone:       dz.root,
-		dropzoneArt:    dz.art,
-		welcomeArt:     dz.welcomeArt,
-		emptyStateArt:  dz.emptyStateArt,
-		restoreLink:    dz.restoreLink,
-		savedSession:   savedSession,
-		loadingBar:     loadingBar,
-		scanArt:        scan.art,
-		scanSpinner:    scan.spinner,
-		scanLabel:      scan.label,
-		sortSpinner:    sortUIC.spinner,
-		sortLabel:      sortUIC.label,
-		toast:          toastComp,
-		infoText:       info.text,
-		infoCard:       info.card,
-		exifLink:       info.exifLink,
-		state:          newAppState(filesort.FromPref(prefs.SortMode), prefs.MergeMode),
-		baseTitle:      appTitle,
-		imgCache:       imaging.NewImgCache(int64(prefs.MaxImageCacheMB) * bytesPerMB),
-		preloadSem:     make(chan struct{}, preloadConcurrency),
-		maxScan:        prefs.MaxScanFiles,
-		maxWinW:        prefs.MaxWindowWidth,
-		maxWinH:        prefs.MaxWindowHeight,
-		imgCacheMB:     prefs.MaxImageCacheMB,
+		app:           application,
+		win:           window,
+		img:           img,
+		hint:          dz.hint,
+		dropzone:      dz.root,
+		dropzoneArt:   dz.art,
+		welcomeArt:    dz.welcomeArt,
+		emptyStateArt: dz.emptyStateArt,
+		restoreLink:   dz.restoreLink,
+		savedSession:  savedSession,
+		loadingBar:    loadingBar,
+		toast:         toastComp,
+		infoText:      info.text,
+		infoCard:      info.card,
+		exifLink:      info.exifLink,
+		state:         newAppState(filesort.FromPref(prefs.SortMode), prefs.MergeMode),
+		baseTitle:     appTitle,
+		imgCache:      imaging.NewImgCache(int64(prefs.MaxImageCacheMB) * bytesPerMB),
+		preloadSem:    make(chan struct{}, preloadConcurrency),
+		settings: settings{
+			maxScan:    prefs.MaxScanFiles,
+			maxWinW:    prefs.MaxWindowWidth,
+			maxWinH:    prefs.MaxWindowHeight,
+			imgCacheMB: prefs.MaxImageCacheMB,
+		},
 		wallpaperDir:   defaultWallpaperDir(),
 		keyModifiers:   defaultKeyModifiers,
 		stopWinPosPoll: noPollerStop,
@@ -88,6 +85,13 @@ func buildViewer(application fyne.App, startup startupState) (*viewer, fyne.Wind
 	view.vector.debounce = defaultVectorDebounce
 	view.vector.rasterize = func(vec *imaging.Vector, w, h int) (image.Image, error) { return vec.RasterAt(w, h) }
 	view.vector.after = time.After
+
+	view.scanOp.art = scan.art
+	view.scanOp.spinner = scan.spinner
+	view.scanOp.label = scan.label
+
+	view.sortOp.spinner = sortUIC.spinner
+	view.sortOp.label = sortUIC.label
 
 	// Seeded here for the same reason imgCache's budget is: buildViewer
 	// applies the saved preference directly rather than through the

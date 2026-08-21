@@ -54,21 +54,15 @@ func (v *viewer) SetSortMode(m filesort.Mode) {
 	})
 }
 
-// invalidateSort advances sortLifecycle and, if a reorder is currently in flight,
-// cancels its context so filesort.Order's per-file stat/Exif loop notices
-// and stops promptly instead of running to completion for a result that's
-// already guaranteed to be discarded - see sortLifecycle's field comment for
+// invalidateSort advances sortOp.lifecycle and, if a reorder is currently in
+// flight, cancels its context so filesort.Order's per-file stat/Exif loop
+// notices and stops promptly instead of running to completion for a result
+// that's already guaranteed to be discarded - see sortOp's field comment for
 // every caller (a newer sort superseding an older one, Escape via
 // cancelSort, RemoveFile, clearToDropzone). It returns the new revision for
 // tests and diagnostics.
 func (v *viewer) invalidateSort() uint64 {
-	revision := v.sortLifecycle.invalidate()
-	if v.sorting {
-		v.sorting = false
-		v.sortSpinner.Hide()
-		v.sortLabel.Hide()
-	}
-	return revision
+	return v.sortOp.invalidate()
 }
 
 // startSort reorders unsorted under mode in the background, showing the sort
@@ -77,22 +71,17 @@ func (v *viewer) invalidateSort() uint64 {
 // potentially large file set: its capture-date/modified/size modes stat or
 // Exif-read every file, which freezes the UI for as long as that takes if
 // done inline on the UI goroutine (see filesort.Order's own doc comment).
-// Any sort already in flight is cancelled by sortLifecycle.begin, rather
+// Any sort already in flight is cancelled by sortOp.begin, rather
 // than left to keep computing a result this call already supersedes - so
 // pressing S repeatedly cycles straight through modes instead of queuing up
 // wasted background work behind whichever one happened to be slowest.
 // onDone runs once, and only if this call's token is still current once
-// the reorder finishes - see sortLifecycle's field comment for every way it can be
+// the reorder finishes - see sortOp's field comment for every way it can be
 // superseded.
 func (v *viewer) startSort(mode filesort.Mode, unsorted []fyne.URI, onDone func(ordered []fyne.URI)) {
-	token := v.sortLifecycle.begin()
-	v.sorting = true
+	token, sortDone := v.sortOp.begin()
 
-	sortDone := make(chan struct{})
-	v.sortDone = sortDone
-
-	v.sortSpinner.Show()
-	v.sortLabel.Show()
+	v.sortOp.show()
 	// A widget hidden since construction has never been painted, so it has
 	// no canvas of its own to mark dirty on Show/Refresh - see
 	// ForceRepaint's own doc comment.
@@ -124,27 +113,25 @@ func (v *viewer) finishSort(token requestToken, ordered []fyne.URI, sortDone cha
 		return
 	}
 
-	// v.sorting and the progress widgets are finalized here, inside the
-	// staleness check: if two sorts overlap (a
+	// v.sortOp.active and the progress widgets are finalized here, inside
+	// the staleness check: if two sorts overlap (a
 	// second large first-drop landing before the first one's reorder
 	// finishes, say), the earlier, stale one's finishSort must not report
 	// "no sort in flight" while the current one is still computing - that
-	// would reopen the Escape-quits-mid-reorder bug v.sorting exists to
-	// close, just for a narrower window. Only the token that's still
+	// would reopen the Escape-quits-mid-reorder bug v.sortOp.active exists
+	// to close, just for a narrower window. Only the token that's still
 	// current when it finishes gets to clear it.
-	v.sorting = false
-	v.sortSpinner.Hide()
-	v.sortLabel.Hide()
+	v.sortOp.finish()
 	v.fileSetRevision.advance()
 
 	onDone(ordered)
 }
 
-// cancelSort aborts a reorder in progress (Escape while v.sorting is true),
-// mirroring cancelScan (drop.go) for the analogous scan-gathering phase.
-// invalidateSort's context cancellation makes filesort.Order's per-file
-// stat/Exif loop notice and stop promptly instead of running to completion
-// in the background for a result nobody will see.
+// cancelSort aborts a reorder in progress (Escape while v.sortOp.active is
+// true), mirroring cancelScan (drop.go) for the analogous scan-gathering
+// phase. invalidateSort's context cancellation makes filesort.Order's
+// per-file stat/Exif loop notice and stop promptly instead of running to
+// completion in the background for a result nobody will see.
 //
 // Unlike cancelScan, there's nothing to put back: v.state.files/v.state.unsortedFiles
 // are never touched until a reorder's own onDone callback runs (see
@@ -154,14 +141,9 @@ func (v *viewer) finishSort(token requestToken, ordered []fyne.URI, sortDone cha
 // screen, if there was one; nothing, still showing the dropzone, for a
 // first-ever drop's cancelled reorder.
 func (v *viewer) cancelSort() {
-	if !v.sorting {
+	if !v.sortOp.cancel() {
 		return
 	}
-
-	v.invalidateSort()
-
-	v.sortSpinner.Hide()
-	v.sortLabel.Hide()
 
 	if len(v.state.files) == 0 {
 		v.showWelcomeState()

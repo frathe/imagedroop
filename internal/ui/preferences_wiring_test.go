@@ -113,7 +113,7 @@ func TestStartup_LoadsSavedSecondaryWindowGeometry(t *testing.T) {
 	defer win.Close()
 	t.Cleanup(func() { imaging.SetMaxEncodedBytes(0) }) // process-wide - see memlimits.go
 
-	settings := v.settings.Geometry()
+	settings := v.settingsWin.Geometry()
 	if !settings.PositionSet || settings.X != 210 || settings.Y != 220 {
 		t.Errorf("settings position = (%d, %d, set=%v), want the saved (210, 220, set=true)", settings.X, settings.Y, settings.PositionSet)
 	}
@@ -307,7 +307,7 @@ func TestStartViewerRuntime_ReplacesConstructionStopAfterGeometryRestoration(t *
 	if !positionSet || x != 120 || y != 340 {
 		t.Errorf("main window position = (%d, %d, set=%v), want restored (120, 340, set=true)", x, y, positionSet)
 	}
-	if got := prefGeometry(v.settings.Geometry()); got != settingsGeometry {
+	if got := prefGeometry(v.settingsWin.Geometry()); got != settingsGeometry {
 		t.Errorf("settings geometry = %+v, want restored %+v", got, settingsGeometry)
 	}
 	if got := prefGeometry(v.exif.Geometry()); got != exifGeometry {

@@ -67,7 +67,7 @@ func normalizePreferenceDefaults(prefs preferences.State) preferences.State {
 func restoreStartupGeometry(view *viewer, window fyne.Window, startup startupState) {
 	prefs := startup.prefs
 
-	view.settings.RestoreGeometry(widgetGeometry(prefs.SettingsWindow))
+	view.settingsWin.RestoreGeometry(widgetGeometry(prefs.SettingsWindow))
 	view.exif.RestoreGeometry(widgetGeometry(prefs.ExifWindow))
 
 	initialSize := fyne.NewSize(startW, startH)

@@ -4,19 +4,54 @@ import (
 	"github.com/frathe/picfetch/internal/imaging"
 )
 
-// The three limits that bound how much memory images are allowed to occupy,
-// and the settings window's getter/setter pairs for them. Grouped in one
-// file rather than sitting beside their consumers the way MaxScan (drop.go)
-// and MaxWindowWidth (load.go) do, because they have no single consumer to
-// sit beside - the image cache is read in load.go, the thumbnail cache lives
-// in internal/ui/grid, and the encoded-input ceiling is process-wide state
-// in internal/imaging - while together they are one coherent thing: the
-// app's memory budget.
+// settings is every value the Settings window's Host surface reads and
+// writes, and nothing else: the app's memory budget, the two geometry caps,
+// the folder-scan cap, and the favorite-preview-cache toggle. Grouped so
+// that surface reads as the single concern it is, and so run.go's
+// currentPreferences copy is a flat field-for-field one.
 //
-// All three are expressed in megabytes rather than bytes because that is the
-// unit the user types into the settings window and the unit
+// The three memory limits (imgCacheMB/thumbCacheMB/maxFileMB) are why this
+// file exists at all: they have no single consumer to sit beside - the image
+// cache is read in load.go, the thumbnail cache lives in internal/ui/grid,
+// and the encoded-input ceiling is process-wide state in internal/imaging -
+// while together they are one coherent thing, the app's memory budget. The
+// other four fields do have a natural home each (maxScan in drop.go,
+// maxWinW/maxWinH in load.go, favPreviewCache in favthumbs.go), and their
+// getter/setter pairs stay there exactly as before; only the storage moved
+// here so the whole settings-backed state is declared in one struct instead
+// of flattened across viewer's ~70 fields.
+//
+// All the megabyte figures are megabytes rather than bytes because that is
+// the unit the user types into the settings window and the unit
 // internal/preferences round-trips; the conversion to the byte budgets
-// internal/imaging actually enforces happens in the setters below.
+// internal/imaging actually enforces happens in the setters, which stay
+// where their consumers are.
+type settings struct {
+	// maxScan caps how many images a single recursive folder scan will
+	// gather - see handleDrop (drop.go). A field rather than the package
+	// var it used to be, so tests shrink it per-viewer instead of
+	// mutating a global.
+	maxScan int
+
+	// maxWinW/maxWinH cap how large the window is ever allowed to
+	// auto-grow to fit a loaded image - see resizeToImage (load.go),
+	// which never resizes past them. Fields rather than the constants
+	// they used to be, so the settings window can change them per-viewer
+	// and tests can shrink/grow them without touching a global.
+	maxWinW, maxWinH float32
+
+	// imgCacheMB/thumbCacheMB/maxFileMB are the app's memory budget, in
+	// the megabytes the settings window shows - see memlimits.go, which
+	// holds their getter/setter pairs and converts each to the byte budget
+	// its consumer actually enforces.
+	imgCacheMB, thumbCacheMB, maxFileMB int
+
+	// favPreviewCache is the settings window's "Cache favorite previews on
+	// disk" checkbox - see favthumbs.go for its getter/setter pair. Restored
+	// from preferences.State.FavoritePreviewCache in features.go and read
+	// back into it by currentPreferences (run.go).
+	favPreviewCache bool
+}
 
 // bytesPerMB converts the megabyte figures above into the byte budgets
 // imaging.ByteCache and imaging.SetMaxEncodedBytes take.
@@ -35,9 +70,9 @@ const (
 
 // MaxImageCacheMB/MaxThumbCacheMB/MaxFileSizeMB report the current limits -
 // the settings window's getters.
-func (v *viewer) MaxImageCacheMB() int { return v.imgCacheMB }
-func (v *viewer) MaxThumbCacheMB() int { return v.thumbCacheMB }
-func (v *viewer) MaxFileSizeMB() int   { return v.maxFileMB }
+func (v *viewer) MaxImageCacheMB() int { return v.settings.imgCacheMB }
+func (v *viewer) MaxThumbCacheMB() int { return v.settings.thumbCacheMB }
+func (v *viewer) MaxFileSizeMB() int   { return v.settings.maxFileMB }
 
 // SetMaxImageCacheMB retunes the decoded-image cache's byte budget, evicting
 // down to it immediately - the settings window's binding. Floored at 1 MB
@@ -51,7 +86,7 @@ func (v *viewer) SetMaxImageCacheMB(n int) {
 		n = 1
 	}
 
-	v.imgCacheMB = n
+	v.settings.imgCacheMB = n
 	v.imgCache.SetBudget(int64(n) * bytesPerMB)
 	imaging.SetMaxVectorRasterPixels(vectorRasterPixelsFor(n))
 }
@@ -75,7 +110,7 @@ func (v *viewer) SetMaxThumbCacheMB(n int) {
 		n = 1
 	}
 
-	v.thumbCacheMB = n
+	v.settings.thumbCacheMB = n
 	v.grid.SetCacheBytes(int64(n) * bytesPerMB)
 }
 
@@ -88,6 +123,6 @@ func (v *viewer) SetMaxFileSizeMB(n int) {
 		n = 1
 	}
 
-	v.maxFileMB = n
+	v.settings.maxFileMB = n
 	imaging.SetMaxEncodedBytes(int64(n) * bytesPerMB)
 }
