@@ -477,15 +477,9 @@ func (v *viewer) clearToDropzone() {
 	v.slides.Exit()
 	v.resetFade()
 
-	v.invalidateLoad() // invalidate any decode/preload or animation still in flight
-	v.invalidateSort() // cancel a sort still in flight - see sortOp's field comment
-
-	// Deliberately the bare lifecycle, not v.scanOp.invalidate(): a scan
-	// still in flight here keeps its v.scanOp.active flag set and its
-	// spinner/art/label showing - a known, not-fixed-here bug, see
-	// todos.md's "clearToDropzone leaves a running scan's flag and widgets
-	// behind". Do not "tidy" this into the flag-aware call.
-	v.scanOp.lifecycle.invalidate()
+	v.invalidateLoad()    // invalidate any decode/preload or animation still in flight
+	v.invalidateSort()    // cancel a sort still in flight - see sortOp's field comment
+	v.scanOp.invalidate() // same shape: supersede the token and finish the overlay if a scan is in flight
 
 	v.state.clearFiles()
 	v.fileSetRevision.advance()

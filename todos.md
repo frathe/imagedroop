@@ -127,27 +127,29 @@
    Behavior-preserving throughout, with one dead-store removal: `cancelSort`
    used to hide its spinner and label a second time after `invalidateSort`
    already had. Two things were deliberately left alone rather than silently
-   fixed: `clearToDropzone`'s bare `scanOp.lifecycle.invalidate()` (see the
-   entry above it) and `favThumbLifecycle`/`favThumbDone`, which are the same
-   lifecycle-plus-done-channel shape but have no progress UI to group with.
+   fixed at grouping time: `clearToDropzone`'s bare `scanOp.lifecycle.invalidate()`
+   (fixed in a later entry) and `favThumbLifecycle`/`favThumbDone`, which are
+   the same lifecycle-plus-done-channel shape but have no progress UI to
+   group with.
+
+ - `clearToDropzone` finishes an in-flight scan's flag and overlay
+   `viewer.clearToDropzone` used `scanOp.lifecycle.invalidate()` — token only —
+   so a reset or `ShowEmptyStateError` during a folder scan left `scanOp.active`
+   set and the digging art/spinner/label showing. Those widgets live in
+   `scanContainer`, stacked above the drop zone in `build.go`, so they stayed
+   visible over the welcome state; the scan's own completion then found its
+   token stale and returned without cleaning up, and unlike a superseded drop
+   there was no newer scan to own the flag. Escape never hit this (`keys.go`
+   cancelScan's first) and File ▸ Close Files already called `cancelScan`
+   before `reset`, but deletion of the last files (and any other
+   `ShowEmptyStateError` path) went through `clearToDropzone` unguarded.
+   Now it calls `scanOp.invalidate()`, the same flag-aware finish
+   `invalidateSort` already used. Shutdown in `run.go` still uses the bare
+   lifecycle call, since nothing will be repainted.
 
 ## ACTIVE DEVELOPMENT
 
 ## TODO
-
-## `clearToDropzone` leaves a running scan's flag and widgets behind
-
-`viewer.clearToDropzone` calls `v.scanLifecycle.invalidate()` but never
-clears `v.scanning` and never hides the scan art/spinner/label — unlike
-`cancelScan`, which does all three. Reachable through File ▸ Close Files
-while a recursive folder scan is running: `keys.go`'s Escape branch checks
-`v.scanning` *before* the reset branch, so the keyboard path can't get there,
-but the menu item has no such guard. The scan's own completion closure won't
-clean up either — it finds its token stale and returns early, and the comment
-on `scanning` explains why that is normally fine ("the newer scan already
-owns the flag by the time the stale one's closure would run") — but here
-there is no newer scan. Needs checking against what `clearToDropzone`
-repaints afterward before deciding whether anything is actually left visible.
 
 ## Give `animate` a frame-clock seam so animation timing is deterministic
 

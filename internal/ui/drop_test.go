@@ -25,9 +25,11 @@ import (
 // second drop adds to the current set or starts over, and a merge that
 // finds nothing supported must leave the existing set untouched), and scan
 // cancellation: Escape during an in-flight scan cancels it rather than
-// resetting the session, and a superseded scan's goroutine must notice it's
-// stale and stop touching the filesystem instead of racing a large tree to
-// completion for a result that will be discarded.
+// resetting the session, clearToDropzone must finish the scan overlay the
+// same way invalidateSort finishes a reorder (reset and ShowEmptyStateError
+// have no cancelScan of their own), and a superseded scan's goroutine must
+// notice it's stale and stop touching the filesystem instead of racing a
+// large tree to completion for a result that will be discarded.
 //
 // toggleMergeMode and SetMergeMode themselves live in viewer.go, not
 // drop.go, but their tests belong here: what they assert is entirely about
@@ -460,6 +462,39 @@ func TestCancelScan_PreservesExistingFilesInMergeMode(t *testing.T) {
 		t.Error("scanOp.active should be false after cancelScan")
 	}
 	settleToast(t, v)
+}
+
+// TestClearToDropzone_FinishesInFlightScan is the scan-side of
+// invalidateSort: returning to the empty drop zone must not leave
+// scanOp.active set or the scan overlay showing. Escape cannot reach
+// this (it cancelScan's first), and File > Close Files currently works
+// around it the same way, but reset and ShowEmptyStateError both go
+// through clearToDropzone with no such guard. The scan's own completion
+// then finds its token stale and returns without cleaning up either -
+// there is no newer scan to own the flag, unlike a superseded drop.
+func TestClearToDropzone_FinishesInFlightScan(t *testing.T) {
+	v := newTestViewer(t)
+
+	token := v.scanOp.lifecycle.begin()
+	v.scanOp.active = true
+	v.scanOp.show()
+	v.dropzone.Hide()
+	v.welcomeArt.Hide()
+
+	v.clearToDropzone()
+
+	if v.scanOp.active {
+		t.Error("scanOp.active should be false after clearToDropzone")
+	}
+	if v.scanOp.art.Visible() || v.scanOp.spinner.Visible() || v.scanOp.label.Visible() {
+		t.Error("scan art/spinner/label should be hidden after clearToDropzone")
+	}
+	if !v.dropzone.Visible() {
+		t.Error("dropzone should be visible after clearToDropzone")
+	}
+	if token.current() || token.context().Err() == nil {
+		t.Error("clearToDropzone should cancel and supersede the in-flight scan token")
+	}
 }
 
 // TestHandleDrop_SupersededScanGoroutineExits drops a folder large enough to
