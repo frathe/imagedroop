@@ -8,11 +8,9 @@ import (
 	"sync"
 
 	"fyne.io/fyne/v2"
-	"fyne.io/fyne/v2/data/validation"
 	"fyne.io/fyne/v2/dialog"
 	"fyne.io/fyne/v2/driver/desktop"
 	"fyne.io/fyne/v2/lang"
-	"fyne.io/fyne/v2/widget"
 
 	"github.com/frathe/picfetch/internal/favstore"
 )
@@ -63,6 +61,12 @@ type Feature struct {
 	// manageDialog doubles as the guard against stacking a second one.
 	manageDialog dialog.Dialog
 	managePanel  *managePanel
+
+	// addDialog and addPanel are the Add to Favorites dialog while it is up,
+	// nil whenever it is not - see add.go, where a non-nil addDialog is the
+	// same kind of guard against stacking a second one.
+	addDialog dialog.Dialog
+	addPanel  *addPanel
 
 	pending sync.WaitGroup
 }
@@ -167,37 +171,12 @@ func (f *Feature) menuLabel(name string) string {
 	return fmt.Sprintf(lang.L("%s (%d)"), name, count)
 }
 
+// addToFavorites is the Favorites menu's own "Add Current List to
+// Favorites…" item - always a fresh, empty dialog; showAdd's initial
+// parameter exists for Stage 5's Replace-Cancel, which reopens with the name
+// that just clashed still in the field.
 func (f *Feature) addToFavorites() {
-	form, _ := f.newAddDialog()
-	form.Show()
-}
-
-func (f *Feature) newAddDialog() (*dialog.FormDialog, *widget.Entry) {
-	entry := widget.NewEntry()
-	reason := lang.L(`enter a name without / \ : * ? " < > |`)
-	entry.Validator = validation.NewAllStrings(
-		validation.NewRegexp(`^[^/\\:*?"<>|]+$`, reason),
-		func(name string) error {
-			if !favstore.ValidName(strings.TrimSpace(name)) {
-				return errors.New(reason)
-			}
-			return nil
-		},
-	)
-
-	form := dialog.NewForm(
-		lang.L("Add to Favorites"),
-		lang.L("Add"),
-		lang.L("Cancel"),
-		[]*widget.FormItem{widget.NewFormItem(lang.L("Name"), entry)},
-		func(confirmed bool) {
-			if confirmed {
-				f.saveFavorite(entry.Text)
-			}
-		},
-		f.win,
-	)
-	return form, entry
+	f.showAdd("")
 }
 
 func (f *Feature) saveFavorite(name string) {
@@ -208,18 +187,29 @@ func (f *Feature) saveFavorite(name string) {
 	}
 
 	if favstore.Exists(f.dir, name) {
-		confirm := dialog.NewConfirm(
-			lang.L("Replace Favorite"),
-			fmt.Sprintf(lang.L("A favorite named %q already exists. Replace it?"), name),
-			func(replace bool) {
-				if replace {
-					f.writeFavorite(name)
-				}
-			},
-			f.win,
-		)
-		confirm.SetConfirmText(lang.L("Replace"))
-		confirm.Show()
+		// Plain importance, not widget.DangerImportance: replacing a
+		// favorite is not trashing one, and this prompt looked the same
+		// before it went through showConfirm. Cancel is still index 0 and
+		// so the default selection either way, which is what keeps a bare
+		// Return from replacing by itself.
+		f.showConfirm(confirmation{
+			title:     lang.L("Replace Favorite"),
+			message:   fmt.Sprintf(lang.L("A favorite named %q already exists. Replace it?"), name),
+			action:    lang.L("Replace"),
+			onConfirm: func() { f.writeFavorite(name) },
+			// Cancel and Escape both land here (showConfirm runs onCancel
+			// for either), and both mean the same thing: go back to the
+			// field that produced this name, with the name still in it, so
+			// a clash costs one keystroke rather than the whole name. Safe
+			// to reopen from inside onCancel specifically because
+			// showConfirm's own onClosed - which unfocuses the canvas -
+			// always finishes before onCancel starts (see confirm.go), so
+			// this call's own Canvas().Focus(entry) at the end of showAdd
+			// is the last thing to touch focus, not undone by the outgoing
+			// dialog's teardown running late.
+			onCancel: func() { f.showAdd(name) },
+			onClosed: func() { f.win.Canvas().Unfocus() },
+		})
 		return
 	}
 	f.writeFavorite(name)

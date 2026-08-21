@@ -55,6 +55,12 @@ type ChoicePanel struct {
 	// Cancel) has nothing left for Escape to do.
 	onCancel func()
 
+	// onBack is what Up runs - see SetOnBack. Nil for every panel that lives
+	// inside a ChoiceCard (deletion, the export prompt): those are fed keys by
+	// the app's own dispatcher, where Up already means something else, and
+	// leaving the field nil is what keeps this panel from stepping on it.
+	onBack func()
+
 	choices  []Choice
 	selected int
 
@@ -129,6 +135,46 @@ func (p *ChoicePanel) SetOnCancel(onCancel func()) {
 	p.onCancel = onCancel
 }
 
+// SetOnBack registers what Up runs: the panel is one stop in a larger
+// keyboard story and Up is how the user leaves it upwards (internal/ui/
+// favorites' Add dialog, whose name field is the stop above the panel of
+// Cancel/Add buttons below it). Optional - nil leaves Up ignored, which is
+// what every panel inside a ChoiceCard wants, since the app dispatcher feeds
+// those keys and Up means something else out there.
+func (p *ChoicePanel) SetOnBack(onBack func()) {
+	p.onBack = onBack
+}
+
+// SetChoiceEnabled enables or disables choice i. A disabled choice runs
+// nothing and dismisses nothing, whether it is clicked or confirmed from the
+// keyboard, and renders greyed - the same deal a disabled button in a Fyne
+// dialog.FormDialog offers, which is what the Add dialog this exists for
+// replaces. There is deliberately no parallel []bool tracking this: the
+// button itself (Enable/Disable/Disabled) is the one place enabled state
+// lives, so the greyed rendering and ChoiceEnabled's answer can never
+// disagree with each other. Out-of-range indices are a no-op.
+func (p *ChoicePanel) SetChoiceEnabled(i int, enabled bool) {
+	if i < 0 || i >= len(p.buttons) {
+		return
+	}
+
+	if enabled {
+		p.buttons[i].Enable()
+	} else {
+		p.buttons[i].Disable()
+	}
+}
+
+// ChoiceEnabled reports whether choice i can currently be run. False for an
+// out-of-range index - there is no button there to be either.
+func (p *ChoicePanel) ChoiceEnabled(i int) bool {
+	if i < 0 || i >= len(p.buttons) {
+		return false
+	}
+
+	return !p.buttons[i].Disabled()
+}
+
 // Select moves the selection to index i, clamping to the choice range rather
 // than wrapping, and redraws whichever ring now marks it.
 //
@@ -137,6 +183,14 @@ func (p *ChoicePanel) SetOnCancel(onCancel func()) {
 // a negative index that would then panic in runChoice. A choiceless panel is
 // a caller's mistake either way, but an inert panel is a far easier mistake
 // to find than an index-out-of-range on whatever key press happens next.
+//
+// Select deliberately still moves the ring onto a disabled choice rather than
+// skipping over it: a greyed button under the ring is the app telling the
+// user why Return just did nothing (the Add dialog's Add, before a valid
+// name is typed), and Fyne's own dialog.FormDialog leaves a disabled Submit
+// focusable too, rather than jumping focus away from it. Do not "fix" this
+// into a skip - a caller that wants Left/Right to bypass a disabled choice
+// has to say so itself, this panel has no opinion on it.
 func (p *ChoicePanel) Select(i int) {
 	if last := len(p.choices) - 1; i > last {
 		i = last
@@ -177,14 +231,31 @@ func (p *ChoicePanel) Confirm() {
 // same as Confirm, but by index rather than by whatever TypedKey last moved
 // the ring to.
 //
-// The panel is dismissed first, before the action and before the range check
-// below, so an action that shows something of its own doesn't have to take
-// this prompt down first. The range check covers the one index that can reach
-// here without naming a button: Select's clamp on a panel built with no
-// choices at all. That panel still dismisses, so even that mistake dismisses
-// rather than wedging.
+// A disabled choice is checked first and returns before onDismiss runs at
+// all: a disabled choice must not take the prompt down any more than it runs
+// OnChosen, so Return on a greyed Add in the Add dialog does nothing
+// whatsoever rather than closing the dialog with nothing saved. That check is
+// deliberately not ChoiceEnabled(i), which reports false for an out-of-range
+// index too - here an out-of-range i names no button to be disabled, so it
+// has to fall through to the dismiss-then-range-check pair below rather than
+// being swallowed by this guard, or the choiceless panel would stop
+// dismissing on Return. test.Tap never reaches this func for a disabled
+// button - widget.Button.Tapped checks Disabled() itself - but Confirm (the
+// keyboard path) goes straight through runChoice, so the guard has to live
+// here to cover both.
+//
+// The panel is otherwise dismissed first, before the action and before the
+// range check below, so an action that shows something of its own doesn't
+// have to take this prompt down first. The range check covers the one index
+// that can reach here without naming a button: Select's clamp on a panel
+// built with no choices at all. That panel still dismisses, so even that
+// mistake dismisses rather than wedging.
 func (p *ChoicePanel) runChoice(i int) func() {
 	return func() {
+		if i >= 0 && i < len(p.buttons) && p.buttons[i].Disabled() {
+			return
+		}
+
 		if p.onDismiss != nil {
 			p.onDismiss()
 		}
@@ -203,8 +274,9 @@ func (p *ChoicePanel) runChoice(i int) func() {
 // handed to it by a caller that owns the keyboard itself
 // (ChoiceCard.HandleKey): Left/Right move the selection (clamping at either
 // end), Return/Enter runs whichever is selected, Escape dismisses the panel
-// and runs onCancel if one is registered. Every other key is deliberately
-// left alone, so a caller can still make its own use of it.
+// and runs onCancel if one is registered, Up runs onBack if one is
+// registered. Every other key is deliberately left alone, so a caller can
+// still make its own use of it.
 func (p *ChoicePanel) TypedKey(ev *fyne.KeyEvent) {
 	switch ev.Name {
 	case fyne.KeyLeft:
@@ -219,6 +291,14 @@ func (p *ChoicePanel) TypedKey(ev *fyne.KeyEvent) {
 		}
 		if p.onCancel != nil {
 			p.onCancel()
+		}
+	case fyne.KeyUp:
+		// Deliberately not p.Select(...) of anything - Up leaves the panel
+		// rather than moving within it (see onBack's field comment), so the
+		// selection must be exactly where it was found when the caller comes
+		// back down with Down.
+		if p.onBack != nil {
+			p.onBack()
 		}
 	}
 }

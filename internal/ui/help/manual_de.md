@@ -617,7 +617,15 @@ benötigen in beiden Fällen nichts Zusätzliches.
   bleiben nach einem Neustart von PicFetch erhalten. Gespeichert werden
   Verweise auf die Originaldateien, keine Kopien der Bilder; wird ein
   Original verschoben oder gelöscht, kann es aus dem Favoriten nicht mehr
-  geladen werden
+  geladen werden. Der Dialog ist vollständig über die Tastatur bedienbar:
+  beim Öffnen ist bereits das Namensfeld fokussiert, Sie können also sofort
+  lostippen; **`Return`** im Feld speichert mit dem gerade eingegebenen
+  Namen, **`↓`** bewegt die Tastatur weiter zu einem Rahmen über
+  „Abbrechen“/„Hinzufügen“ (steht anfangs auf „Abbrechen“), **`↑`** bewegt
+  sie zurück zum Feld, **`←`**/**`→`** bewegen dort den Rahmen, und
+  **`Esc`** bricht von beiden Stellen aus ab. „Hinzufügen“ bleibt
+  ausgegraut, solange der Name ungültig ist — also leer ist oder eines der
+  Zeichen `/ \ : * ? " < > |` enthält
 - **Favoriten -> _Favoritenname_** — öffnet die gespeicherte Liste mit
   demselben Scan-, Sortier- und Zusammenführen-Verhalten wie „Dateien
   öffnen“. Jeder Eintrag zeigt, wie viele Dateien er enthält, z. B.
@@ -625,7 +633,14 @@ benötigen in beiden Fällen nichts Zusätzliches.
   Groß-/Kleinschreibung nach Namen sortiert. Die ersten neun zeigen
   `Cmd`/`Strg+1` bis `Cmd`/`Strg+9`, der zehnte zeigt `Cmd`/`Strg+0`. Wird
   eine Sammlung unter einem bereits vorhandenen Namen gespeichert, fragt
-  PicFetch vor dem Ersetzen der gespeicherten Liste nach
+  PicFetch vor dem Ersetzen der gespeicherten Liste nach, und auch diese
+  Rückfrage lässt sich vollständig über die Tastatur beantworten:
+  **`←`**/**`→`** bewegen einen Rahmen zwischen „Abbrechen“ und „Ersetzen“
+  — er steht anfangs auf „Abbrechen“, sodass `Return` von sich aus nichts
+  ersetzt —, **`Return`** löst die markierte Option aus, **`Esc`** bricht
+  ab. Beide Wege, die Rückfrage abzubrechen, öffnen den Dialog zum
+  Hinzufügen erneut, mit dem eingegebenen Namen weiterhin im Feld, statt
+  ihn erneut eintippen zu lassen
 - **Favoriten -> Favoriten verwalten…** (auch `Cmd`/`Strg+Shift+F`) — zeigt
   alle gespeicherten Sammlungen mit ihrer Dateianzahl an und lässt Sie eine
   davon öffnen oder entfernen. Vollständig über die Tastatur bedienbar:

@@ -549,17 +549,29 @@ needed. macOS and Windows need nothing extra either way.
   currently open file list as a named collection. Favorites remain available
   after restarting PicFetch. This stores references to the original files,
   not copies of the images; moving or deleting an original means it can no
-  longer be loaded from the favorite. Saving also starts preparing that
-  favorite's grid previews in the background, so opening its Grid Overview
-  (`G`) later is fast
+  longer be loaded from the favorite. The dialog is fully keyboard-driven:
+  the name field is already focused when it opens, so you can start typing
+  right away; **`Return`** in the field saves with whatever name is
+  currently typed, **`↓`** moves down to a ring over **Cancel**/**Add**
+  (starting on **Cancel**), **`↑`** moves back up to the field, **`←`**/
+  **`→`** move the ring once you're there, and **`Esc`** cancels from either
+  place. **Add** stays greyed out until the name is usable — anything but
+  empty, or containing `/ \ : * ? " < > |`. Saving also starts preparing
+  that favorite's grid previews in the background, so opening its Grid
+  Overview (`G`) later is fast
 - **Favorites -> _favorite name_** — opens that saved list through the same
   scan, sort, and merge behavior as Open Files. Each entry shows how many
   files it stores, e.g. `Holiday 2024 (128)`; entries are sorted by name,
   case-insensitively. The first nine show `Cmd/Ctrl+1` through
   `Cmd/Ctrl+9`; the tenth shows `Cmd/Ctrl+0`. Saving another collection with
-  an existing name asks before replacing its stored list. Opening a favorite
-  also tops up its grid previews in the background if any are missing, so
-  its Grid Overview opens quickly
+  an existing name asks before replacing its stored list, and that prompt is
+  keyboard-driven too: **`←`**/**`→`** move a ring between **Cancel** and
+  **Replace** — it starts on **Cancel**, so `Return` never replaces anything
+  by itself — **`Return`** activates whichever is ringed, and **`Esc`**
+  cancels. Either way of cancelling reopens the Add dialog with the name you
+  typed still in the field, rather than making you retype it. Opening a
+  favorite also tops up its grid previews in the background if any are
+  missing, so its Grid Overview opens quickly
 - **Favorites -> Manage Favorites…** (also `Cmd/Ctrl+Shift+F`) — lists every
   saved collection, each with the same file count, and lets you open or
   remove one. Fully keyboard-driven: **`↑`**/**`↓`** move a ring between

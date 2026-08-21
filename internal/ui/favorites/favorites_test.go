@@ -15,6 +15,7 @@ import (
 	"fyne.io/fyne/v2/test"
 
 	"github.com/frathe/picfetch/internal/favstore"
+	"github.com/frathe/picfetch/internal/ui/widgets"
 )
 
 type fakeHost struct {
@@ -403,38 +404,6 @@ func TestWriteFavoriteDoesNotSyncPreviewsForAFailedSave(t *testing.T) {
 	}
 }
 
-func TestAddDialogSubmitsValidatedName(t *testing.T) {
-	host := &fakeHost{files: []fyne.URI{storage.NewFileURI("/photos/a.jpg")}}
-	f := newFeature(t, host)
-	form, entry := f.newAddDialog()
-	form.Show()
-
-	entry.SetText("  Trip  ")
-	form.Submit()
-
-	if !favstore.Exists(f.dir, "Trip") {
-		t.Error("submitting the add dialog did not save the trimmed favorite name")
-	}
-}
-
-func TestAddDialogRejectsInvalidName(t *testing.T) {
-	host := &fakeHost{files: []fyne.URI{storage.NewFileURI("/photos/a.jpg")}}
-	f := newFeature(t, host)
-	form, entry := f.newAddDialog()
-	form.Show()
-
-	entry.SetText("../escape")
-	form.Submit()
-	form.Dismiss()
-
-	if favstore.Exists(f.dir, "../escape") {
-		t.Error("submitting the add dialog accepted an invalid favorite name")
-	}
-	if len(host.toasts) != 0 {
-		t.Errorf("disabled form submission unexpectedly ran its callback: %v", host.toasts)
-	}
-}
-
 func TestWriteFavoriteRejectsEmptyCurrentList(t *testing.T) {
 	host := &fakeHost{}
 	f := newFeature(t, host)
@@ -525,5 +494,157 @@ func TestOpenFavoriteReportsLoadError(t *testing.T) {
 	}
 	if len(host.toasts) != 1 || !strings.Contains(host.toasts[0], "Missing") {
 		t.Errorf("toasts = %v", host.toasts)
+	}
+}
+
+// --- Stage 5: the Replace-favorite confirmation ---
+//
+// Every test below drives the clash through the real path a user hits it
+// from: open the Add dialog (showAdd), type the clashing name, submit with
+// Return. That also happens to be the only way saveFavorite's Exists branch
+// ever runs in production (favorites.go's addToFavorites is its sole
+// caller) - calling f.saveFavorite(name) directly would test a call shape
+// nothing in this app produces.
+
+// raiseReplaceConfirm opens the Add dialog, types name (already saved by
+// the caller) and submits with Return - which the Add-dialog side already
+// proves (TestShowAddDismissesBeforeOnChosenRuns) dismisses the Add dialog
+// itself before saveFavorite's Exists check ever runs, so by the time this
+// returns exactly one overlay (the Replace confirmation) is up, not two
+// stacked on top of each other.
+func raiseReplaceConfirm(t *testing.T, f *Feature, name string) {
+	t.Helper()
+
+	f.showAdd("")
+	test.Type(f.addPanel.entry, name)
+	typeKey(t, f.win, fyne.KeyReturn)
+}
+
+func TestSaveFavoriteExistingNameRaisesConfirmationFocusedOnCancel(t *testing.T) {
+	host := &fakeHost{files: []fyne.URI{storage.NewFileURI("/photos/new.jpg")}}
+	f := newFeature(t, host)
+	if err := favstore.Save(f.dir, "Trip", []fyne.URI{storage.NewFileURI("/photos/old.jpg")}); err != nil {
+		t.Fatal(err)
+	}
+
+	raiseReplaceConfirm(t, f, "Trip")
+
+	panel, ok := f.win.Canvas().Focused().(*widgets.ChoicePanel)
+	if !ok {
+		t.Fatalf("focused = %T, want the confirmation's choice panel", f.win.Canvas().Focused())
+	}
+	if got := panel.Selected(); got != cancelChoice {
+		t.Errorf("selected = %d, want Cancel (%d): a prompt never opens with the action already under Return", got, cancelChoice)
+	}
+	if got := len(f.win.Canvas().Overlays().List()); got != 1 {
+		t.Errorf("overlay count = %d, want 1: the Add dialog should already be gone", got)
+	}
+}
+
+// TestSaveFavoriteReplaceOnConfirmWritesNewListAndSyncsPreviews covers
+// Right, Return on the Replace confirmation: the stored list becomes the
+// one just typed through the Add dialog, and SyncFavoritePreviews is
+// reported for it exactly the way writeFavorite always reports a save.
+func TestSaveFavoriteReplaceOnConfirmWritesNewListAndSyncsPreviews(t *testing.T) {
+	host := &fakeHost{files: []fyne.URI{storage.NewFileURI("/photos/new.jpg")}}
+	f := newFeature(t, host)
+	if err := favstore.Save(f.dir, "Trip", []fyne.URI{storage.NewFileURI("/photos/old.jpg")}); err != nil {
+		t.Fatal(err)
+	}
+
+	raiseReplaceConfirm(t, f, "Trip")
+	typeKey(t, f.win, fyne.KeyRight)
+	typeKey(t, f.win, fyne.KeyReturn)
+
+	got, err := favstore.Load(f.dir, "Trip")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(got) != 1 || got[0].Path() != "/photos/new.jpg" {
+		t.Errorf("stored files = %v, want the replaced list [/photos/new.jpg]", got)
+	}
+
+	wantDir := favstore.Dir(f.dir, "Trip")
+	i := len(host.syncedDirs) - 1
+	if i < 0 || host.syncedDirs[i] != wantDir || len(host.syncedFiles[i]) != 1 ||
+		host.syncedFiles[i][0].Path() != "/photos/new.jpg" {
+		t.Errorf("last sync = dir %v files %v, want dir %q with the replaced list",
+			host.syncedDirs, host.syncedFiles, wantDir)
+	}
+}
+
+// TestSaveFavoriteReplaceCancelReopensAddDialogWithNameStillInField covers
+// Return on the confirmation's default selection, Cancel: it closes the
+// confirmation and reopens the Add dialog rather than throwing the typed
+// name away, so a name clash costs a keystroke rather than the name. The
+// reopen leans on the ordering confirm.go documents: ChoicePanel dismisses
+// the confirmation (which unfocuses the canvas, through onClosed) before
+// running onCancel, so showAdd's own Focus(entry) at the very end of that
+// call is the last thing to touch focus, and wins.
+func TestSaveFavoriteReplaceCancelReopensAddDialogWithNameStillInField(t *testing.T) {
+	host := &fakeHost{files: []fyne.URI{storage.NewFileURI("/photos/new.jpg")}}
+	f := newFeature(t, host)
+	if err := favstore.Save(f.dir, "Trip", []fyne.URI{storage.NewFileURI("/photos/old.jpg")}); err != nil {
+		t.Fatal(err)
+	}
+
+	raiseReplaceConfirm(t, f, "Trip")
+	typeKey(t, f.win, fyne.KeyReturn) // Return on Cancel, the default selection
+
+	if f.addDialog == nil {
+		t.Fatal("Cancel did not reopen the Add dialog")
+	}
+	if got := len(f.win.Canvas().Overlays().List()); got != 1 {
+		t.Errorf("overlay count = %d, want 1: the confirmation should be gone, not stacked under the reopened Add dialog", got)
+	}
+	if f.addPanel.entry.Text != "Trip" {
+		t.Errorf("entry text = %q, want the clashing name %q still there", f.addPanel.entry.Text, "Trip")
+	}
+	if got := f.win.Canvas().Focused(); got != fyne.Focusable(f.addPanel.entry) {
+		t.Errorf("focused = %T, want the reopened name field", got)
+	}
+
+	got, err := favstore.Load(f.dir, "Trip")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(got) != 1 || got[0].Path() != "/photos/old.jpg" {
+		t.Errorf("stored files = %v, want the original list untouched by Cancel", got)
+	}
+}
+
+// TestSaveFavoriteReplaceEscapeReopensAddDialogWithNameStillInField pins
+// that Escape behaves exactly as Cancel: showConfirm runs onCancel for
+// both, since confirmation's own contract makes no distinction between the
+// Cancel choice and Escape (see confirm.go).
+func TestSaveFavoriteReplaceEscapeReopensAddDialogWithNameStillInField(t *testing.T) {
+	host := &fakeHost{files: []fyne.URI{storage.NewFileURI("/photos/new.jpg")}}
+	f := newFeature(t, host)
+	if err := favstore.Save(f.dir, "Trip", []fyne.URI{storage.NewFileURI("/photos/old.jpg")}); err != nil {
+		t.Fatal(err)
+	}
+
+	raiseReplaceConfirm(t, f, "Trip")
+	typeKey(t, f.win, fyne.KeyEscape)
+
+	if f.addDialog == nil {
+		t.Fatal("Escape did not reopen the Add dialog")
+	}
+	if got := len(f.win.Canvas().Overlays().List()); got != 1 {
+		t.Errorf("overlay count = %d, want 1: the confirmation should be gone, not stacked under the reopened Add dialog", got)
+	}
+	if f.addPanel.entry.Text != "Trip" {
+		t.Errorf("entry text = %q, want the clashing name %q still there", f.addPanel.entry.Text, "Trip")
+	}
+	if got := f.win.Canvas().Focused(); got != fyne.Focusable(f.addPanel.entry) {
+		t.Errorf("focused = %T, want the reopened name field", got)
+	}
+
+	got, err := favstore.Load(f.dir, "Trip")
+	if err != nil {
+		t.Fatalf("Load: %v", err)
+	}
+	if len(got) != 1 || got[0].Path() != "/photos/old.jpg" {
+		t.Errorf("stored files = %v, want the original list untouched by Escape", got)
 	}
 }

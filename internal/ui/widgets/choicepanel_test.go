@@ -370,3 +370,199 @@ func TestChoicePanel_FocusChangesLeaveTheRingWhereItIs(t *testing.T) {
 		t.Errorf("chosen = %v, want %v - the selection survived the focus round trip", chosen, want)
 	}
 }
+
+// TestChoicePanel_UpWithNoOnBackIsInert: onBack is optional, and every panel
+// inside a ChoiceCard (deletion, the export prompt) never sets it, since the
+// app dispatcher owns Up out there. Up must not stand in for anything else
+// - in particular it must not move the selection - when nothing is
+// registered.
+func TestChoicePanel_UpWithNoOnBackIsInert(t *testing.T) {
+	var chosen []int
+	p := NewChoicePanel(nil, threeChoices(&chosen)...)
+
+	p.Select(1)
+	p.TypedKey(&fyne.KeyEvent{Name: fyne.KeyUp})
+
+	assertSelection(t, p, 1)
+	if len(chosen) != 0 {
+		t.Errorf("chosen = %v, want none - Up must not run anything", chosen)
+	}
+}
+
+// TestChoicePanel_UpRunsOnBackWithoutMovingSelection is the Add dialog's
+// shape one stage over: Up leaves the field's stop and comes back to it,
+// which only works if the ring is exactly where it was found.
+func TestChoicePanel_UpRunsOnBackWithoutMovingSelection(t *testing.T) {
+	var chosen []int
+	p := NewChoicePanel(nil, threeChoices(&chosen)...)
+
+	backs := 0
+	p.SetOnBack(func() { backs++ })
+
+	p.Select(2)
+	p.TypedKey(&fyne.KeyEvent{Name: fyne.KeyUp})
+
+	if backs != 1 {
+		t.Errorf("onBack ran %d times, want exactly 1", backs)
+	}
+	assertSelection(t, p, 2)
+	if len(chosen) != 0 {
+		t.Errorf("chosen = %v, want none - Up must not run a choice", chosen)
+	}
+
+	p.TypedKey(&fyne.KeyEvent{Name: fyne.KeyUp})
+	if backs != 2 {
+		t.Errorf("onBack ran %d times after a second Up, want 2", backs)
+	}
+}
+
+// TestChoicePanel_SetChoiceEnabledTogglesTheButtonAndTheReport pins the
+// single source of truth: enabled state lives on the Fyne button itself
+// (Enable/Disable/Disabled), not in a parallel bool the panel could get out
+// of sync with the greyed rendering.
+func TestChoicePanel_SetChoiceEnabledTogglesTheButtonAndTheReport(t *testing.T) {
+	var chosen []int
+	p := NewChoicePanel(nil, threeChoices(&chosen)...)
+
+	if !p.ChoiceEnabled(1) {
+		t.Fatal("ChoiceEnabled(1) = false, want every choice to start enabled")
+	}
+
+	p.SetChoiceEnabled(1, false)
+	if p.ChoiceEnabled(1) {
+		t.Error("ChoiceEnabled(1) = true after SetChoiceEnabled(1, false)")
+	}
+	if !p.buttons[1].Disabled() {
+		t.Error("buttons[1].Disabled() = false, want the button itself disabled")
+	}
+
+	p.SetChoiceEnabled(1, true)
+	if !p.ChoiceEnabled(1) {
+		t.Error("ChoiceEnabled(1) = false after re-enabling")
+	}
+	if p.buttons[1].Disabled() {
+		t.Error("buttons[1].Disabled() = true, want the button re-enabled")
+	}
+}
+
+// TestChoicePanel_ConfirmOnADisabledChoiceRunsNothing is what makes a
+// disabled choice under the ring mean something: Return/Enter (Confirm)
+// must not run OnChosen, and must not dismiss the prompt either - a
+// disabled choice is a dead end, not a shortcut around the guard a click
+// already gets from widget.Button.Tapped.
+func TestChoicePanel_ConfirmOnADisabledChoiceRunsNothing(t *testing.T) {
+	var chosen []int
+	dismissed := 0
+	p := NewChoicePanel(nil, threeChoices(&chosen)...)
+	p.SetOnDismiss(func() { dismissed++ })
+
+	p.Select(1)
+	p.SetChoiceEnabled(1, false)
+
+	p.Confirm()
+
+	if len(chosen) != 0 {
+		t.Errorf("chosen = %v, want none - a disabled choice must not run", chosen)
+	}
+	if dismissed != 0 {
+		t.Errorf("onDismiss ran %d times, want 0 - a disabled choice must not dismiss either", dismissed)
+	}
+}
+
+// TestChoicePanel_TapOnADisabledChoiceRunsNothing proves the keyboard guard
+// in TestChoicePanel_ConfirmOnADisabledChoiceRunsNothing isn't needed to
+// cover the click path too - widget.Button.Tapped already refuses a
+// disabled button - but pins it anyway, since it's the same behaviour a
+// caller relies on regardless of which path reaches it.
+func TestChoicePanel_TapOnADisabledChoiceRunsNothing(t *testing.T) {
+	var chosen []int
+	dismissed := 0
+	p := NewChoicePanel(nil, threeChoices(&chosen)...)
+	p.SetOnDismiss(func() { dismissed++ })
+
+	p.SetChoiceEnabled(0, false)
+	test.Tap(p.buttons[0])
+
+	if len(chosen) != 0 {
+		t.Errorf("chosen = %v, want none - a disabled choice must not run", chosen)
+	}
+	if dismissed != 0 {
+		t.Errorf("onDismiss ran %d times, want 0", dismissed)
+	}
+}
+
+// TestChoicePanel_ChoiceEnabledOutOfRangeIsFalse: an index that names no
+// button can't be "enabled" - false is the only answer that doesn't invent
+// state for a button that doesn't exist.
+func TestChoicePanel_ChoiceEnabledOutOfRangeIsFalse(t *testing.T) {
+	var chosen []int
+	p := NewChoicePanel(nil, threeChoices(&chosen)...)
+
+	if p.ChoiceEnabled(-1) {
+		t.Error("ChoiceEnabled(-1) = true, want false")
+	}
+	if p.ChoiceEnabled(3) {
+		t.Error("ChoiceEnabled(len(choices)) = true, want false")
+	}
+}
+
+// TestChoicePanel_SetChoiceEnabledOutOfRangeIsANoOp: nothing to disable at
+// an out-of-range index, and nothing should panic trying.
+func TestChoicePanel_SetChoiceEnabledOutOfRangeIsANoOp(t *testing.T) {
+	var chosen []int
+	p := NewChoicePanel(nil, threeChoices(&chosen)...)
+
+	p.SetChoiceEnabled(-1, false)
+	p.SetChoiceEnabled(3, false)
+
+	for i, btn := range p.buttons {
+		if btn.Disabled() {
+			t.Errorf("buttons[%d].Disabled() = true after an out-of-range SetChoiceEnabled, want untouched", i)
+		}
+	}
+}
+
+// TestChoicePanel_SelectStillLandsOnADisabledChoice pins the deliberate
+// choice *not* to skip a disabled button: a greyed button under the ring is
+// the app telling the user why Return just did nothing, the same way
+// Fyne's own dialog.FormDialog leaves a disabled Submit focusable rather
+// than jumping focus away from it. Select must therefore still move the
+// ring onto choice 1 even though it is disabled - a later "fix" that skips
+// disabled choices would take that explanation away.
+func TestChoicePanel_SelectStillLandsOnADisabledChoice(t *testing.T) {
+	var chosen []int
+	p := NewChoicePanel(nil, threeChoices(&chosen)...)
+	p.SetChoiceEnabled(1, false)
+
+	p.Select(1)
+
+	assertSelection(t, p, 1)
+}
+
+// TestChoicePanel_RegressionOldStyleCallerStillConfirmsAndDismisses is the
+// safety net for every existing ChoiceCard caller (deletion, the export
+// prompt): a panel built exactly the old way, never touching SetOnBack or
+// SetChoiceEnabled, must keep working byte-for-byte - Up stays ignored and
+// every choice starts, and stays, enabled.
+func TestChoicePanel_RegressionOldStyleCallerStillConfirmsAndDismisses(t *testing.T) {
+	var chosen []int
+	dismissed := 0
+	p := NewChoicePanel(nil, threeChoices(&chosen)...)
+	p.SetOnDismiss(func() { dismissed++ })
+
+	p.TypedKey(&fyne.KeyEvent{Name: fyne.KeyUp})
+	assertSelection(t, p, 0)
+	if len(chosen) != 0 || dismissed != 0 {
+		t.Fatalf("Up with no onBack ran something: chosen=%v dismissed=%d", chosen, dismissed)
+	}
+
+	p.Select(2)
+	p.TypedKey(&fyne.KeyEvent{Name: fyne.KeyReturn})
+
+	if want := []int{2}; !slices.Equal(chosen, want) {
+		t.Errorf("chosen = %v, want %v", chosen, want)
+	}
+	if dismissed != 1 {
+		t.Errorf("onDismiss ran %d times, want exactly 1", dismissed)
+	}
+}

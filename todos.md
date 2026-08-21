@@ -25,16 +25,26 @@
    canvas overlay is up, which stops the same class for every other dialog —
    `Escape` used to reset the whole session from behind one.
 
+ - keyboard-driven Add-to-Favorites and Replace-favorite prompts
+   The Add dialog (`internal/ui/favorites/add.go`'s `nameEntry`/`addPanel`/
+   `newAddDialog`/`showAdd`) opens with its name field auto-focused, `↓`
+   hands the keyboard to a `Cancel`/`Add` `widgets.ChoicePanel` without
+   moving its ring, `↑` hands it back, `Return` in the field saves once the
+   name validates, and `Esc` cancels from either stop; `Add` stays greyed
+   while the name is empty or invalid. The Replace-favorite confirmation
+   (raised from `saveFavorite` on a name clash) is the same focusable
+   two-choice shape, with `Cancel` and `Esc` alike reopening the Add dialog
+   with the clashing name still typed rather than throwing it away. Both
+   share the removal confirmation's shape through a new
+   `internal/ui/favorites/confirm.go`'s `showConfirm`, so `dialog.NewConfirm`
+   is now gone from the package entirely. `widgets.ChoicePanel` gained
+   `SetOnBack` (what `Up` runs) and `SetChoiceEnabled`/`ChoiceEnabled` (a
+   disabled choice runs and dismisses nothing, from a click or the
+   keyboard) to support this.
+
 ## ACTIVE DEVELOPMENT
 
 ## TODO
-
- - Give the favorites Add-name form and the Replace-favorite confirmation
-   focusable content too, the way the removal confirmation now has. Neither
-   is dangerous any more (the overlay guard in `keys.go` covers them), but
-   `Return` still cannot answer either from the keyboard. The Replace confirm
-   is a small copy of `removeFavorite`; the Add form needs a real two-stop
-   focus story, since its `widget.Entry` wants the keyboard first.
 
 ## not deemed worth implementing (edge cases)
 

@@ -67,13 +67,18 @@ func (v *viewer) handleTypedRune(r rune) {
 // SetOnTypedKey in buildViewer (build.go), so tests can drive the exact
 // same dispatch instead of reimplementing it.
 func (v *viewer) handleKeyEvent(ev *fyne.KeyEvent) {
-	// A Fyne dialog (favorites' Manage/Add/Replace/removal dialogs, the
-	// file picker, a native menu) owns the keyboard whole while it is up.
-	// This dispatcher is the canvas's *unfocused* handler, and Fyne resolves
-	// Canvas.Focused through the top overlay's focus manager only - so a
-	// dialog whose content focuses nothing leaves Focused() nil and the glfw
-	// driver routes every key here instead, where Escape would reset the
-	// session or close the window from behind the modal.
+	// A Fyne dialog owns the keyboard whole while it is up. This dispatcher
+	// is the canvas's *unfocused* handler, and Fyne resolves Canvas.Focused
+	// through the top overlay's focus manager only - so a dialog whose
+	// content focuses nothing leaves Focused() nil and the glfw driver
+	// routes every key here instead, where Escape would reset the session or
+	// close the window from behind the modal. That used to include every
+	// dialog internal/ui/favorites raises - Manage, Add, Replace, the
+	// removal confirmation - until each was given focusable content of its
+	// own (managePanel, nameEntry, widgets.ChoicePanel); what this guard
+	// still earns its keep against today is whatever Fyne itself leaves
+	// unfocused regardless, the file picker and a native menu chief among
+	// them.
 	//
 	// This cannot shadow the app's own modal surfaces: the delete card, the
 	// export prompt, the grid, the info card and the toast are all layers of

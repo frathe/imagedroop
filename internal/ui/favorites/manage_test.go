@@ -576,7 +576,7 @@ func TestManageConfirmationTakesTheKeyboardAndStartsOnCancel(t *testing.T) {
 	if got := panel.Selected(); got != cancelChoice {
 		t.Errorf("selected = %d, want Cancel (%d): a prompt never opens with Remove under Return", got, cancelChoice)
 	}
-	if !panel.Ring(cancelChoice).Visible() || panel.Ring(removeChoice).Visible() {
+	if !panel.Ring(cancelChoice).Visible() || panel.Ring(confirmChoice).Visible() {
 		t.Error("the ring is not drawn on Cancel")
 	}
 }
@@ -602,7 +602,7 @@ func TestManageConfirmationOffersExactlyTwoButtons(t *testing.T) {
 	if got := buttons[cancelChoice].Importance; got != widget.MediumImportance {
 		t.Errorf("Cancel importance = %v, want the plain default", got)
 	}
-	if got := buttons[removeChoice].Importance; got != widget.DangerImportance {
+	if got := buttons[confirmChoice].Importance; got != widget.DangerImportance {
 		t.Errorf("Remove importance = %v, want widget.DangerImportance", got)
 	}
 }
@@ -668,8 +668,8 @@ func TestManageConfirmationRightThenReturnRemoves(t *testing.T) {
 	panel := raiseConfirm(t, f)
 
 	typeKey(t, f.win, fyne.KeyRight)
-	if got := panel.Selected(); got != removeChoice {
-		t.Fatalf("selected = %d, want Remove (%d)", got, removeChoice)
+	if got := panel.Selected(); got != confirmChoice {
+		t.Fatalf("selected = %d, want Remove (%d)", got, confirmChoice)
 	}
 	typeKey(t, f.win, fyne.KeyReturn)
 	f.pending.Wait()

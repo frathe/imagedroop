@@ -26,15 +26,6 @@ const (
 	columnCount
 )
 
-// cancelChoice and removeChoice are the removal confirmation's two button
-// indices, and they follow the same rule one level down: Cancel first/left
-// and so the default selection, the red Remove second/right. Named the way
-// deletion's cancelChoice/dangerChoice are, because it is the same rule.
-const (
-	cancelChoice = 0
-	removeChoice = 1
-)
-
 // manageEntry is one favorite as the panel needs it: the label to show and
 // what its two buttons do. The feature builds these; the panel knows
 // nothing about favorites, names, or storage.
@@ -58,12 +49,14 @@ type manageRow struct {
 
 // managePanel is the Manage Favorites dialog's content: a scrolled list of
 // favorites with a focus ring that moves over rows and over each row's two
-// buttons. It is a fyne.Focusable - one of only two things this app ever
-// focuses, the other being the widgets.ChoicePanel removeFavorite gives its
-// confirmation - because Fyne resolves Canvas.Focus through the *top
-// overlay's* focus manager, the dialog's, so a focusable content widget is
-// what makes the dialog's keys reach this package rather than falling
-// through to the app's own dispatcher (internal/ui/keys.go).
+// buttons. It is a fyne.Focusable - one of only three things this app ever
+// focuses, the other two being the widgets.ChoicePanel showConfirm gives the
+// removal and Replace-favorite confirmations (confirm.go), and the nameEntry
+// that is the Add dialog's own name field (add.go) - because Fyne resolves
+// Canvas.Focus through the *top overlay's* focus manager, the dialog's, so a
+// focusable content widget is what makes the dialog's keys reach this
+// package rather than falling through to the app's own dispatcher
+// (internal/ui/keys.go).
 type managePanel struct {
 	widget.BaseWidget
 
@@ -331,60 +324,27 @@ func (f *Feature) focusManage() {
 	}
 }
 
-// removeFavorite asks before trashing a favorite's folder. Not
-// dialog.NewConfirm: that focuses nothing inside itself, and Fyne resolves
-// Canvas.Focused through the *top overlay's* focus manager only, so its
-// confirmation left Focused() nil - which is exactly the state in which the
-// glfw driver routes keys to the canvas's unfocused handler, this app's own
-// dispatcher (internal/ui/keys.go). Escape then reset the session behind the
-// prompt, and Return answered nothing at all, since a focused Fyne button
-// reacts to Space and never to Return.
-//
-// A widgets.ChoicePanel is a fyne.Focusable, so making it the dialog's
-// content puts the keyboard where the user is looking, exactly as
-// managePanel does for the dialog underneath. The dialog carries no dismiss
-// button of its own (NewCustomWithoutButtons): Cancel is already one of the
-// two choices, and a Close beside it would be a second way to say the same
-// thing.
+// removeFavorite asks before trashing a favorite's folder, through
+// showConfirm (confirm.go) - see that func's own doc comment for why this is
+// not dialog.NewConfirm and the history that made it worth fixing; that
+// history is now the shared rule for every confirmation this package raises,
+// not just this one.
 func (f *Feature) removeFavorite(name string) {
-	// Unwrapped, unlike Fyne's own text dialogs: they wrap the message and
-	// then widen the dialog to fit it from a beforeShowHook, which a custom
-	// dialog has no equivalent of, so a wrapping label here would collapse to
-	// its own minimum and stack the sentence four words to a line.
-	message := &widget.Label{
-		Text:      fmt.Sprintf(lang.L("Remove %q from favorites? Its folder will be moved to the Trash."), name),
-		Alignment: fyne.TextAlignCenter,
-	}
-
-	var confirm dialog.Dialog
-	panel := widgets.NewChoicePanel(nil,
-		// Cancel first/left and so the default selection, the red Remove
-		// second/right - see cancelChoice/removeChoice.
-		widgets.Choice{Label: lang.L("Cancel")},
-		widgets.Choice{
-			Label:      lang.L("Remove"),
-			Importance: widget.DangerImportance,
-			OnChosen:   func() { f.performRemove(name) },
-		},
-	)
-	// Cancel and Escape need nothing beyond this: the panel dismisses before
-	// running any choice, and Cancel's choice runs nothing of its own.
-	panel.SetOnDismiss(func() { confirm.Hide() })
-
-	confirm = dialog.NewCustomWithoutButtons(lang.L("Remove Favorite"),
-		container.NewVBox(message, panel), f.win)
-	// The confirmation is a second overlay and owns the keyboard while it is
-	// up; whichever way it goes, the panel underneath has to get it back.
-	// Fyne happens to hand it back on its own, because removing the top
-	// overlay drops only that overlay's focus manager and the dialog's below
-	// it still has the panel focused - but a dialog left unable to answer
-	// Escape is a dead end for the user, so this does not lean on it.
-	confirm.SetOnClosed(f.focusManage)
-	confirm.Show()
-	// After Show, for the reason ShowManage focuses its own panel after Show:
-	// Fyne can only focus an object that is already part of an overlay it can
-	// walk to.
-	f.win.Canvas().Focus(panel)
+	f.showConfirm(confirmation{
+		title:      lang.L("Remove Favorite"),
+		message:    fmt.Sprintf(lang.L("Remove %q from favorites? Its folder will be moved to the Trash."), name),
+		action:     lang.L("Remove"),
+		importance: widget.DangerImportance,
+		onConfirm:  func() { f.performRemove(name) },
+		// The confirmation is a second overlay and owns the keyboard while it
+		// is up; whichever way it goes, the panel underneath has to get it
+		// back. Fyne happens to hand it back on its own, because removing the
+		// top overlay drops only that overlay's focus manager and the
+		// dialog's below it still has the panel focused - but a dialog left
+		// unable to answer Escape is a dead end for the user, so this does
+		// not lean on it.
+		onClosed: f.focusManage,
+	})
 }
 
 func (f *Feature) performRemove(name string) {
