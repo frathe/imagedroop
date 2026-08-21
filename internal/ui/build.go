@@ -63,6 +63,7 @@ func buildViewer(application fyne.App, startup startupState) (*viewer, fyne.Wind
 		restoreLink:    dz.restoreLink,
 		savedSession:   savedSession,
 		loadingBar:     loadingBar,
+		scanArt:        scan.art,
 		scanSpinner:    scan.spinner,
 		scanLabel:      scan.label,
 		sortSpinner:    sortUIC.spinner,
@@ -108,7 +109,7 @@ func buildViewer(application fyne.App, startup startupState) (*viewer, fyne.Wind
 	// loadingBarHeight regardless of the widget's natural (themed) size.
 	overlay := container.New(layout.NewVBoxLayout(), container.New(fixedHeightLayout{height: loadingBarHeight}, loadingBar))
 
-	scanContainer := container.NewCenter(container.NewVBox(scan.spinner, scan.label))
+	scanContainer := container.NewCenter(container.NewVBox(scan.art, scan.spinner, scan.label))
 	sortContainer := container.NewCenter(container.NewVBox(sortUIC.spinner, sortUIC.label))
 
 	// Pinned to the bottom edge, mirroring how loadingBar is pinned to the

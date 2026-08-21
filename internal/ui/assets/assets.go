@@ -20,3 +20,9 @@ var WelcomeWebP []byte
 //
 //go:embed placeholder.webp
 var PlaceholderWebP []byte
+
+// DiggingWebP is shown alongside the folder-scan spinner while a drop is
+// being scanned.
+//
+//go:embed digging.webp
+var DiggingWebP []byte

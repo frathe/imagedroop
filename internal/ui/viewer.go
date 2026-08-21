@@ -185,6 +185,7 @@ type viewer struct {
 	// so the save still has a value).
 	stopWinPosPoll func()
 
+	scanArt     *canvas.Image
 	scanSpinner *widget.ProgressBarInfinite
 	scanLabel   *widget.Label
 

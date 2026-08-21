@@ -35,6 +35,10 @@ const (
 	// currently shown.
 	WelcomeArtSize = 180
 
+	// ScanArtSize is the square box the folder-scan overlay's art occupies,
+	// above the spinner and label.
+	ScanArtSize = 120
+
 	// Focus rings (see NewFocusRing): the delete-confirmation buttons use a
 	// thinner ring than the grid's cell highlight, whose stroke has to stay
 	// visible against a busy thumbnail behind it.

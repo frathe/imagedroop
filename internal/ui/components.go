@@ -119,20 +119,28 @@ func newDropzoneUI(onOpen, onRestore func()) dropzoneUI {
 	}
 }
 
-// scanUI is the folder-scan progress indicator: an infinite spinner over a
-// "Scanning... N images" counter, both hidden until handleDrop shows them.
+// scanUI is the folder-scan progress indicator: Trane digging above an
+// infinite spinner over a "Scanning... N images" counter, all three hidden
+// until handleDrop shows them.
 type scanUI struct {
+	art     *canvas.Image
 	spinner *widget.ProgressBarInfinite
 	label   *widget.Label
 }
 
 func newScanUI() scanUI {
+	art := canvas.NewImageFromResource(fyne.NewStaticResource("digging.webp", assets.DiggingWebP))
+	art.FillMode = canvas.ImageFillContain
+	art.ScaleMode = canvas.ImageScaleSmooth
+	art.SetMinSize(fyne.NewSize(widgets.ScanArtSize, widgets.ScanArtSize))
+	art.Hide()
+
 	spinner := widget.NewProgressBarInfinite()
 	label := widget.NewLabelWithStyle(lang.L("Scanning... 0 images"), fyne.TextAlignCenter, fyne.TextStyle{Bold: true})
 	spinner.Hide()
 	label.Hide()
 
-	return scanUI{spinner: spinner, label: label}
+	return scanUI{art: art, spinner: spinner, label: label}
 }
 
 // sortUI is the background-reorder progress indicator: an infinite spinner

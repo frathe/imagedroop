@@ -2,6 +2,22 @@
 
 ## Done
 
+ - Trane mascot rebrand
+   The app icon (`assets/appIcon.png`, packaging + website favicon source),
+   README/website header, and social-preview image now use the Trane
+   artwork prepared under `assets/trane/`; the previous mascot is kept for
+   reference under `assets/old_mascott/`. `docs/index.html` gained proper
+   `<link rel="icon">`/`apple-touch-icon`/`shortcut icon` tags pointing at
+   the prepared multi-size favicon set (its generic auto-generated
+   `manifest.json` was left unwired — no existing PWA setup to hook it
+   into). In-app: `internal/ui/assets/welcome.webp` and `placeholder.webp`
+   are now resized Trane art (`internal/ui/assets/assets.go`'s
+   `WelcomeWebP`/`PlaceholderWebP`), and a new `DiggingWebP` appears above
+   the folder-scan spinner (`newScanUI` in `internal/ui/components.go`,
+   `widgets.ScanArtSize`) — shown/hidden alongside `scanSpinner`/
+   `scanLabel` at all three call sites in `drop.go`. Golden screenshots
+   regenerated via `make golden`.
+
  - favorites’ disk thumbnail cache
    Favorite grid previews are now generated in the background on save and
    topped up on open, cached under each favorite's own `thumbs/` folder keyed
@@ -57,17 +73,6 @@
 ## ACTIVE DEVELOPMENT
 
 ## TODO
-
-## Rebranding new Mascott Trane
-
-- new app icon: assets/trane/appicon.png
-- website & readme changes:
-  - favicons: [Favicons (TaneWithFrame)](assets/trane/Favicons%20%28TaneWithFrame%29)
-  - Readme and website header: ![header.jpg](assets/trane/header.jpg)
-- add changes also please resize the images to the actual size that is needed in the app:
-  - [placeholder.webp](internal/ui/assets/placeholder.webp) -> [trane_sad.webp](assets/trane/trane_sad.webp)
-  - [welcome.webp](internal/ui/assets/welcome.webp) -> [trane_wags.webp](assets/trane/trane_wags.webp)
-  - new: logo displayed while loading spinner is shown: [trane_digging.webp](assets/trane/trane_digging.webp)
 
 ## Group the `viewer` struct's field clusters into sub-structs
 

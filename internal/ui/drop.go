@@ -31,6 +31,7 @@ func (v *viewer) cancelScan() {
 	v.scanLifecycle.invalidate()
 	v.scanning = false
 
+	v.scanArt.Hide()
 	v.scanSpinner.Hide()
 	v.scanLabel.Hide()
 
@@ -122,6 +123,7 @@ func (v *viewer) handleDrop(uris []fyne.URI) {
 	v.scanDone = scanDone
 
 	v.scanLabel.SetText(lang.L("Scanning... 0 images"))
+	v.scanArt.Show()
 	v.scanSpinner.Show()
 	v.scanLabel.Show()
 	v.dropzone.Hide()
@@ -283,6 +285,7 @@ func (v *viewer) applyScanResult(token requestToken, merging bool, uris, images 
 		return
 	}
 	v.scanning = false
+	v.scanArt.Hide()
 	v.scanSpinner.Hide()
 	v.scanLabel.Hide()
 
