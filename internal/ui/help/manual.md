@@ -66,14 +66,19 @@ the front instead of opening a second copy.
 - **AVIF** — `.avif` (built-in rotation/mirroring applied)
 - **SVG** — `.svg` (vector; small icons open large enough to fill the window,
   and the image re-renders sharp at every zoom level rather than scaling up)
+- **RAW** — `.cr2`, `.cr3`, `.nef`, `.nrw`, `.arw`, `.dng`, `.orf`, `.rw2`,
+  `.raf`, `.pef`, `.srw`, `.raw` (the camera's embedded JPEG preview is shown,
+  marked `(preview)` in the title and info overlay; there is no demosaic, and
+  File → Save Changes stays off)
 
 A file is also accepted if your system reports it as `image/jpeg`,
 `image/png`, `image/gif`, `image/webp`, `image/bmp`, `image/tiff`,
 `image/x-icon`, `image/vnd.microsoft.icon`, `image/x-xpixmap`, `image/heic`,
-`image/heif`, `image/avif`, or `image/svg+xml`, even when the extension is
-missing or unusual.
+`image/heif`, `image/avif`, `image/svg+xml`, or a camera-RAW MIME type such as
+`image/x-adobe-dng` / `image/x-canon-cr2`, even when the extension is missing
+or unusual.
 
-Everything else — PDFs, RAW camera files, videos — is **not** supported.
+Everything else — PDFs, videos — is **not** supported.
 
 ---
 
@@ -100,6 +105,7 @@ The title bar tells you what you are looking at, for example:
 - **File name** of the current image
 - **Pixel dimensions** of the image (after any rotation correction)
 - **`(animated)`** if it is an animated GIF
+- **`(preview)`** if it is a camera RAW file shown via its embedded JPEG
 - **`(2/7)`** — position in the current set, shown only when you dropped more
   than one image
 - **`[merge]`** at the very front, only while merge mode (`M`) is on — see
@@ -692,7 +698,9 @@ Things PicFetch deliberately does not do (yet):
   (**File -> Save Changes**), a copy in another format
   (**File -> Export image**) and a wallpaper copy
   (**File -> Set as Wallpaper**), all described in "Menu" below
-- No support for RAW or PDF
+- No RAW demosaic or PDF support: RAW files display the camera's embedded
+  JPEG preview only; what you can write to disk is still a rotation of
+  encodable formats, an export, or a wallpaper copy
 - No playback controls (pause, step, restart) for animated GIFs
 - No offline maps: the EXIF window's location view needs a working internet
   connection, since it draws live OpenStreetMap tiles
@@ -750,5 +758,5 @@ Things PicFetch deliberately does not do (yet):
 - **Clear / Quit** — `Esc` (clears the loaded images first, then quits;
   cancels a folder scan still in progress instead, if one is running)
 - **Formats** — JPEG, PNG, GIF (incl. animated), WebP, BMP, TIFF, ICO, XPM,
-  HEIC/HEIF, AVIF, SVG
+  HEIC/HEIF, AVIF, SVG, camera RAW (embedded JPEG preview)
 - **Max window size** — 1500 × 950

@@ -12,11 +12,23 @@ import (
 	"github.com/gen2brain/heic"
 )
 
-// readEXIFOrientation scans the raw JPEG bytes for an APP1 Exif segment and
-// returns the orientation tag's value (1-8), or 1 (no correction needed) if
-// the file has no Exif data, no orientation tag, or is malformed in a way
-// that makes the tag unreadable.
+// readEXIFOrientation returns the orientation tag's value (1-8), or 1 (no
+// correction needed). JPEG files store it in an APP1 Exif segment; TIFF-
+// container RAW files store it in IFD0. A missing or unreadable tag is 1.
 func readEXIFOrientation(data []byte) int {
+	if len(data) >= 4 && data[0] == 0xFF && data[1] == 0xD8 {
+		return jpegEXIFOrientation(data)
+	}
+	if o := tiffIFD0Orientation(data); o != 1 {
+		return o
+	}
+	return 1
+}
+
+// jpegEXIFOrientation is the APP1 walk that used to be readEXIFOrientation
+// itself, split out so TIFF-container RAW files can use IFD0's orientation
+// tag without pretending to be a JPEG.
+func jpegEXIFOrientation(data []byte) int {
 	if len(data) < 4 || data[0] != 0xFF || data[1] != 0xD8 {
 		return 1
 	}
@@ -60,6 +72,24 @@ func readEXIFOrientation(data []byte) int {
 	}
 
 	return 1
+}
+
+func tiffIFD0Orientation(data []byte) int {
+	bo, ok := tiffOrder(data)
+	if !ok {
+		return 1
+	}
+
+	found := 1
+	walkIFD(data, bo, bo.Uint32(data[4:8]), func(tag, typ uint16, val []byte) {
+		if tag != 0x0112 {
+			return
+		}
+		if v, ok := uintValue(bo, typ, val); ok && v >= 1 && v <= 8 {
+			found = int(v)
+		}
+	})
+	return found
 }
 
 // parseExifOrientation reads the orientation tag (0x0112) out of an APP1
@@ -180,8 +210,26 @@ func (m Metadata) Empty() bool {
 // field (or all of them) blank rather than returning an error - there is no
 // error to report, only "nothing to show".
 func ReadMetadata(data []byte) Metadata {
+	if len(data) >= 4 && data[0] == 0xFF && data[1] == 0xD8 {
+		return jpegMetadata(data)
+	}
+	if _, ok := tiffOrder(data); ok {
+		if m := parseExifMetadata(data); !m.Empty() {
+			return m
+		}
+	}
+	if m := isobmffMetadata(data); !m.Empty() {
+		return m
+	}
+	if jpegBytes, ok := embeddedJPEGPreview(data); ok {
+		return jpegMetadata(jpegBytes)
+	}
+	return Metadata{}
+}
+
+func jpegMetadata(data []byte) Metadata {
 	if len(data) < 4 || data[0] != 0xFF || data[1] != 0xD8 {
-		return isobmffMetadata(data)
+		return Metadata{}
 	}
 
 	pos := 2
@@ -227,12 +275,11 @@ func ReadMetadata(data []byte) Metadata {
 }
 
 // isobmffMetadata reads Exif metadata out of an ISOBMFF-boxed file (HEIC or
-// AVIF) - readEXIFOrientation and the JPEG walk above only understand the
-// APP1 container, so anything that fails that signature check lands here
-// instead. Both DecodeExif calls fail fast (pure box-walking, no wasm/cgo
-// invocation) on a file that isn't theirs, so trying heic then avif costs
-// nothing extra for the common case of a format with no Exif at all (PNG,
-// GIF, WebP, BMP, TIFF, ICO, XPM).
+// AVIF) - JPEG APP1 and TIFF IFD0 are handled before this is called. Both
+// DecodeExif calls fail fast (pure box-walking, no wasm/cgo invocation) on a
+// file that isn't theirs, so trying heic then avif costs nothing extra for
+// the common case of a format with no Exif at all (PNG, GIF, WebP, BMP, ICO,
+// XPM).
 func isobmffMetadata(data []byte) Metadata {
 	if ex, err := heic.DecodeExif(bytes.NewReader(data)); err == nil {
 		return metadataFromISOBMFFExif(ex.Make, ex.Model, ex.ExposureTime, ex.FNumber, ex.ISOSpeed, ex.FocalLength, ex.DateTimeOriginal, ex.DateTime, ex.GPSLatitude, ex.GPSLongitude)
@@ -542,7 +589,7 @@ func tagComponentSize(typ uint16) int {
 		return 1
 	case 3, 8: // SHORT, SSHORT
 		return 2
-	case 4, 9: // LONG, SLONG
+	case 4, 9, 13: // LONG, SLONG, IFD (SubIFD pointers)
 		return 4
 	case 5, 10: // RATIONAL, SRATIONAL
 		return 8
@@ -580,7 +627,7 @@ func uintValue(bo binary.ByteOrder, typ uint16, val []byte) (uint32, bool) {
 			return 0, false
 		}
 		return uint32(bo.Uint16(val[:2])), true
-	case 4: // LONG
+	case 4, 13: // LONG, IFD
 		if len(val) < 4 {
 			return 0, false
 		}

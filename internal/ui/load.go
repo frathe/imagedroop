@@ -229,6 +229,7 @@ func (v *viewer) finishLoad(token requestToken, _ int, u fyne.URI, loaded *imagi
 
 	v.currentFileSize = loaded.FileSize
 	v.currentHasEXIF = loaded.HasEXIF
+	v.currentPreview = loaded.Preview
 	v.syncInfoOverlayVisibility()
 	v.exif.Refresh()
 
@@ -252,6 +253,9 @@ func (v *viewer) finishLoad(token requestToken, _ int, u fyne.URI, loaded *imagi
 	}
 
 	title := fmt.Sprintf("%s — %d x %d", u.Name(), b.Dx(), b.Dy())
+	if loaded.Preview {
+		title += " " + lang.L("(preview)")
+	}
 
 	// The slideshow uses this so an animated GIF always gets to play at
 	// least one full loop before auto-advancing - see

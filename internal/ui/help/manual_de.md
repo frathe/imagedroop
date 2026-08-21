@@ -77,15 +77,20 @@ bereits geöffnete Handbuchfenster nach vorne, statt eine zweite Kopie zu
 - **SVG** — `.svg` (Vektorgrafik; kleine Symbole werden groß genug geöffnet,
   um das Fenster zu füllen, und das Bild wird bei jeder Zoomstufe scharf neu
   gerendert, statt hochskaliert zu werden)
+- **RAW** — `.cr2`, `.cr3`, `.nef`, `.nrw`, `.arw`, `.dng`, `.orf`, `.rw2`,
+  `.raf`, `.pef`, `.srw`, `.raw` (es wird die vom Fotoapparat eingebettete
+  JPEG-Vorschau gezeigt, in Titelzeile und Infokarte als `(Vorschau)`
+  gekennzeichnet; es gibt kein Demosaic, und Datei → Änderungen speichern
+  bleibt aus)
 
 Eine Datei wird auch akzeptiert, wenn Ihr System sie als `image/jpeg`,
 `image/png`, `image/gif`, `image/webp`, `image/bmp`, `image/tiff`,
 `image/x-icon`, `image/vnd.microsoft.icon`, `image/x-xpixmap`, `image/heic`,
-`image/heif`, `image/avif` oder `image/svg+xml` meldet, auch wenn die
+`image/heif`, `image/avif`, `image/svg+xml` oder einen Kamera-RAW-MIME-Typ
+wie `image/x-adobe-dng` / `image/x-canon-cr2` meldet, auch wenn die
 Dateiendung fehlt oder ungewöhnlich ist.
 
-Alles andere — PDFs, RAW-Kameradateien, Videos — wird **nicht**
-unterstützt.
+Alles andere — PDFs, Videos — wird **nicht** unterstützt.
 
 ---
 
@@ -114,6 +119,8 @@ Die Titelzeile zeigt, was Sie gerade betrachten, zum Beispiel:
 - **Dateiname** des aktuellen Bildes
 - **Pixelabmessungen** des Bildes (nach etwaiger Rotationskorrektur)
 - **`(animated)`**, wenn es sich um ein animiertes GIF handelt
+- **`(Vorschau)`**, wenn es sich um eine Kamera-RAW-Datei handelt, die über
+  ihr eingebettetes JPEG gezeigt wird
 - **`(2/7)`** — Position in der aktuellen Auswahl, wird nur angezeigt, wenn
   Sie mehr als ein Bild abgelegt haben
 - **`[Zusammenführen]`** ganz vorne, nur solange der Zusammenführen-Modus
@@ -782,7 +789,10 @@ Dinge, die PicFetch absichtlich (noch) nicht tut:
   eine Kopie in einem anderen Format (**Datei -> Bild exportieren**) und
   eine Hintergrundbild-Kopie (**Datei -> Als Hintergrundbild festlegen**),
   alle unter „Menü“ oben beschrieben
-- Keine Unterstützung für RAW oder PDF
+- Kein RAW-Demosaic und keine PDF-Unterstützung: RAW-Dateien zeigen nur die
+  vom Fotoapparat eingebettete JPEG-Vorschau; auf die Festplatte schreiben
+  lassen sich weiterhin eine Drehung encodierbarer Formate, ein Export oder
+  eine Hintergrundbild-Kopie
 - Keine Wiedergabesteuerung (Pause, Einzelschritt, Neustart) für animierte
   GIFs
 - Keine Offline-Karten: die Ortsansicht im EXIF-Fenster benötigt eine
@@ -848,5 +858,5 @@ Dinge, die PicFetch absichtlich (noch) nicht tut:
   dann; bricht stattdessen einen noch laufenden Ordner-Scan ab, falls einer
   läuft)
 - **Formate** — JPEG, PNG, GIF (inkl. animiert), WebP, BMP, TIFF, ICO, XPM,
-  HEIC/HEIF, AVIF, SVG
+  HEIC/HEIF, AVIF, SVG, Kamera-RAW (eingebettete JPEG-Vorschau)
 - **Maximale Fenstergröße** — 1500 × 950

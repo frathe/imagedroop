@@ -198,6 +198,122 @@ func CaptureDateJPEG(t *testing.T, w, h int, raw string) []byte {
 	return out
 }
 
+// RAWPreview is the options EncodeRAWPreview uses to wrap a JPEG in a
+// TIFF-shaped camera-RAW container. Width/Height/Color build the embedded
+// preview; the optional tags are written into IFD0 so ReadMetadata and
+// orientation correction can see them the way they would on a real CR2/NEF.
+type RAWPreview struct {
+	Width, Height int
+	Color         color.Color
+	Orientation   uint16 // 0 omits the tag
+	Make, Model   string
+	DateTime      string // Exif "YYYY:MM:DD HH:MM:SS"
+}
+
+// EncodeRAWPreview builds a little-endian TIFF whose only image is a JPEG
+// stored via JPEGInterchangeFormat (0x0201) and Compression=6 - the shape
+// camera RAW files use for their embedded preview. golang.org/x/image/tiff
+// does not decode compression 6, so the file is not a displayable TIFF:
+// imaging has to extract the JPEG to show anything.
+func EncodeRAWPreview(t *testing.T, p RAWPreview) []byte {
+	t.Helper()
+
+	if p.Color == nil {
+		p.Color = color.White
+	}
+	jpegBytes := EncodeJPEG(t, p.Width, p.Height, p.Color)
+
+	type entry struct {
+		tag, typ uint16
+		count    uint32
+		value    uint32
+		extra    []byte
+	}
+
+	var entries []entry
+	addInline := func(tag, typ uint16, count, value uint32) {
+		entries = append(entries, entry{tag: tag, typ: typ, count: count, value: value})
+	}
+	addASCII := func(tag uint16, s string) {
+		entries = append(entries, entry{tag: tag, typ: 2, count: uint32(len(s) + 1), extra: append([]byte(s), 0)})
+	}
+
+	addInline(0x0100, 3, 1, uint32(p.Width))  // ImageWidth SHORT
+	addInline(0x0101, 3, 1, uint32(p.Height)) // ImageLength SHORT
+	addInline(0x0103, 3, 1, 6)                // Compression = old JPEG
+	if p.Make != "" {
+		addASCII(0x010F, p.Make)
+	}
+	if p.Model != "" {
+		addASCII(0x0110, p.Model)
+	}
+	if p.Orientation != 0 {
+		addInline(0x0112, 3, 1, uint32(p.Orientation))
+	}
+	if p.DateTime != "" {
+		addASCII(0x0132, p.DateTime)
+	}
+
+	const headerSize = 8
+	ifdSize := 2 + 12*len(entries) + 4 + 24 // two more entries for 0x0201/0x0202
+	valuePos := uint32(headerSize + ifdSize)
+
+	var valueArea []byte
+	place := func(b []byte) uint32 {
+		off := valuePos + uint32(len(valueArea))
+		valueArea = append(valueArea, b...)
+		return off
+	}
+	for i, e := range entries {
+		if e.extra != nil {
+			entries[i].value = place(e.extra)
+		}
+	}
+
+	jpegPos := valuePos + uint32(len(valueArea))
+	addInline(0x0201, 4, 1, jpegPos)                // JPEGInterchangeFormat
+	addInline(0x0202, 4, 1, uint32(len(jpegBytes))) // JPEGInterchangeFormatLength
+
+	le := binary.LittleEndian
+	u16 := func(v uint16) []byte { b := make([]byte, 2); le.PutUint16(b, v); return b }
+	u32 := func(v uint32) []byte { b := make([]byte, 4); le.PutUint32(b, v); return b }
+
+	// bytes.Buffer.Write/WriteString never return a non-nil error, so every
+	// result below is ignored deliberately.
+	buf := new(bytes.Buffer)
+	_, _ = buf.WriteString("II")
+	_, _ = buf.Write(u16(0x002A))
+	_, _ = buf.Write(u32(headerSize))
+
+	_, _ = buf.Write(u16(uint16(len(entries))))
+	for _, e := range entries {
+		_, _ = buf.Write(u16(e.tag))
+		_, _ = buf.Write(u16(e.typ))
+		_, _ = buf.Write(u32(e.count))
+		if e.typ == 3 && e.extra == nil { // SHORT inline
+			_, _ = buf.Write(u16(uint16(e.value)))
+			_, _ = buf.Write(u16(0))
+		} else {
+			_, _ = buf.Write(u32(e.value))
+		}
+	}
+	_, _ = buf.Write(u32(0)) // next IFD
+	_, _ = buf.Write(valueArea)
+	_, _ = buf.Write(jpegBytes)
+
+	return buf.Bytes()
+}
+
+// TempRAWURI writes EncodeRAWPreview to a temp file named name (typically
+// with a RAW extension such as .cr2) and returns its file URI.
+func TempRAWURI(t *testing.T, name string, w, h int, c color.Color) fyne.URI {
+	t.Helper()
+
+	return storage.NewFileURI(WriteTempFile(t, name, EncodeRAWPreview(t, RAWPreview{
+		Width: w, Height: h, Color: c,
+	})))
+}
+
 // GPSJPEG builds a minimal encoded JPEG carrying an Exif GPS sub-IFD (the
 // 0x8825 pointer in IFD0, then the latitude/longitude reference and
 // degrees/minutes/seconds tags) for the given signed decimal degrees -

@@ -26,6 +26,7 @@
    "could not open the file browser: %v": "could not open the file browser: %v",
    "could not copy the image: %v": "could not copy the image: %v",
    "Zoom: %d%%": "Zoom: %d%%",
+   "(preview)": "(preview)",
    "[merge]": "[merge]",
    "[shuffle]": "[shuffle]",
    "[sort: date]": "[sort: date]",

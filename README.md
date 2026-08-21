@@ -22,9 +22,12 @@ set with the keyboard.
 ## Features
 
 - Drag-and-drop viewing of JPEG, PNG, GIF, WebP, BMP, TIFF, ICO, XPM, HEIC,
-  AVIF, and SVG (`.jpg`, `.jpeg`, `.jpe`, `.jfif`, `.png`, `.gif`, `.webp`,
+  AVIF, SVG, and camera RAW (`.jpg`, `.jpeg`, `.jpe`, `.jfif`, `.png`, `.gif`, `.webp`,
   `.bmp`, `.tif`, `.tiff`, `.ico`, `.xpm`, `.heic`, `.heif`, `.avif`, `.svg`,
-  or anything reporting a matching `image/*` MIME type). HEIC/AVIF decode
+  `.cr2`, `.cr3`, `.nef`, `.arw`, `.dng`, `.orf`, `.rw2`, `.raf`, and other
+  common RAW extensions, or anything reporting a matching `image/*` MIME type).
+  RAW files show the camera's embedded JPEG preview — marked `(preview)` in
+  the title and info overlay — with no demosaic engine. HEIC/AVIF decode
   through embedded WASM (no cgo), so they need no system libraries and don't
   complicate cross-compilation. SVG is rasterized on the fly and re-rendered
   as you zoom, so it stays sharp at any zoom level

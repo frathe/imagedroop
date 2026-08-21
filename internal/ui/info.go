@@ -58,6 +58,9 @@ func (v *viewer) updateInfoOverlay() {
 
 	w, h := v.displayedDimensions()
 	name := v.state.files[v.state.index].Name()
+	if v.currentPreview {
+		name += " " + lang.L("(preview)")
+	}
 	if n := len(v.state.files); n > 1 {
 		name = fmt.Sprintf("%s  (%d/%d)", name, v.state.index+1, n)
 	}

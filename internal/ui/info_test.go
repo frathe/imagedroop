@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/lang"
 
 	"github.com/frathe/picfetch/internal/uitest"
 )
@@ -192,5 +193,20 @@ func TestClearToDropzone_HidesInfoCardButKeepsThePreference(t *testing.T) {
 
 	if !v.infoCard.Visible() {
 		t.Error("infoCard should reappear on the next load since the preference was still on")
+	}
+}
+
+func TestToggleInfoOverlay_RAWMarksPreview(t *testing.T) {
+	v := newTestViewer(t)
+
+	raw := uitest.TempRAWURI(t, "photo.nef", 16, 8, color.White)
+	dropAndWait(t, v, raw)
+	v.toggleInfoOverlay()
+
+	if !strings.Contains(v.infoText.Text, lang.L("(preview)")) {
+		t.Errorf("infoText = %q, want %q on a RAW preview", v.infoText.Text, lang.L("(preview)"))
+	}
+	if !strings.Contains(v.infoText.Text, "photo.nef") {
+		t.Errorf("infoText = %q, want the RAW filename", v.infoText.Text)
 	}
 }

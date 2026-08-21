@@ -1,6 +1,7 @@
 // Package imaging reads, decodes, EXIF-orients, and caches the image files
 // PicFetch displays: JPEG, PNG, GIF (including animated), WebP, BMP,
-// TIFF, ICO, XPM, HEIC, AVIF, and SVG.
+// TIFF, ICO, XPM, HEIC, AVIF, SVG, and camera RAW (embedded JPEG preview
+// only — see raw.go).
 //
 // SVG is the one vector format here and the only one whose pixels are not
 // fixed at load: LoadedImage carries the parsed Vector alongside its first
@@ -40,14 +41,19 @@ func IsSupportedImage(u fyne.URI) bool {
 	// recursive folder scan into thousands of needless file opens.
 	switch strings.ToLower(u.Extension()) {
 	case ".jpg", ".jpeg", ".jpe", ".jfif", ".png", ".gif", ".webp", ".bmp", ".tif", ".tiff", ".ico", ".xpm",
-		".heic", ".heif", ".avif", ".svg":
+		".heic", ".heif", ".avif", ".svg",
+		".cr2", ".cr3", ".nef", ".nrw", ".arw", ".dng", ".orf", ".rw2", ".raf", ".pef", ".srw", ".raw":
 		return true
 	}
 
 	switch strings.ToLower(u.MimeType()) {
 	case "image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp", "image/tiff",
 		"image/x-icon", "image/vnd.microsoft.icon", "image/x-xpixmap",
-		"image/heic", "image/heif", "image/avif", "image/svg+xml":
+		"image/heic", "image/heif", "image/avif", "image/svg+xml",
+		"image/x-adobe-dng", "image/dng", "image/x-canon-cr2", "image/x-canon-cr3",
+		"image/x-nikon-nef", "image/x-sony-arw", "image/x-olympus-orf",
+		"image/x-panasonic-rw2", "image/x-fuji-raf", "image/x-pentax-pef",
+		"image/x-samsung-srw":
 		return true
 	}
 
@@ -82,6 +88,13 @@ type LoadedImage struct {
 	// size changes. Nil for every raster format, which is what internal/ui
 	// branches on to decide whether re-rendering means anything.
 	Vector *Vector
+
+	// Preview reports that Frames came from an embedded JPEG inside a camera
+	// RAW container (CR2, NEF, ARW, DNG, CR3, …) rather than from decoding
+	// the file's own pixels. The info overlay and window title mark those
+	// with "(preview)"; Save Changes stays off because this module does not
+	// write RAW. False for every format that DecodeLoaded already handled.
+	Preview bool
 }
 
 // maxImagePixels caps the pixel count a decoded image header is allowed to
@@ -298,6 +311,9 @@ func ReadAndProbe(ctx context.Context, u fyne.URI) (data []byte, bounds image.Re
 	cfg, _, err := image.DecodeConfig(bytes.NewReader(data))
 
 	if err != nil {
+		if b, ok := previewBounds(data); ok {
+			return data, b, nil
+		}
 		return nil, image.Rectangle{}, err
 	}
 
@@ -315,10 +331,9 @@ func ReadAndProbe(ctx context.Context, u fyne.URI) (data []byte, bounds image.Re
 }
 
 // DecodeLoaded finishes decoding data - already read and header-validated by
-// ReadAndProbe - applying EXIF orientation correction where present. Only
-// JPEG files carry an Exif orientation tag in practice; readEXIFOrientation
-// returns 1 (no correction) for anything else. Animated GIFs are decoded to
-// every frame instead of just the first.
+// ReadAndProbe - applying EXIF orientation correction where present. JPEG
+// files carry the tag in APP1; TIFF-container RAW files carry it in IFD0.
+// Animated GIFs are decoded to every frame instead of just the first.
 //
 // ctx is checked once, up front, rather than threaded into the decode
 // itself: unlike ReadAndProbe's file read, decoding already-in-memory
@@ -348,6 +363,9 @@ func DecodeLoaded(ctx context.Context, data []byte, maxAnimBytes int64) (*Loaded
 	decoded, _, err := image.Decode(bytes.NewReader(data))
 
 	if err != nil {
+		if loaded, ok := decodeEmbeddedPreview(data); ok {
+			return loaded, nil
+		}
 		return nil, err
 	}
 
@@ -359,14 +377,15 @@ func DecodeLoaded(ctx context.Context, data []byte, maxAnimBytes int64) (*Loaded
 
 // LoadImage reads and decodes an image file of any format registered with
 // the image package (JPEG, PNG, GIF, WebP, BMP, TIFF, ICO, XPM, HEIC, AVIF)
-// - see ReadAndProbe and
-// DecodeLoaded, which callers wanting to resize a window ahead of the full
-// pixel decode call separately instead. Uses context.Background() rather
-// than taking a ctx of its own: its only caller, LoadThumbnail, is read by
-// internal/ui/grid's own bounded worker pool, which has its own staleness
-// guard (a generation the caller checks against once a thumbnail comes
-// back) rather than the cancellable-context one internal/ui's main decode
-// path (ShowImage/attemptLoad/preloadOne) uses.
+// or a camera RAW container whose embedded JPEG preview raw.go can extract
+// - see ReadAndProbe and DecodeLoaded, which callers wanting to resize a
+// window ahead of the full pixel decode call separately instead. Uses
+// context.Background() rather than taking a ctx of its own: its only
+// caller, LoadThumbnail, is read by internal/ui/grid's own bounded worker
+// pool, which has its own staleness guard (a generation the caller checks
+// against once a thumbnail comes back) rather than the cancellable-context
+// one internal/ui's main decode path (ShowImage/attemptLoad/preloadOne)
+// uses.
 func LoadImage(u fyne.URI, maxAnimBytes int64) (*LoadedImage, error) {
 	data, _, err := ReadAndProbe(context.Background(), u)
 

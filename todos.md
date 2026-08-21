@@ -157,20 +157,18 @@
    only tests (`parkAnimate` in `harness_test.go`) replace the old multi-
    second delay trick.
 
+ - RAW support via embedded preview extraction
+   Camera RAW (CR2/CR3, NEF, ARW, DNG, ORF, RW2, RAF, …) is now a supported
+   drop: `internal/imaging/raw.go` extracts the largest embedded JPEG
+   (TIFF IFD walk, SOI scan for CR3/RAF) instead of shipping a demosaic
+   engine. The title and info overlay mark it `(preview)`; File → Save
+   Changes stays off (`CanEncode` is false). EXIF/orientation read the
+   container's IFD0 the same way they already read a JPEG APP1 payload.
+   Viewer-only — export and wallpaper still write the preview pixels.
+
 ## ACTIVE DEVELOPMENT
 
 ## TODO
-
-## 4. RAW support via embedded preview extraction — L
-
-Camera RAW files (CR2/CR3, NEF, ARW, DNG…) all embed full-size JPEG
-previews. Extracting those is pure-Go-feasible (TIFF/IFD walking —
-`internal/imaging/exif.go` already has the walker) and turns "drop the
-memory card folder" into a supported workflow without shipping a demosaic
-engine. Scope guard: viewer-only — no RAW decode, no editing; the info
-overlay/title marks it as "(preview)". Extends `imaging.IsSupportedImage`
-and the loader; EXIF window works as-is since the metadata lives in the
-same IFDs.
 
 ## not deemed worth implementing (edge cases)
 

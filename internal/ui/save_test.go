@@ -70,6 +70,21 @@ func TestCanSaveRotation_FalseForUnsupportedFormat(t *testing.T) {
 	}
 }
 
+func TestCanSaveRotation_FalseForRAW(t *testing.T) {
+	v := newTestViewer(t)
+	raw := uitest.TempRAWURI(t, "photo.cr2", 8, 8, color.White)
+	dropAndWait(t, v, raw)
+
+	v.rotateBy(1)
+
+	if v.rotation == 0 {
+		t.Fatal("expected rotateBy to still rotate the view of a RAW preview")
+	}
+	if v.canSaveRotation() {
+		t.Error("canSaveRotation should be false for RAW - there is no write-back, only the embedded preview")
+	}
+}
+
 // TestCanSaveRotation_FalseForAnimatedImage parks animate so its background
 // goroutine never fires during the test - nothing here depends on the
 // animation itself, only on displayFrames holding more than one frame.

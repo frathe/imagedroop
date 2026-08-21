@@ -317,11 +317,14 @@ type viewer struct {
 	// the widget tree. It is only shown for a file that actually has metadata
 	// to show (currentHasEXIF, carried the same way currentFileSize is): the
 	// link is a promise, and offering it for a file with no Exif at all can
-	// only ever open a panel saying so.
+	// only ever open a panel saying so. currentPreview is the matching flag
+	// for a camera-RAW embedded JPEG (imaging.LoadedImage.Preview): the
+	// info overlay and window title mark those "(preview)".
 	exifLink        *widget.Hyperlink
 	infoCard        *fyne.Container
 	currentFileSize int64
 	currentHasEXIF  bool
+	currentPreview  bool
 
 	// deletion is the Shift+Delete confirmation flow - see
 	// internal/ui/deletion, which owns its own widgets and selection state

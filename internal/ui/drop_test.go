@@ -140,6 +140,20 @@ func TestHandleDrop_AcceptsPNGAndGIF(t *testing.T) {
 	}
 }
 
+func TestHandleDrop_AcceptsRAW(t *testing.T) {
+	v := newTestViewer(t)
+
+	raw := uitest.TempRAWURI(t, "photo.cr2", 8, 8, color.White)
+	dropAndWait(t, v, raw)
+
+	if len(v.state.files) != 1 || v.state.files[0].Name() != "photo.cr2" {
+		t.Errorf("files = %v, want the RAW file kept", v.state.files)
+	}
+	if v.img.Image == nil {
+		t.Fatal("expected the embedded JPEG preview to be on screen")
+	}
+}
+
 // --- handleDrop merge vs. replace (M toggles merge mode) --------------------
 
 func TestHandleDrop_SecondDropWithoutMergeModeReplaces(t *testing.T) {

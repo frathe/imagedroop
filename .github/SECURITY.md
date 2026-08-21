@@ -33,7 +33,7 @@ This project is a local, offline image viewer — it doesn't run a network
 service or process untrusted input beyond image files you choose to open.
 Reports of particular interest include crashes or memory-safety issues
 triggered by malformed image files (JPEG, PNG, GIF, WebP, BMP, TIFF, ICO,
-XPM, HEIC/HEIF, AVIF, SVG) and issues in the HEIC/AVIF WASM decoders and the
+XPM, HEIC/HEIF, AVIF, SVG, camera RAW containers) and issues in the HEIC/AVIF WASM decoders and the
 SVG rasterizer.
 Dependency vulnerabilities are also welcome, though `make security` (see the
 [README](../README.md)) already runs `govulncheck` and checks GitHub

@@ -262,3 +262,24 @@ func TestViewerShow_AllFilesBrokenFallsBackToEmptyState(t *testing.T) {
 	}
 	settleToast(t, v)
 }
+
+// TestViewerShow_RAWPreviewMarksTheTitle is the UI half of imaging's
+// Preview flag: a camera RAW is shown via its embedded JPEG, and the
+// window title has to say so rather than looking like a finished decode.
+func TestViewerShow_RAWPreviewMarksTheTitle(t *testing.T) {
+	v := newTestViewer(t)
+
+	raw := uitest.TempRAWURI(t, "photo.cr2", 20, 10, color.White)
+	dropAndWait(t, v, raw)
+
+	got := v.win.Title()
+	if !strings.Contains(got, "photo.cr2") {
+		t.Errorf("title = %q, want the RAW filename", got)
+	}
+	if !strings.Contains(got, "20 x 10") {
+		t.Errorf("title = %q, want the preview's pixel size", got)
+	}
+	if !strings.Contains(got, lang.L("(preview)")) {
+		t.Errorf("title = %q, want %q so a RAW preview is not mistaken for a demosaic", got, lang.L("(preview)"))
+	}
+}
