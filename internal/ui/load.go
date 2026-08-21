@@ -440,7 +440,10 @@ func (v *viewer) retryAfterLoadFailure(token requestToken, msg string, i int, do
 // fresh drop wakes the previous animation immediately. stopped is closed right before it
 // returns, and animFrame is bumped after every frame write, so tests can
 // wait on those instead of reading v.img.Image from another goroutine - see
-// the animFrame/animStopped comment on the viewer struct.
+// the animFrame/animStopped comment on the viewer struct. Frame delays go
+// through v.frameAfter (time.After in production) so a test can step
+// frames instead of racing a live timer; the seam is write-once, set
+// before the first drop.
 func (v *viewer) animate(token requestToken, frames []image.Image, delays []time.Duration, stopped chan struct{}) {
 	defer close(stopped)
 
@@ -448,7 +451,7 @@ func (v *viewer) animate(token requestToken, frames []image.Image, delays []time
 
 	for {
 		select {
-		case <-time.After(delays[idx]):
+		case <-v.frameAfter(delays[idx]):
 		case <-token.context().Done():
 			return
 		}

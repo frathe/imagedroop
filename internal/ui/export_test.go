@@ -72,14 +72,14 @@ func TestCanExport_TrueForAFormatWithNoEncoder(t *testing.T) {
 
 // TestCanExport_TrueForAnAnimatedImage is the other half of that gap: Save
 // Changes refuses an animation because it would have to re-encode every
-// frame, but exporting the frame on screen as a still is well-defined. Uses
-// the 10s-per-frame delay trick (see TestCanSaveRotation_FalseForAnimatedImage)
-// so animate's goroutine never fires during the test.
+// frame, but exporting the frame on screen as a still is well-defined.
+// Parks animate so its goroutine never fires during the test.
 func TestCanExport_TrueForAnAnimatedImage(t *testing.T) {
 	v := newTestViewer(t)
+	parkAnimate(v)
 	path := uitest.WriteTempFile(t, "anim.gif", uitest.EncodeAnimatedGIF(t, 4, 4,
 		[]color.Color{color.RGBA{R: 255, A: 255}, color.RGBA{B: 255, A: 255}},
-		[]int{1000, 1000}))
+		[]int{2, 2}))
 	dropAndWait(t, v, storage.NewFileURI(path))
 
 	if v.canSaveRotation() {

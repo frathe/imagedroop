@@ -6,6 +6,7 @@ import (
 	"slices"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
@@ -243,6 +244,12 @@ type viewer struct {
 	// a superseded request's close can't be mistaken for a newer one's.
 	animFrame   atomic.Uint64
 	animStopped chan struct{}
+
+	// frameAfter is time.After behind a per-viewer seam so a test can
+	// release GIF frames one at a time instead of racing a live timer.
+	// Write-once: set at construction, and by a test only before its first
+	// drop (concurrency invariant).
+	frameAfter func(time.Duration) <-chan time.Time
 
 	// displayFrames is the current image's decoded, EXIF-corrected frames
 	// (loaded.Frames - unrotated), and displayFrameIdx which one of them is

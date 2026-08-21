@@ -17,7 +17,7 @@ set with the keyboard.
 ## usage demo
 
 <img src="assets/picfetch_functionality.gif" alt="Demo" width="100%">
-[![PicFetch demo](https://i.vimeocdn.com/video/2192695257-f9b1b18fb7a99af5098b207671f0a33508dc1a4438558774b651c14fef846233-d_295x166)](https://vimeo.com/1220283616)
+[![PicFetch demo](https://vimeo.com/1220283616)](https://vimeo.com/1220283616)
 
 ## Features
 

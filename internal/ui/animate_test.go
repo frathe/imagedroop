@@ -25,7 +25,51 @@ import (
 // for v.animStopped to close - that animate has actually returned; polling
 // animFrame with waitForAnimFrame is how a test observes progress in the
 // meantime without racing those writes. Both helpers stay in
-// harness_test.go as shared harness.
+// harness_test.go as shared harness. Tests that need a known frame index
+// (or to supersede a live animation without racing finishLoad) replace
+// viewer.frameAfter with a frameClock before the first drop.
+
+// frameClock is time.After that a test steps. parked is signalled each time
+// After is called, so the test can wait until animate is sitting in its
+// select rather than inside fyne.Do - the window where ShowImage's
+// finishLoad would race displayFrames/displayFrameIdx under the test driver.
+type frameClock struct {
+	ticks  chan time.Time
+	parked chan struct{}
+}
+
+func newFrameClock() *frameClock {
+	return &frameClock{
+		ticks:  make(chan time.Time),
+		parked: make(chan struct{}, 1),
+	}
+}
+
+func (c *frameClock) After(time.Duration) <-chan time.Time {
+	select {
+	case c.parked <- struct{}{}:
+	default:
+	}
+	return c.ticks
+}
+
+func (c *frameClock) waitParked(t *testing.T) {
+	t.Helper()
+	select {
+	case <-c.parked:
+	case <-time.After(testTimeout):
+		t.Fatal("timed out waiting for animate to park on the frame clock")
+	}
+}
+
+func (c *frameClock) tick(t *testing.T) {
+	t.Helper()
+	select {
+	case c.ticks <- time.Time{}:
+	case <-time.After(testTimeout):
+		t.Fatal("timed out releasing a frame tick")
+	}
+}
 
 func TestViewerShow_AnimatesGIF(t *testing.T) {
 	v := newTestViewer(t)
@@ -70,49 +114,43 @@ func TestViewerShow_AnimatesGIF(t *testing.T) {
 
 func TestViewerShow_NavigatingAwayStopsAnimation(t *testing.T) {
 	v := newTestViewer(t)
+	clock := newFrameClock()
 
-	// 10s per frame, the same parking trick TestInvalidateLoad_WakesAnimateImmediately
-	// uses, and load-bearing here rather than merely convenient: animate is
-	// left asleep in its frame-delay select for the whole test, so the
-	// ShowImage below supersedes it while it is parked. It then wakes on
-	// token.context().Done() and returns *without* entering its fyne.Do,
-	// which is what keeps it away from displayFrames/displayFrameIdx - the
-	// two fields ShowImage's own finishLoad writes from this goroutine.
-	// With short delays the two genuinely raced: the fyne test driver runs
-	// fyne.Do inline on the calling goroutine instead of marshaling onto one
-	// UI goroutine, so nothing serialized animate's frame write against
-	// finishLoad's. Production is serialized (see animate's own comment) and
-	// so has no such race, which is why the fix belongs here and not there.
-	//
-	// What this test can no longer claim is that the animation was actively
-	// cycling frames at the instant of navigation. Exercising that safely
-	// would need a frame-clock seam on animate itself; superseding a parked
-	// goroutine still proves what this test is named for.
+	// Write-once, before the drop: the same rule as vector.after. 10s GIF
+	// delays so a missing seam cannot pass this by firing time.After on its
+	// own inside testTimeout; the clock is what has to advance the frame.
+	v.frameAfter = clock.After
+
 	animURI := storage.NewFileURI(uitest.WriteTempFile(t, "anim.gif", uitest.EncodeAnimatedGIF(t, 4, 4,
 		[]color.Color{color.RGBA{R: 255, A: 255}, color.RGBA{B: 255, A: 255}},
 		[]int{1000, 1000})))
 	staticURI := uitest.TempJPEGURI(t, "static.jpg", 4, 4, color.RGBA{G: 255, A: 255})
 
 	dropAndWait(t, v, animURI, staticURI)
+	clock.waitParked(t)
+	clock.tick(t)
+	waitForAnimFrame(t, v, 2)
+	// After() is only called again once fyne.Do has returned, so parking
+	// here is the happens-before that lets this goroutine read
+	// displayFrameIdx (and later call ShowImage) without racing animate's
+	// write under the test driver.
+	clock.waitParked(t)
 
-	// Capture the first image's animate goroutine before superseding it -
-	// once ShowImage(1) bumps gen, that goroutine's close(stopped) is the
-	// only signal that it has actually noticed and returned, rather than
-	// still being asleep between frames.
+	if v.displayFrameIdx != 1 {
+		t.Fatalf("displayFrameIdx = %d after one clock tick, want 1 - the animation must have actually cycled", v.displayFrameIdx)
+	}
+	if _, _, b, _ := v.img.Image.At(0, 0).RGBA(); b == 0 {
+		t.Fatal("expected the blue frame on screen after one clock tick")
+	}
+
 	oldAnimStopped := v.animStopped
 
 	v.ShowImage(1)
 	waitUntilLoaded(t, v)
 
-	// Wait for the superseded animation goroutine to actually stop instead
-	// of sleeping a fixed duration and hoping: it writes v.img.Image from
-	// its own goroutine, so reading the field before it's confirmed done
-	// would race with that write even though the staleness check means it
-	// would never actually overwrite the static image once gen has moved
-	// on.
 	select {
 	case <-oldAnimStopped:
-	case <-time.After(2 * time.Second):
+	case <-time.After(testTimeout):
 		t.Fatal("timed out waiting for the superseded animation to stop")
 	}
 
@@ -125,15 +163,16 @@ func TestViewerShow_NavigatingAwayStopsAnimation(t *testing.T) {
 	}
 }
 
-// TestInvalidateLoad_WakesAnimateImmediately parks animate in a frame-delay
-// sleep far longer than the test and checks lifecycle cancellation wakes it
-// immediately rather than waiting for the next frame tick.
+// TestInvalidateLoad_WakesAnimateImmediately parks animate on a clock that
+// never ticks and checks lifecycle cancellation wakes it immediately rather
+// than waiting for the next frame.
 func TestInvalidateLoad_WakesAnimateImmediately(t *testing.T) {
 	v := newTestViewer(t)
+	parkAnimate(v)
 
 	animURI := storage.NewFileURI(uitest.WriteTempFile(t, "slow.gif", uitest.EncodeAnimatedGIF(t, 4, 4,
 		[]color.Color{color.RGBA{R: 255, A: 255}, color.RGBA{B: 255, A: 255}},
-		[]int{1000, 1000}))) // 10s per frame, in centiseconds
+		[]int{2, 2})))
 
 	dropAndWait(t, v, animURI)
 

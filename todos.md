@@ -147,29 +147,19 @@
    `invalidateSort` already used. Shutdown in `run.go` still uses the bare
    lifecycle call, since nothing will be repainted.
 
+ - Give `animate` a frame-clock seam so animation timing is deterministic
+   GIF frame delays now go through `viewer.frameAfter` (`time.After` in
+   production, set in `build.go`), a write-once/pre-first-drop seam in the
+   mould of `vector.after`. `TestViewerShow_NavigatingAwayStopsAnimation`
+   steps one frame on a `frameClock`, asserts `displayFrameIdx == 1`, then
+   navigates while the goroutine is parked between ticks — so it covers a
+   live animation being superseded, not just a never-started one. Parking-
+   only tests (`parkAnimate` in `harness_test.go`) replace the old multi-
+   second delay trick.
+
 ## ACTIVE DEVELOPMENT
 
 ## TODO
-
-## Give `animate` a frame-clock seam so animation timing is deterministic
-
-Two tests have now had to be fixed for the same race, and the fix both
-times was to park `animate` in a multi-second frame delay so its goroutine
-never runs during the test. That works, but it means no test can exercise
-an animation that is *actively cycling* — including the one case worth
-covering, a navigation superseding a live animation.
-
-The root of it: `animate` (load.go) sleeps on a bare
-`time.After(delays[idx])`, so a test cannot step it. Every other piece of
-background work in this package already has a per-viewer seam for exactly
-this reason (`vector.after` is the closest precedent, and `vector.debounce`
-alongside it). A `func(time.Duration) <-chan time.Time` field on `viewer`,
-defaulting to `time.After`, would let a test release frames one at a time
-and assert against a known frame index instead of racing or parking.
-
-Worth doing before a third test hits this. Note the seam must be
-write-once/pre-first-drop like the vector ones, per the concurrency
-invariant.
 
 ## 4. RAW support via embedded preview extraction — L
 

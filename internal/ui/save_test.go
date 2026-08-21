@@ -70,16 +70,15 @@ func TestCanSaveRotation_FalseForUnsupportedFormat(t *testing.T) {
 	}
 }
 
-// TestCanSaveRotation_FalseForAnimatedImage uses a 10s-per-frame delay, the
-// same trick TestStopAnimation_WakesAnimateImmediately uses, so animate's
-// background goroutine never fires during the test - nothing here depends
-// on the animation itself, only on displayFrames holding more than one
-// frame.
+// TestCanSaveRotation_FalseForAnimatedImage parks animate so its background
+// goroutine never fires during the test - nothing here depends on the
+// animation itself, only on displayFrames holding more than one frame.
 func TestCanSaveRotation_FalseForAnimatedImage(t *testing.T) {
 	v := newTestViewer(t)
+	parkAnimate(v)
 	path := uitest.WriteTempFile(t, "anim.gif", uitest.EncodeAnimatedGIF(t, 4, 4,
 		[]color.Color{color.RGBA{R: 255, A: 255}, color.RGBA{B: 255, A: 255}},
-		[]int{1000, 1000}))
+		[]int{2, 2}))
 	dropAndWait(t, v, storage.NewFileURI(path))
 
 	v.rotateBy(1)

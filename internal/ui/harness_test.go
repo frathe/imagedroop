@@ -292,6 +292,15 @@ func waitForAnimFrame(t *testing.T, v *viewer, n uint64) {
 	}
 }
 
+// parkAnimate replaces viewer.frameAfter with a clock that never ticks, so
+// animate sits in its select for the whole test. Must be called before the
+// first drop, like the vector.after seam. Cancellation still wakes it via
+// the load token. Tests that need a known frame index use a frameClock in
+// animate_test.go instead of this.
+func parkAnimate(v *viewer) {
+	v.frameAfter = func(time.Duration) <-chan time.Time { return make(chan time.Time) }
+}
+
 // waitForAnimStopped waits for the current animate call to close
 // v.animStopped, which it does right before returning once it notices its
 // generation is stale.
