@@ -20,7 +20,7 @@ A small [Fyne](https://fyne.io/) desktop app for quickly viewing images.
 Drop one or more images onto the window to view them, and step through the
 set with the keyboard.
 
-## usage demo
+## usage demo (click for longer demo video)
 
 [![PicFetch demo](assets/picfetch_functionality.gif)](https://vimeo.com/1220283616)
 
