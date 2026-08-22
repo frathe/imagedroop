@@ -5,6 +5,7 @@
 package grid
 
 import (
+	"context"
 	"image"
 
 	"fyne.io/fyne/v2"
@@ -56,7 +57,7 @@ func (g *Overview) Warm() error {
 // app never needs this; tests do, to keep a decode goroutine from touching
 // widgets after the test that started it has moved on.
 func (g *Overview) Settle() {
-	g.pending.Wait()
+	g.decodes.Wait()
 }
 
 // Cached reports whether u's thumbnail is in the cache. Contains rather
@@ -123,7 +124,7 @@ func (g *Overview) SetCacheBytes(n int64) {
 // the cache if present (painted synchronously) or freshly decoded and
 // scaled otherwise. key identifies which cell this request was made for
 // (see the cellIDs field) - it's the stable per-slot container, not img
-// itself, only because that's what cellIDs and inflight are keyed by; img
+// itself, only because that's what cellIDs and decodes are keyed by; img
 // is where the result actually gets painted. gen is the host's generation
 // at request time: if a new drop supersedes the current file set before
 // the decode finishes, the result must not be painted - a now-meaningless
@@ -161,19 +162,16 @@ func (g *Overview) requestThumbnail(key *fyne.Container, img *canvas.Image, id i
 		img.Refresh()
 	}
 
-	if !g.claim(key, id) {
+	if !g.decodes.Claim(key, id) {
 		return
 	}
 
-	// pending lets Settle wait for every spawned decode to fully finish -
-	// Done fires only after the completion fyne.Do below has returned, so
-	// a Wait that comes back guarantees no decode goroutine will touch a
-	// widget afterwards.
-	g.pending.Go(func() {
-
-		g.sem <- struct{}{}
-		defer func() { <-g.sem }()
-
+	// decodes lets Settle wait for every spawned decode to fully finish -
+	// the pool's count drops only after the completion fyne.Do below has
+	// returned, so a Wait that comes back guarantees no decode goroutine
+	// will touch a widget afterwards. The grid has no cancellation context,
+	// so acquired is always true here and goes unread.
+	g.decodes.Go(context.Background(), func(bool) {
 		// Bail *before* decoding, not just after: during a fast scroll
 		// through a large set, most queued requests are for cells recycled
 		// long ago to other files, and this predicate is exactly what the
@@ -184,7 +182,7 @@ func (g *Overview) requestThumbnail(key *fyne.Container, img *canvas.Image, id i
 		// scrolled-past cell while the cells actually on screen sit blank
 		// at the back of the queue.
 		if !g.stillWanted(key, id, gen, fgen) {
-			g.release(key, id)
+			g.decodes.Release(key, id)
 
 			// That check raced the UI goroutine's cell updates in one
 			// narrow window: the cell scrolled away and back to id between
@@ -203,7 +201,7 @@ func (g *Overview) requestThumbnail(key *fyne.Container, img *canvas.Image, id i
 
 		// A second look at the cache: merge mode can load one path at two
 		// indices, so a peer worker may have finished this exact file
-		// while this request sat behind sem.
+		// while this request sat behind the pool.
 		thumb, ok := g.thumbs.Get(cacheKey)
 		if !ok {
 			var err error
@@ -211,7 +209,7 @@ func (g *Overview) requestThumbnail(key *fyne.Container, img *canvas.Image, id i
 				// No retry here: release lets the cell's next update pass
 				// claim and try again, and the normal viewing path is
 				// where the file's actual error surfaces to the user.
-				g.release(key, id)
+				g.decodes.Release(key, id)
 				return
 			}
 
@@ -223,7 +221,7 @@ func (g *Overview) requestThumbnail(key *fyne.Container, img *canvas.Image, id i
 			g.thumbs.Add(cacheKey, thumb)
 		}
 
-		g.release(key, id)
+		g.decodes.Release(key, id)
 
 		fyne.Do(func() {
 			if g.stillWanted(key, id, gen, fgen) {
@@ -232,30 +230,6 @@ func (g *Overview) requestThumbnail(key *fyne.Container, img *canvas.Image, id i
 			}
 		})
 	})
-}
-
-// claim records that a decode goroutine is being spawned to fill the cell
-// key with id's thumbnail - false means an identical decode is already in
-// flight, so don't spawn another. Every repaint re-runs GridWrap's update
-// callback for every visible cell, and one multi-megapixel decode easily
-// outlives several repaints; without this gate each of those passes would
-// stack another goroutine behind sem for work already underway. A claim
-// for a different id overwrites the old entry - the cell scrolled on, and
-// the superseded decode's release is compare-and-delete precisely so its
-// late finish can't clobber the newer claim.
-func (g *Overview) claim(key *fyne.Container, id int) bool {
-	if cur, ok := g.inflight.Load(key); ok && cur == id {
-		return false
-	}
-	g.inflight.Store(key, id)
-
-	return true
-}
-
-// release clears key's claim, but only if it still belongs to id - see
-// claim on why a finished decode must not drop a newer claim made over it.
-func (g *Overview) release(key *fyne.Container, id int) {
-	g.inflight.CompareAndDelete(key, id)
 }
 
 // stillWanted reports whether a decode for id (kicked off at generation

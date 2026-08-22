@@ -1,6 +1,7 @@
 package grid
 
 import (
+	"context"
 	"image"
 	"image/color"
 	"testing"
@@ -230,31 +231,31 @@ func TestClaimRelease(t *testing.T) {
 	g := newOverview(t, hostWith(t, "a.jpg"))
 	cell, _ := newCell()
 
-	if !g.claim(cell, 0) {
+	if !g.decodes.Claim(cell, 0) {
 		t.Fatal("the first claim for a cell should allow a spawn")
 	}
-	if g.claim(cell, 0) {
+	if g.decodes.Claim(cell, 0) {
 		t.Error("an identical claim while one is in flight must not spawn a second decode")
 	}
-	if !g.claim(cell, 1) {
+	if !g.decodes.Claim(cell, 1) {
 		t.Error("a claim for a different id should supersede the old one - the cell scrolled on")
 	}
 
-	g.release(cell, 0) // the superseded decode finishing late
-	if g.claim(cell, 1) {
+	g.decodes.Release(cell, 0) // the superseded decode finishing late
+	if g.decodes.Claim(cell, 1) {
 		t.Error("a stale release must not drop the newer claim")
 	}
 
-	g.release(cell, 1)
-	if !g.claim(cell, 1) {
+	g.decodes.Release(cell, 1)
+	if !g.decodes.Claim(cell, 1) {
 		t.Error("after its own release, a cell should be claimable again")
 	}
 }
 
 // TestRequestThumbnail_RecycledBeforeDecodeBailsAndReleases pins the
 // worker's pre-decode bail: a request whose cell is recycled while the
-// request waits behind sem must neither paint the cell nor keep its claim.
-// The workers are parked by filling sem from the test, so the recycle
+// request waits for a slot must neither paint the cell nor keep its claim.
+// The workers are parked by filling the pool from the test, so the recycle
 // deterministically wins the race against the decode.
 func TestRequestThumbnail_RecycledBeforeDecodeBailsAndReleases(t *testing.T) {
 	host := hostWith(t, "a.jpg", "b.jpg")
@@ -263,22 +264,31 @@ func TestRequestThumbnail_RecycledBeforeDecodeBailsAndReleases(t *testing.T) {
 	cell, img := newCell()
 	g.cellIDs.Store(cell, 0)
 
+	// The pool waits for its slot on the spawned goroutine, so each parker
+	// has to report that it really holds one before the request below can
+	// be sure of queueing behind them.
+	holding := make(chan struct{}, thumbConcurrency)
+	parked := make(chan struct{})
 	for range thumbConcurrency {
-		g.sem <- struct{}{}
+		g.decodes.Go(context.Background(), func(bool) {
+			holding <- struct{}{}
+			<-parked
+		})
+	}
+	for range thumbConcurrency {
+		<-holding
 	}
 
 	g.requestThumbnail(cell, img, 0, host.gen)
 	g.cellIDs.Store(cell, 1) // the cell scrolls on before a worker picks this up
 
-	for range thumbConcurrency {
-		<-g.sem
-	}
+	close(parked)
 	g.Settle()
 
 	if img.Image != nil {
 		t.Error("a decode whose cell scrolled away must not paint it")
 	}
-	if !g.claim(cell, 0) {
+	if !g.decodes.Claim(cell, 0) {
 		t.Error("the bailed decode should have released its claim")
 	}
 }
@@ -288,7 +298,7 @@ func TestRequestThumbnail_RecycledBeforeDecodeBailsAndReleases(t *testing.T) {
 // set and the cell's own id can both still be current while the query
 // underneath has renumbered the cells, so display cell 0 means a different
 // file than the one this decode was started for. Same parking technique as
-// the recycling test above - fill sem so the change deterministically
+// the recycling test above - fill the pool so the change deterministically
 // beats the decode.
 func TestRequestThumbnail_QueryChangeDiscardsInFlightDecode(t *testing.T) {
 	host := hostWith(t, "a.jpg", "b.jpg")
@@ -297,8 +307,16 @@ func TestRequestThumbnail_QueryChangeDiscardsInFlightDecode(t *testing.T) {
 	cell, img := newCell()
 	g.cellIDs.Store(cell, 0)
 
+	holding := make(chan struct{}, thumbConcurrency)
+	parked := make(chan struct{})
 	for range thumbConcurrency {
-		g.sem <- struct{}{}
+		g.decodes.Go(context.Background(), func(bool) {
+			holding <- struct{}{}
+			<-parked
+		})
+	}
+	for range thumbConcurrency {
+		<-holding
 	}
 
 	g.requestThumbnail(cell, img, 0, host.gen)
@@ -306,9 +324,7 @@ func TestRequestThumbnail_QueryChangeDiscardsInFlightDecode(t *testing.T) {
 	// Display cell 0 now means b.jpg; the decode in flight is for a.jpg.
 	typeQuery(g, "b")
 
-	for range thumbConcurrency {
-		<-g.sem
-	}
+	close(parked)
 	g.Settle()
 
 	if img.Image != nil {

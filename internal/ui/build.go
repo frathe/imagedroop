@@ -15,6 +15,7 @@ import (
 	"fyne.io/fyne/v2/layout"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/frathe/picfetch/internal/decodepool"
 	"github.com/frathe/picfetch/internal/filesort"
 	"github.com/frathe/picfetch/internal/imaging"
 )
@@ -70,7 +71,7 @@ func buildViewer(application fyne.App, startup startupState) (*viewer, fyne.Wind
 		state:         newAppState(filesort.FromPref(prefs.SortMode), prefs.MergeMode),
 		baseTitle:     appTitle,
 		imgCache:      imaging.NewImgCache(int64(prefs.MaxImageCacheMB) * bytesPerMB),
-		preloadSem:    make(chan struct{}, preloadConcurrency),
+		preloads:      decodepool.New[string, struct{}](preloadConcurrency),
 		settings: settings{
 			maxScan:    prefs.MaxScanFiles,
 			maxWinW:    prefs.MaxWindowWidth,

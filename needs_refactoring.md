@@ -21,6 +21,11 @@ seven waiter helpers into one audited implementation, and make it
 impossible for a new async feature to get the "stale generation must still
 close its own channel" rule subtly wrong — a rule currently enforced only
 by prose. Pairs naturally with the `asyncOpUI` grouping in item 2.
+`internal/decodepool` is now the precedent for exactly this move: one
+audited type replacing N hand-rolled copies of the same contract, with the
+general type owning the mechanism (there, the semaphore/claim/WaitGroup
+trio; here, the channel) and the caller keeping its own domain-specific
+staleness rules on top of it.
 
 ## Noted but not in the top 5
 

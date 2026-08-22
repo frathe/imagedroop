@@ -333,7 +333,7 @@ func (v *viewer) preloadNeighbors(token requestToken) {
 }
 
 // preloadConcurrency bounds how many preloadOne decodes run at once - see
-// the preloadSem field comment on the viewer struct.
+// the preloads field comment on the viewer struct.
 const preloadConcurrency = 2
 
 // preloadOne decodes u in the background and adds it to imgCache, unless
@@ -343,7 +343,7 @@ const preloadConcurrency = 2
 // keep working, or land a stale result, after the fact; its context backs that up
 // by making ReadAndProbe/DecodeLoaded themselves stop doing I/O partway
 // through, for a preload that goes stale while it's actually running
-// rather than while still queued behind preloadSem.
+// rather than while it is still queued for a slot.
 func (v *viewer) preloadOne(token requestToken, u fyne.URI) {
 	key := u.String()
 
@@ -353,25 +353,21 @@ func (v *viewer) preloadOne(token requestToken, u fyne.URI) {
 	if v.imgCache.Contains(key) {
 		return
 	}
-	if _, inFlight := v.preloading.LoadOrStore(key, struct{}{}); inFlight {
+	if !v.preloads.Claim(key, struct{}{}) {
 		return
 	}
 
-	v.preloadPending.Go(func() {
-		defer v.preloading.Delete(key)
+	// Bounded the same way the grid's thumbnail decodes are:
+	// preloadNeighbors only ever asks for two files per settled image,
+	// but rapid navigation could otherwise stack an unbounded number
+	// of these full-size decode goroutines.
+	v.preloads.Go(token.context(), func(acquired bool) {
+		defer v.preloads.Release(key, struct{}{})
 
-		// Bounded the same way the grid's thumbnail decodes are:
-		// preloadNeighbors only ever asks for two files per settled image,
-		// but rapid navigation could otherwise stack an unbounded number
-		// of these full-size decode goroutines.
-		select {
-		case v.preloadSem <- struct{}{}:
-		case <-token.context().Done():
-			return
-		}
-		defer func() { <-v.preloadSem }()
-
-		if !token.current() {
+		// acquired is false when the token's context was cancelled while
+		// this was still queued for a slot - the pool runs fn either way
+		// precisely so the deferred Release above still clears the claim.
+		if !acquired || !token.current() {
 			return
 		}
 

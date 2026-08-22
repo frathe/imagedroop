@@ -26,15 +26,25 @@ pipeline. `grid_test.go` split the same four ways plus a new
 declaration moved byte-identical, nothing renamed, no visibility change, no
 exported API change.
 
-## ACTIVE DEVELOPMENT
-
-## Shared bounded-decode-pool type (item 4's stretch goal)
+## Extract the shared bounded decode pool into `internal/decodepool` (item 4's stretch goal)
 
 The grid's thumbnail decode pool (`thumbs.go`) and the viewer's preload pool
-(`preloadSem`/`preloading`/`preloadPending`) still duplicate the same
-semaphore/in-flight-claim/WaitGroup trio. Collapsing them onto one shared
-type in a new `internal/decodepool` package is in progress — see
-`planned_features/split_grid.md` (stages 9–12).
+(`preloadSem`/`preloading`/`preloadPending`) duplicated the same
+semaphore/in-flight-claim/WaitGroup trio. Both now share one generic
+`Pool[K, V]` in a new `internal/decodepool` package: `Claim`/`Release` for
+the per-key in-flight guard, `Go`/`Wait` for the bounded worker pool and its
+test-drainable completion count. `internal/ui/grid`'s `Overview` collapsed
+`sem`/`pending`/`inflight` into one `decodes
+*decodepool.Pool[*fyne.Container, int]`; `internal/ui`'s `viewer` collapsed
+`preloadSem`/`preloading`/`preloadPending` into one `preloads
+*decodepool.Pool[string, struct{}]`. `stillWanted` and `cellIDs` stayed
+behind in `internal/ui/grid`: deciding whether a finished decode still
+belongs on its cell needs the host generation, the filter generation, and
+cell recycling, none of which a general-purpose pool should know about — it
+answers only whether identical work is already in flight, not whether that
+work still matters.
+
+## ACTIVE DEVELOPMENT
 
 ## TODO
 

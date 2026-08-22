@@ -131,6 +131,17 @@ go test -count=1 -v ./internal/ui/grid/ 2>/dev/null | grep -E '^(--- |    --- )'
     and the filenames carry the rest. The only test file in the module with a
     header is `deletion/export_test.go`, which is a test-only *seam*, not a
     test file.
+11. **`Go` waits for its slot on the spawned goroutine, never in the
+    caller's.** Corrected during stage 9's review. That is the shape both
+    consumers already have, it is why `Go` cannot stall a caller sitting on the
+    UI goroutine, and keeping it is what lets stages 10-11 argue they changed no
+    behavior. The first draft of `TestGo_CancelledWhileQueuedStillCallsFn` in
+    this plan was racy - it never proved the first worker held the pool's only
+    slot, and it freed that slot before the cancelled call resolved, leaving
+    that call's `select` with two ready cases. The fix belongs in the test (two
+    handshakes, see stage 9), not in `Go`: an implementation that acquires the
+    semaphore synchronously to make the test deterministic would stop being a
+    faithful factoring of `preloadOne`. Verified with `go test -race -count=50`.
 
 ---
 
@@ -752,7 +763,7 @@ func TestGo_LimitBoundsConcurrency(t *testing.T) {
 	p := New[int, int](2)
 	var inFlight, peak atomic.Int64
 	release := make(chan struct{})
-	for i := 0; i < 8; i++ {
+	for range 8 {
 		p.Go(context.Background(), func(acquired bool) {
 			if !acquired {
 				t.Error("acquired false with an uncancelled context")
@@ -778,17 +789,34 @@ func TestGo_LimitBoundsConcurrency(t *testing.T) {
 
 func TestGo_CancelledWhileQueuedStillCallsFn(t *testing.T) {
 	p := New[int, int](1)
+	holding := make(chan struct{})
 	block := make(chan struct{})
-	p.Go(context.Background(), func(bool) { <-block })
+	p.Go(context.Background(), func(bool) {
+		close(holding)
+		<-block
+	})
+
+	// The pool's one slot has to be genuinely taken before the cancelled call
+	// queues behind it: Go does its waiting on the spawned goroutine, so
+	// without this handshake that goroutine might not have reached its select
+	// yet and the cancelled call would find the slot free.
+	<-holding
 
 	ctx, cancel := context.WithCancel(context.Background())
 	cancel()
 	var got atomic.Bool
 	var sawAcquired atomic.Bool
+	resolved := make(chan struct{})
 	p.Go(ctx, func(acquired bool) {
 		got.Store(true)
 		sawAcquired.Store(acquired)
+		close(resolved)
 	})
+
+	// And it has to resolve while the slot is still held. Releasing first
+	// would leave its select with two ready cases - the freed slot and the
+	// cancelled ctx - which select picks between at random.
+	<-resolved
 
 	close(block)
 	p.Wait()
@@ -804,7 +832,7 @@ func TestWait_ReturnsOnlyAfterEveryFnReturns(t *testing.T) {
 	p := New[int, int](4)
 	var done atomic.Int64
 	block := make(chan struct{})
-	for i := 0; i < 4; i++ {
+	for range 4 {
 		p.Go(context.Background(), func(bool) {
 			<-block
 			done.Add(1)

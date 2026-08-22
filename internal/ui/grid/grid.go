@@ -20,6 +20,7 @@ import (
 	"fyne.io/fyne/v2/theme"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/frathe/picfetch/internal/decodepool"
 	"github.com/frathe/picfetch/internal/imaging"
 	"github.com/frathe/picfetch/internal/selection"
 	"github.com/frathe/picfetch/internal/ui/widgets"
@@ -150,10 +151,18 @@ type Overview struct {
 	// the app runs; see its own comment.
 	thumbs *imaging.ByteCache[image.Image]
 
-	// sem bounds concurrent decodes; pending counts them, so Settle can
-	// wait for every spawned decode to finish.
-	sem     chan struct{}
-	pending sync.WaitGroup
+	// decodes bounds concurrent thumbnail decodes and gates duplicate work
+	// per recycled cell - see internal/decodepool. The key is the cell
+	// container (the stable per-slot widget, not the image inside it) and the
+	// value is the file id that cell's in-flight decode is working toward, so
+	// a cell recycled onto a different file supersedes rather than blocks.
+	//
+	// The duplicate gate earns its keep here specifically: every repaint
+	// re-runs GridWrap's update callback for every visible cell, and one
+	// multi-megapixel decode easily outlives several repaints - without the
+	// gate, each of those passes would queue another goroutine for work
+	// already underway. Wait is what Settle waits on.
+	decodes *decodepool.Pool[*fyne.Container, int]
 
 	// cellIDs tracks which file id each recycled cell is currently
 	// showing: GridWrap reuses a small, fixed pool of cell widgets as the
@@ -168,13 +177,6 @@ type Overview struct {
 	// which turned a plain map into a genuine, test-reproducible
 	// concurrent read/write.
 	cellIDs sync.Map
-
-	// inflight records, per recycled cell, which id a spawned decode is
-	// currently working toward - the claim/release pair around each decode
-	// goroutine, so repeated update passes over a still-decoding cell
-	// don't stack duplicate goroutines behind sem. A sync.Map for the same
-	// reason as cellIDs.
-	inflight sync.Map
 }
 
 // New builds the overview (hidden) around host. win is maximized (see
@@ -189,11 +191,11 @@ type Overview struct {
 // GridWrap (see Close's comment on why).
 func New(host Host, win fyne.Window) *Overview {
 	g := &Overview{
-		host:   host,
-		win:    win,
-		sel:    selection.New(),
-		thumbs: imaging.NewThumbCache(imaging.DefaultThumbCacheBytes),
-		sem:    make(chan struct{}, thumbConcurrency),
+		host:    host,
+		win:     win,
+		sel:     selection.New(),
+		thumbs:  imaging.NewThumbCache(imaging.DefaultThumbCacheBytes),
+		decodes: decodepool.New[*fyne.Container, int](thumbConcurrency),
 	}
 
 	g.wrap = widget.NewGridWrap(

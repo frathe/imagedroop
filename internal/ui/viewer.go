@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"image"
 	"slices"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -13,6 +12,7 @@ import (
 	"fyne.io/fyne/v2/lang"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/frathe/picfetch/internal/decodepool"
 	"github.com/frathe/picfetch/internal/filesort"
 	"github.com/frathe/picfetch/internal/imaging"
 	"github.com/frathe/picfetch/internal/ui/deletion"
@@ -278,19 +278,18 @@ type viewer struct {
 	// background goroutines can populate it without going through fyne.Do.
 	imgCache *imaging.ByteCache[*imaging.LoadedImage]
 
-	// preloading tracks URIs a preloadOne goroutine is currently decoding,
-	// so rapid navigation doesn't pile up a second decode of the same
-	// not-yet-cached neighbor while the first is still in flight.
-	// preloadSem bounds how many of those decodes run at once, the same
-	// small-worker-pool shape internal/ui/grid gives thumbnails - without
-	// it, rapid navigation could stack an unbounded number of full-size
-	// decode goroutines. preloadPending counts them, mirroring
-	// thumbPending below: waitUntilLoaded (harness_test.go) waits it out
-	// after every load so a preload goroutine never outlives the test
-	// whose navigation spawned it.
-	preloading     sync.Map
-	preloadSem     chan struct{}
-	preloadPending sync.WaitGroup
+	// preloads bounds how many speculative neighbor decodes run at once and
+	// stops rapid navigation piling up a second decode of the same
+	// not-yet-cached neighbor while the first is still in flight - see
+	// internal/decodepool, the same pool *type* internal/ui/grid fills with
+	// thumbnails, but its own instance and its own budget of slots, the way
+	// imgCache and the grid's thumbnail cache are two caches rather than
+	// one. Keyed by URI string; the claim carries no value, since the
+	// URI alone says what the work is. Without the bound, rapid navigation
+	// could stack an unbounded number of full-size decode goroutines.
+	// waitUntilLoaded (harness_test.go) waits it out after every load so a
+	// preload goroutine never outlives the test whose navigation spawned it.
+	preloads *decodepool.Pool[string, struct{}]
 
 	// zoom is the zoom/pan view of img (0/1/+/- and drag/scroll) - see
 	// internal/ui/zoom, whose widget sits in the window's content Stack in

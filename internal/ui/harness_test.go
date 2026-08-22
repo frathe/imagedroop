@@ -168,7 +168,7 @@ func drain(t *testing.T, v *viewer) {
 
 	settled := make(chan struct{})
 	go func() {
-		v.preloadPending.Wait()
+		v.preloads.Wait()
 		v.grid.Settle()
 		v.slides.Settle()
 		close(settled)
@@ -239,14 +239,14 @@ func waitUntilLoaded(t *testing.T, v *viewer) {
 	}
 
 	// Also wait out the neighbor preloads finishLoad kicked off (they're
-	// registered with preloadPending before loadDone closes): a preload
+	// registered with preloads before loadDone closes): a preload
 	// goroutine that outlives its test keeps reading files - and shared
 	// library state like the MIME map - under whatever test runs next,
 	// which -race rightly reports. "Loaded" here deliberately means
 	// "loaded, and everything that load spawned has settled".
 	settled := make(chan struct{})
 	go func() {
-		v.preloadPending.Wait()
+		v.preloads.Wait()
 		close(settled)
 	}()
 	select {
