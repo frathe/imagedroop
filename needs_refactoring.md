@@ -8,30 +8,6 @@ that the previous refactoring rounds deliberately kept in the core, plus a
 few files that have outgrown their single-file shape. Ranked by
 payoff-per-risk, best first.
 
-
-
-## 4. Split `internal/ui/grid/grid.go` (995 lines, one file)
-
-The grid package is healthy but is one file holding four separable
-concerns; its test file (1,154 lines) mirrors the problem. Split within
-the package, no API change:
-
-- `grid.go` — `Host`, `Overview`, construction, Toggle/Close/Overlay
-  lifecycle.
-- `nav.go` — `HandleKey`, `movePage`, highlight/selection movement,
-  `escape`/`backspace`.
-- `search.go` — `HandleRune`, `Query`, `applyFilter`, `syncTopBar`, the
-  display→host index mapping (`fileIndex`, `count`).
-- `thumbs.go` — the decode pipeline: `requestThumbnail`,
-  `claim`/`release`/`stillWanted`, `Cached`/`CachedThumb`/`StoreThumb`/
-  `ThumbCacheFull`/`SetCacheBytes`, `Warm`/`Settle`.
-
-Stretch goal, only if a real need appears: `viewer.go` notes the preload
-semaphore is "the same small-worker-pool shape internal/ui/grid gives
-thumbnails" — the claim/semaphore/pending trio in `thumbs.go` and
-`preloadSem`/`preloading`/`preloadPending` in the viewer could share one
-bounded-decode-pool type.
-
 ## 5. Unify the test-synchronization channels behind one small type
 
 The viewer carries nine ad-hoc `chan struct{}` fields with the same
