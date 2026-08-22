@@ -19,7 +19,9 @@ const (
 // carries its own help text and doesn't depend on the file being shipped
 // alongside the binary. It is rendered with Fyne's markdown support, which
 // has no table extension — keep manual.md (and manual_de.md) free of
-// markdown tables.
+// markdown tables. The three Trane pictures that break up the text are
+// embedded separately (see mascot.go): Fyne's markdown images are file URIs,
+// so a packaged app would otherwise show broken pictures.
 //
 //go:embed manual.md
 var manualMD string
@@ -77,6 +79,7 @@ type manualView struct {
 
 func newManualView(source string, onSecret func()) *manualView {
 	text := widget.NewRichTextFromMarkdown(source)
+	bindManualImages(text)
 	text.Wrapping = fyne.TextWrapWord
 	scroll := container.NewScroll(text)
 	entry := widget.NewEntry()
@@ -107,6 +110,7 @@ func (v *manualView) submit(q string) {
 	}
 
 	v.text.ParseMarkdown(v.source)
+	bindManualImages(v.text)
 
 	if q == "" {
 		v.state = searchState{}

@@ -105,6 +105,8 @@ set with the keyboard.
   (empty-dropzone) window size are remembered across launches, via Fyne's
   `Preferences` API
 
+![Trane mit Bilderrahmen](assets/trane/TaneWithFrame.webp)
+
 ## Download
 
 Pre-built binaries for Linux, Windows, and macOS are published on the
@@ -127,6 +129,8 @@ isn't actually corrupted — to open it anyway:
   dialog that appears, or
 - Run `xattr -cr "/path/to/PicFetch.app"` in Terminal to clear the
   quarantine flag, then open it normally.
+
+![Trane mit Bilderrahmen](assets/trane/trane_digging.webp)
 
 ## Requirements
 
@@ -345,3 +349,5 @@ own licenses in [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
 ## Development
 
 Built with the assistance of Coffee and [Claude Code](https://claude.com/claude-code).
+
+![Trane mit Bilderrahmen](assets/trane/trane_wags.webp)

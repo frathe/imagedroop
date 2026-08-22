@@ -1,6 +1,9 @@
 package help
 
 import (
+	"path"
+	"reflect"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -28,6 +31,28 @@ func TestManualIsEmbedded(t *testing.T) {
 	}
 }
 
+// TestManualsShareMascotImages keeps the English and German editions in lockstep
+// on the three Trane pictures: same files, same order, so a translation update
+// cannot drop one or shuffle them.
+func TestManualsShareMascotImages(t *testing.T) {
+	want := []string{"TaneWithFrame.webp", "trane_digging.webp", "trane_wags.webp"}
+	for name, md := range manuals {
+		if got := mascotRefs(md); !reflect.DeepEqual(got, want) {
+			t.Errorf("%s mascot images = %v, want %v in that order", name, got, want)
+		}
+	}
+}
+
+var mascotMarkdownRef = regexp.MustCompile(`]\(([^)]+\.webp)\)`)
+
+func mascotRefs(md string) []string {
+	var out []string
+	for _, m := range mascotMarkdownRef.FindAllStringSubmatch(md, -1) {
+		out = append(out, path.Base(m[1]))
+	}
+	return out
+}
+
 // TestManualHasNoMarkdownTables guards the in-app rendering: Fyne's markdown
 // support has no table extension, so a table in either manual would show up
 // as a wall of pipe characters in the help window.
@@ -36,6 +61,26 @@ func TestManualHasNoMarkdownTables(t *testing.T) {
 		for i, line := range strings.Split(md, "\n") {
 			if strings.HasPrefix(strings.TrimSpace(line), "|") {
 				t.Errorf("%s:%d looks like a markdown table row, which Fyne cannot render: %q", name, i+1, line)
+			}
+		}
+	}
+}
+
+// TestManualUnicodeArrowsStayInCodeSpans guards a Fyne font quirk: the
+// regular (non-monospace) face shapes U+2192 as a visible arrow plus a
+// .notdef glyph, which the painter draws as � after every arrow. Key
+// arrows belong in backticks (the monospace face has them); cycles and
+// menu paths use ASCII "->", as the keyboard-shortcuts section already does.
+func TestManualUnicodeArrowsStayInCodeSpans(t *testing.T) {
+	fenced := regexp.MustCompile("(?s)```.*?```")
+	inline := regexp.MustCompile("`[^`]*`")
+	arrow := regexp.MustCompile(`[←↑→↓]`)
+
+	for name, md := range manuals {
+		body := inline.ReplaceAllString(fenced.ReplaceAllString(md, ""), "")
+		for i, line := range strings.Split(body, "\n") {
+			if arrow.MatchString(line) {
+				t.Errorf("%s:%d has a Unicode arrow outside a code span: %q", name, i+1, strings.TrimSpace(line))
 			}
 		}
 	}

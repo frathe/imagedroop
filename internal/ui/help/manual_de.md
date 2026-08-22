@@ -11,6 +11,8 @@ Fenster oder `Cmd`/`Strg+O` stattdessen den Dateiauswahldialog Ihres Systems
 
 ---
 
+![Trane mit Bilderrahmen](TaneWithFrame.webp)
+
 ## 1. Erste Schritte
 
 1. Starten Sie **PicFetch**. Ein kleines, leeres Fenster (etwa 520 × 340)
@@ -80,7 +82,7 @@ bereits geöffnete Handbuchfenster nach vorne, statt eine zweite Kopie zu
 - **RAW** — `.cr2`, `.cr3`, `.nef`, `.nrw`, `.arw`, `.dng`, `.orf`, `.rw2`,
   `.raf`, `.pef`, `.srw`, `.raw` (es wird die vom Fotoapparat eingebettete
   JPEG-Vorschau gezeigt, in Titelzeile und Infokarte als `(Vorschau)`
-  gekennzeichnet; es gibt kein Demosaic, und Datei → Änderungen speichern
+  gekennzeichnet; es gibt kein Demosaic, und Datei -> Änderungen speichern
   bleibt aus)
 
 Eine Datei wird auch akzeptiert, wenn Ihr System sie als `image/jpeg`,
@@ -179,7 +181,7 @@ aus, statt zuerst auf 100 % zu springen, damit sich das Zoomen fließend
 anfühlt. Wiederholtes Drücken skaliert weiter hoch oder herunter, begrenzt
 auf 5 % bis 1600 %. Das Fenster wächst und schrumpft mit dem Bild: nie
 kleiner als die Größe, mit der PicFetch startet, und nie größer als die
-maximale Fensterbreite und -höhe unter **Datei → Einstellungen…**. `0`
+maximale Fensterbreite und -höhe unter **Datei -> Einstellungen…**. `0`
 stellt sowohl die Einpassung als auch diese Standard-Fenstergröße wieder her.
 
 **Scrollen** mit Mausrad oder Trackpad über dem Bild zoomt ebenfalls, und
@@ -328,6 +330,8 @@ Hinweise:
   gedrückt halten müssen.
 
 ---
+
+![Trane beim Graben](trane_digging.webp)
 
 ## 8. Rasteransicht
 
@@ -800,6 +804,8 @@ Dinge, die PicFetch absichtlich (noch) nicht tut:
 
 ---
 
+![Trane wedelt mit dem Schwanz](trane_wags.webp)
+
 ## 18. Kurzübersicht
 
 - **Laden** — Bilddateien auf das Fenster ziehen (ersetzt die aktuelle
@@ -817,8 +823,8 @@ Dinge, die PicFetch absichtlich (noch) nicht tut:
   zeigt `[Zusammenführen]`
 - **Nächstes / Vorheriges** — `→` `↓` / `←` `↑` (läuft im Kreis)
 - **Erstes / Letztes** — `Home` / `End`
-- **Sortierreihenfolge** — `S` schaltet durch Name → Aufnahmedatum →
-  Änderungszeitpunkt → Größe → unsortiert → zurück zu Name
+- **Sortierreihenfolge** — `S` schaltet durch Name -> Aufnahmedatum ->
+  Änderungszeitpunkt -> Größe -> unsortiert -> zurück zu Name
 - **Rasteransicht** — `G` schaltet ein fensterfüllendes Miniaturraster
   ein/aus; Pfeiltasten bewegen die Hervorhebung, `Page Up`/`Page Down`
   gleich um eine ganze Seite, `Return` oder ein Klick öffnet, `G`/`Esc`

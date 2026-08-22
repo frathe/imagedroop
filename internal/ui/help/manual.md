@@ -10,6 +10,8 @@ system's own file picker instead (see below).
 
 ---
 
+![Trane carrying a picture frame](TaneWithFrame.webp)
+
 ## 1. Getting started
 
 1. Start **PicFetch**. A small empty window (about 520 × 340) appears with a
@@ -69,7 +71,7 @@ the front instead of opening a second copy.
 - **RAW** — `.cr2`, `.cr3`, `.nef`, `.nrw`, `.arw`, `.dng`, `.orf`, `.rw2`,
   `.raf`, `.pef`, `.srw`, `.raw` (the camera's embedded JPEG preview is shown,
   marked `(preview)` in the title and info overlay; there is no demosaic, and
-  File → Save Changes stays off)
+  File -> Save Changes stays off)
 
 A file is also accepted if your system reports it as `image/jpeg`,
 `image/png`, `image/gif`, `image/webp`, `image/bmp`, `image/tiff`,
@@ -160,7 +162,7 @@ showing, rather than jumping to 100% first, so zooming feels continuous.
 Repeated presses keep scaling up or down, clamped between 5% and 1600%.
 The window grows and shrinks with the image as you zoom: never smaller than
 the size PicFetch opens at, and never larger than the maximum window width
-and height in **File → Settings…**. `0` restores both fit-to-window and that
+and height in **File -> Settings…**. `0` restores both fit-to-window and that
 default image-fit window size.
 
 **Scrolling** the mouse wheel or trackpad over the image zooms too, and
@@ -293,6 +295,8 @@ Notes:
   have to hold anything down mid-drag.
 
 ---
+
+![Trane digging](trane_digging.webp)
 
 ## 8. Grid overview
 
@@ -707,6 +711,8 @@ Things PicFetch deliberately does not do (yet):
 
 ---
 
+![Trane wagging his tail](trane_wags.webp)
+
 ## 18. Quick reference
 
 - **Load** — drag image files onto the window (replaces the current set)
@@ -721,8 +727,8 @@ Things PicFetch deliberately does not do (yet):
   instead of replacing it, and the title bar shows `[merge]`
 - **Next / previous** — `→` `↓` / `←` `↑` (wraps around)
 - **First / last** — `Home` / `End`
-- **Sort order** — `S` cycles name → capture date → modified → size →
-  unsorted → back to name
+- **Sort order** — `S` cycles name -> capture date -> modified -> size ->
+  unsorted -> back to name
 - **Grid overview** — `G` toggles a full-window thumbnail grid; arrow keys
   move the highlight and `Page Up`/`Page Down` move it a page at a time,
   `Return` or a click opens it, `G`/`Esc` backs out without picking one
