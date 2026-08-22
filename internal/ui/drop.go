@@ -149,13 +149,13 @@ func (v *viewer) handleDrop(uris []fyne.URI) {
 // applyScanResult is the shared completion step for both of handleDrop's
 // paths - the synchronous no-directories fast path and the folder-scan
 // goroutine. It must run on the UI goroutine (both callers wrap it in
-// fyne.Do) and always closes scanDone, honoring that channel's contract
+// fyne.Do) and always finishes scanDone, honoring that generation's contract
 // even when a newer generation has made this result stale. maxScan is the
 // cap the scan actually ran under (handleDrop's snapshot), so the
 // truncation toast below reports it accurately even if the settings window
 // has since changed v.settings.maxScan.
-func (v *viewer) applyScanResult(token requestToken, merging bool, uris, images []fyne.URI, truncated bool, maxScan int, scanDone chan struct{}) {
-	defer close(scanDone)
+func (v *viewer) applyScanResult(token requestToken, merging bool, uris, images []fyne.URI, truncated bool, maxScan int, scanDone func()) {
+	defer scanDone()
 	defer token.cancelContext()
 
 	if !token.current() {

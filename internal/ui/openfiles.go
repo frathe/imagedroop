@@ -18,32 +18,37 @@ import (
 // per-OS dispatch. It always runs on its own goroutine since every backing
 // command blocks until the user closes the dialog.
 func (v *viewer) openFileDialog() {
-	// chooserDone mirrors clipboardDone/scanOp.done: closed once this pick's
-	// goroutine has fully finished, error toast included, so a test can
-	// wait for it rather than leave it running into the next one. That
-	// matters more than it looks: reportChooserError renders a toast, and
-	// under the fyne test driver this goroutine's fyne.Do runs inline
-	// here rather than on the UI goroutine, so an unwaited-for failure
-	// path measures text concurrently with whatever the test goroutine is
-	// laying out - which races inside Fyne's own global font-metrics
-	// cache (internal/cache's setAlive writes an expiry stamp unguarded).
-	done := make(chan struct{})
-	v.chooserDone = done
+	// chooser is finished once this pick's goroutine has fully run, error
+	// toast included, so a test can wait for it rather than leave it
+	// running into the next one. That matters more than it looks:
+	// reportChooserError renders a toast, and under the fyne test driver
+	// this goroutine's fyne.Do runs inline here rather than on the UI
+	// goroutine, so an unwaited-for failure path measures text
+	// concurrently with whatever the test goroutine is laying out - which
+	// races inside Fyne's own global font-metrics cache (internal/cache's
+	// setAlive writes an expiry stamp unguarded).
+	done := v.chooser.Begin()
 
 	go func() {
-		defer close(done)
+		defer done()
 
 		v.runFileChooser()
 	}()
 }
 
 // runFileChooser is split out from openFileDialog so tests can call it
-// directly on the test goroutine - avoiding a data race on
-// v.scanOp.done/v.loadDone, which handleDrop below would otherwise write from
-// a background goroutine with nothing synchronizing that write against a
-// test reading them, the same hazard documented on the zenity-specific
-// tests this replaced. Production always reaches it through the goroutine
-// in openFileDialog above.
+// directly on the test goroutine instead of through a spawned one. It used
+// to dodge a real data race, too: handleDrop below would write
+// v.scanOp.done and v.load from a background goroutine with nothing
+// synchronizing those writes against a test goroutine reading them, the
+// same hazard documented on the zenity-specific tests this replaced. Both
+// are completion.Signal values now, internally synchronized by their own
+// mutex, so that race is gone - but the split stays useful: it keeps a
+// test on a single goroutine, and handleDrop still touches other viewer
+// fields (the welcome/dropzone widgets, v.state) that carry no
+// synchronization of their own, which a spawned goroutine racing the test
+// goroutine would still hit. Production always reaches runFileChooser
+// through the goroutine in openFileDialog above.
 func (v *viewer) runFileChooser() {
 	out, err := filepicker.Choose()
 	if err != nil {

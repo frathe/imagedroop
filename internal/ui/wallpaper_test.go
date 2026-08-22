@@ -16,28 +16,23 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"fyne.io/fyne/v2/storage"
 
 	"github.com/frathe/picfetch/internal/uitest"
 )
 
-// settleWallpaper waits out the goroutine setAsWallpaper runs on -
-// wallpaperDone is closed once it has fully finished, toast included, so
+// settleWallpaper waits out the goroutine setAsWallpaper runs on - wallpaper
+// is finished once that goroutine has fully run, toast included, so
 // reading widget state afterwards is race-free.
 func settleWallpaper(t *testing.T, v *viewer) {
 	t.Helper()
 
-	if v.wallpaperDone == nil {
+	if !v.wallpaper.Begun() {
 		t.Fatal("no wallpaper goroutine pending to settle")
 	}
 
-	select {
-	case <-v.wallpaperDone:
-	case <-time.After(testTimeout):
-		t.Fatal("timed out waiting for the wallpaper goroutine to finish")
-	}
+	waitFor(t, "the wallpaper change", &v.wallpaper)
 }
 
 // wallpaperFiles lists what setAsWallpaper has left in the viewer's cache
@@ -205,7 +200,7 @@ func TestSetAsWallpaper_DoesNothingWithoutAnImage(t *testing.T) {
 
 	v.setAsWallpaper()
 
-	if v.wallpaperDone != nil {
+	if v.wallpaper.Begun() {
 		t.Error("setAsWallpaper started a goroutine with nothing loaded")
 	}
 }

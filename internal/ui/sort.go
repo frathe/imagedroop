@@ -97,11 +97,11 @@ func (v *viewer) startSort(mode filesort.Mode, unsorted []fyne.URI, onDone func(
 
 // finishSort is startSort's completion step, shaped like drop.go's
 // applyScanResult: it must run on the UI goroutine (startSort's goroutine
-// wraps it in fyne.Do), always closes sortDone (honoring that channel's
+// wraps it in fyne.Do), always finishes sortDone (honoring that generation's
 // contract even when a newer request has made this result stale), and always
 // releases this invocation's own token context.
-func (v *viewer) finishSort(token requestToken, ordered []fyne.URI, sortDone chan struct{}, onDone func([]fyne.URI)) {
-	defer close(sortDone)
+func (v *viewer) finishSort(token requestToken, ordered []fyne.URI, sortDone func(), onDone func([]fyne.URI)) {
+	defer sortDone()
 	defer token.cancelContext()
 
 	// Superseded either by a newer sort or by something else that changed

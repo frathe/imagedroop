@@ -88,7 +88,7 @@ func (v *viewer) copySelection() {
 // references, so a paste in Finder/Explorer/a Linux file manager creates
 // copies of the files themselves.
 //
-// Runs on its own goroutine and reports through clipboardDone for the same
+// Runs on its own goroutine and reports through v.clipboard for the same
 // reasons copyImageToClipboard does: every backing command blocks on external
 // I/O, and a test needs one thing to wait on rather than polling widgets the
 // goroutine may still be writing.
@@ -105,11 +105,10 @@ func (v *viewer) copyGridSelection() {
 		return
 	}
 
-	done := make(chan struct{})
-	v.clipboardDone = done
+	done := v.clipboard.Begin()
 
 	go func() {
-		defer close(done)
+		defer done()
 
 		if err := clipboard.CopyFiles(paths); err != nil {
 			v.reportFileCopyError(err)

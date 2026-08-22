@@ -6,7 +6,6 @@ import (
 	"os"
 	"slices"
 	"testing"
-	"time"
 
 	"fyne.io/fyne/v2"
 
@@ -16,21 +15,17 @@ import (
 )
 
 // settleFavoritePreviews waits out the background pass SyncFavoritePreviews
-// runs on - favThumbDone is closed once that pass has fully finished, sweep
+// runs on - favThumb is finished once that pass has fully completed, sweep
 // included, so reading the preview directory afterwards is race-free. The
 // same discipline settleWallpaper gives the wallpaper goroutine.
 func settleFavoritePreviews(t *testing.T, v *viewer) {
 	t.Helper()
 
-	if v.favThumbDone == nil {
+	if !v.favThumb.Begun() {
 		t.Fatal("no favorite-preview pass pending to settle")
 	}
 
-	select {
-	case <-v.favThumbDone:
-	case <-time.After(testTimeout):
-		t.Fatal("timed out waiting for the favorite-preview pass to finish")
-	}
+	waitFor(t, "the favorite-preview pass", &v.favThumb)
 }
 
 // storeFavorite writes a favorite holding files into a fresh temporary
@@ -92,7 +87,7 @@ func TestSyncFavoritePreviews_PreferenceOffWritesNothing(t *testing.T) {
 	waitForSort(t, v)
 	waitUntilLoaded(t, v)
 
-	if v.favThumbDone != nil {
+	if v.favThumb.Begun() {
 		t.Error("a preview pass was started with the preference off")
 	}
 	if _, err := os.Stat(favthumbs.Dir(favDir)); !errors.Is(err, os.ErrNotExist) {

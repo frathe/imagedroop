@@ -1,6 +1,7 @@
 package ui
 
 import (
+	"context"
 	"os"
 	"slices"
 	"testing"
@@ -8,6 +9,8 @@ import (
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/test"
+
+	"github.com/frathe/picfetch/internal/completion"
 )
 
 // This file is the shared harness every other test file in this package
@@ -20,9 +23,10 @@ import (
 // happens to need it first.
 //
 // ShowImage and handleDrop decode and scan off the main goroutine and apply
-// their results via fyne.Do, closing loadDone/scanOp.done as the last thing
-// their completion block does. Waiting on those channels - rather than
-// polling v.loading or a widget's visibility - gives the receive a proper
+// their results via fyne.Do, finishing v.load / v.scanOp.done - both
+// completion.Signal, see internal/completion for the contract - as the last
+// thing their completion block does. Waiting on those signals - rather than
+// polling v.loading or a widget's visibility - gives the waiter a proper
 // happens-before relationship with everything the producer goroutine wrote,
 // which is what makes these tests race-free under the test driver's
 // fyne.Do: unlike the real app drivers, it runs synchronously on the calling
@@ -115,10 +119,13 @@ func newTestUI(t *testing.T) (v *viewer, win fyne.Window, closed func() bool) {
 }
 
 // drain waits out every background operation this viewer may still have in
-// flight. Each wait is individually optional - a viewer that never scanned
-// has a nil scanOp.done - but the set is exhaustive on purpose: it is the
-// backstop that keeps one test's goroutines out of the next one, whatever
-// that test happened to exercise.
+// flight. Each wait is individually optional - Wait on a completion.Signal
+// that never began returns immediately - but the set is exhaustive on
+// purpose: it is the backstop that keeps one test's goroutines out of the
+// next one, whatever that test happened to exercise. toast.hidden is the
+// one Signal deliberately left out of the table below - see newTestUI's
+// v.toast.duration comment for why waiting it out here would block for an
+// hour.
 func drain(t *testing.T, v *viewer) {
 	t.Helper()
 
@@ -144,26 +151,35 @@ func drain(t *testing.T, v *viewer) {
 	// further Add.
 	v.vector.pending.Wait()
 
+	// Ordered causally, not chronologically: a row that can still start
+	// the work a later row waits on must come first, or a finish landing
+	// mid-drain spawns work behind a wait that already returned
+	// (finishLoad begins v.anim and spawns animate before its own done()).
+	// The chain is chooser -> scan -> sort -> load -> animation -> preloads
+	// (preloads is waited out separately, below) - chooser first because
+	// runFileChooser calls handleDrop, which begins scan, synchronously
+	// before the chooser's own finisher fires, so a scan wait that ran
+	// ahead of the chooser wait could still miss a scan that starts while
+	// the chooser goroutine is still unwinding. This loop enforces every
+	// edge in that chain now. Ordering helps here in a way a chan-value
+	// table couldn't: these rows hold *completion.Signal, and Wait reads
+	// the live generation at call time, so a correctly ordered row also
+	// catches work that starts during drain, not just whatever was already
+	// in flight when it began.
 	for _, c := range []struct {
 		name string
-		ch   chan struct{}
+		sig  *completion.Signal
 	}{
-		{"scan", v.scanOp.done},
-		{"sort", v.sortOp.done},
-		{"load", v.loadDone},
-		{"clipboard copy", v.clipboardDone},
-		{"file chooser", v.chooserDone},
-		{"wallpaper", v.wallpaperDone},
-		{"favorite previews", v.favThumbDone},
+		{"the clipboard copy at cleanup", &v.clipboard},
+		{"the wallpaper at cleanup", &v.wallpaper},
+		{"the favorite previews at cleanup", &v.favThumb},
+		{"the file chooser at cleanup", &v.chooser},
+		{"the scan at cleanup", &v.scanOp.done},
+		{"the sort at cleanup", &v.sortOp.done},
+		{"the load at cleanup", &v.load},
+		{"the animation at cleanup", &v.anim},
 	} {
-		if c.ch == nil {
-			continue
-		}
-		select {
-		case <-c.ch:
-		case <-time.After(testTimeout):
-			t.Fatalf("timed out draining the %s goroutine at cleanup", c.name)
-		}
+		waitFor(t, c.name, c.sig)
 	}
 
 	settled := make(chan struct{})
@@ -201,12 +217,40 @@ func newTestViewer(t *testing.T) *viewer {
 // suggested a tuning knob nobody was actually turning.
 const testTimeout = 5 * time.Second
 
+// waitFor blocks until s's current operation finishes, failing the test on
+// timeout. One helper for every completion.Signal on the viewer, so the
+// testTimeout deadline lives in exactly one place instead of being
+// restated by a hand-rolled select per operation.
+func waitFor(t *testing.T, name string, s *completion.Signal) {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+
+	if err := s.Wait(ctx); err != nil {
+		t.Fatalf("timed out waiting for %s", name)
+	}
+}
+
+// waitHandle is waitFor for a generation captured before a newer request
+// superseded it - see completion.Signal.Current.
+func waitHandle(t *testing.T, name string, h completion.Handle) {
+	t.Helper()
+
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+
+	if err := h.Wait(ctx); err != nil {
+		t.Fatalf("timed out waiting for %s", name)
+	}
+}
+
 // dropAndWait drops uris and waits for the resulting scan, reorder and load
 // to finish - the opening lines of nearly every test in this suite. The sort
 // step is part of the chain because applyScanResult hands the scanned files
 // to startSort, which only shows the first image once the reorder lands.
 // Use dropAndWaitScan instead when the drop is expected to load nothing
-// (no supported images), since neither sortDone nor loadDone is touched in
+// (no supported images), since neither sortOp.done nor v.load is touched in
 // that case.
 func dropAndWait(t *testing.T, v *viewer, uris ...fyne.URI) {
 	t.Helper()
@@ -220,8 +264,8 @@ func dropAndWait(t *testing.T, v *viewer, uris ...fyne.URI) {
 // dropAndWaitScan drops uris and waits only for the scan, for drops that
 // end with nothing displayable - an unsupported file, an empty folder, a
 // merge that adds nothing. Deliberately no waitForSort: applyScanResult
-// returns before ever reaching startSort in that case, so v.sortOp.done is left
-// holding whatever channel some earlier call put there.
+// returns before ever reaching startSort in that case, so v.sortOp.done is
+// left untouched at whatever generation some earlier call begun.
 func dropAndWaitScan(t *testing.T, v *viewer, uris ...fyne.URI) {
 	t.Helper()
 
@@ -232,14 +276,10 @@ func dropAndWaitScan(t *testing.T, v *viewer, uris ...fyne.URI) {
 func waitUntilLoaded(t *testing.T, v *viewer) {
 	t.Helper()
 
-	select {
-	case <-v.loadDone:
-	case <-time.After(testTimeout):
-		t.Fatal("timed out waiting for the image to finish loading")
-	}
+	waitFor(t, "the image to finish loading", &v.load)
 
 	// Also wait out the neighbor preloads finishLoad kicked off (they're
-	// registered with preloads before loadDone closes): a preload
+	// registered with preloads before the load signal finishes): a preload
 	// goroutine that outlives its test keeps reading files - and shared
 	// library state like the MIME map - under whatever test runs next,
 	// which -race rightly reports. "Loaded" here deliberately means
@@ -259,21 +299,13 @@ func waitUntilLoaded(t *testing.T, v *viewer) {
 func waitForScan(t *testing.T, v *viewer) {
 	t.Helper()
 
-	select {
-	case <-v.scanOp.done:
-	case <-time.After(testTimeout):
-		t.Fatal("timed out waiting for scan to finish")
-	}
+	waitFor(t, "the scan", &v.scanOp.done)
 }
 
 func waitForSort(t *testing.T, v *viewer) {
 	t.Helper()
 
-	select {
-	case <-v.sortOp.done:
-	case <-time.After(testTimeout):
-		t.Fatal("timed out waiting for sort to finish")
-	}
+	waitFor(t, "the sort", &v.sortOp.done)
 }
 
 // waitForAnimFrame polls v.animFrame - an atomic counter animate bumps after
@@ -301,21 +333,17 @@ func parkAnimate(v *viewer) {
 	v.frameAfter = func(time.Duration) <-chan time.Time { return make(chan time.Time) }
 }
 
-// waitForAnimStopped waits for the current animate call to close
-// v.animStopped, which it does right before returning once it notices its
-// generation is stale.
+// waitForAnimStopped waits for the current animate call to finish v.anim,
+// which it does right before returning once it notices its generation is
+// stale.
 func waitForAnimStopped(t *testing.T, v *viewer) {
 	t.Helper()
 
-	select {
-	case <-v.animStopped:
-	case <-time.After(testTimeout):
-		t.Fatal("timed out waiting for animation to stop")
-	}
+	waitFor(t, "the animation to stop", &v.anim)
 }
 
 // waitForCached polls imgCache - populated from preloadOne's background
-// goroutines, which run independently of loadDone/scanOp.done - until it holds
+// goroutines, which run independently of v.load/scanOp.done - until it holds
 // an entry for u, the same polling-with-timeout style waitForAnimFrame uses
 // for animate's background writes.
 func waitForCached(t *testing.T, v *viewer, u fyne.URI) {
@@ -351,11 +379,7 @@ func settleToast(t *testing.T, v *viewer) {
 
 	v.toast.cancelAutoHide()
 
-	select {
-	case <-v.toast.done:
-	case <-time.After(testTimeout):
-		t.Fatal("timed out waiting for the toast's auto-hide goroutine to exit")
-	}
+	waitFor(t, "the toast's auto-hide goroutine", &v.toast.hidden)
 
 	v.toast.autoHide(v.toast.gen.Load())
 }
@@ -368,15 +392,11 @@ func settleToast(t *testing.T, v *viewer) {
 func settleChooser(t *testing.T, v *viewer) {
 	t.Helper()
 
-	if v.chooserDone == nil {
+	if !v.chooser.Begun() {
 		t.Fatal("no file-chooser goroutine pending to settle")
 	}
 
-	select {
-	case <-v.chooserDone:
-	case <-time.After(testTimeout):
-		t.Fatal("timed out waiting for the file-chooser goroutine to finish")
-	}
+	waitFor(t, "the file-chooser goroutine", &v.chooser)
 }
 
 // settleSlideshow leaves picture-frame mode (a no-op when it's already

@@ -50,17 +50,16 @@ func (v *viewer) ShowImage(i int) {
 	// A new request token invalidates any decode/retry chain still in flight,
 	// so a slow load can never overwrite a newer selection. Every retry in
 	// attemptLoad below - for a file that turns out to be broken - shares
-	// this one token and done channel: they're
+	// this one token and this one generation's finisher: they're
 	// all part of the same logical navigation, not independent ones, so a
 	// genuinely newer ShowImage() call correctly invalidates the whole chain
 	// and, via the token's context, stops attemptLoad's/preloadOne's I/O instead of just
 	// discarding a result they'd otherwise run to completion for - and a
-	// waiter on done sees the chain as finished only once it truly settles
-	// instead of racing whichever retry closes a channel first.
+	// waiter on v.load sees the chain as finished only once it truly settles
+	// instead of racing whichever retry finishes first.
 	token := v.loadLifecycle.begin()
 
-	done := make(chan struct{})
-	v.loadDone = done
+	done := v.load.Begin()
 
 	v.attemptLoad(token, i, done)
 }
@@ -81,7 +80,7 @@ func (v *viewer) invalidateLoad() uint64 {
 // RemoveFile and retries at the same position, which now holds what used
 // to be the next file (or wraps around to the first, if i was the last);
 // once nothing is left it falls back to the empty-state error screen.
-func (v *viewer) attemptLoad(token requestToken, i int, done chan struct{}) {
+func (v *viewer) attemptLoad(token requestToken, i int, done func()) {
 	n := len(v.state.files)
 	i = ((i % n) + n) % n
 	v.state.index = i
@@ -94,7 +93,7 @@ func (v *viewer) attemptLoad(token requestToken, i int, done chan struct{}) {
 	// we're already on it.
 	if loaded, ok := v.imgCache.Get(u.String()); ok {
 		if !token.current() {
-			close(done)
+			done()
 			return
 		}
 		v.finishLoad(token, i, u, loaded, done)
@@ -138,7 +137,7 @@ func (v *viewer) attemptLoad(token requestToken, i int, done chan struct{}) {
 
 		fyne.Do(func() {
 			if !token.current() {
-				close(done) // user already navigated elsewhere
+				done() // user already navigated elsewhere
 				return
 			}
 
@@ -183,13 +182,13 @@ func (v *viewer) attemptLoad(token requestToken, i int, done chan struct{}) {
 // finishLoad displays loaded - already decoded, either just now or earlier
 // and pulled from imgCache - as v.state.files[i], updates the window title/size
 // and animation state, kicks off speculative preloading of its neighbors,
-// and closes done last. Shared by attemptLoad's disk-decode path (called
-// from inside its completion fyne.Do, which - like every fyne.Do callback
-// in this file - the real driver runs on the UI goroutine but the fyne
-// test driver runs synchronously on whatever goroutine called it) and its
-// cache-hit path (called directly from attemptLoad, always on whichever
-// goroutine called ShowImage()).
-func (v *viewer) finishLoad(token requestToken, _ int, u fyne.URI, loaded *imaging.LoadedImage, done chan struct{}) {
+// and finishes the load signal last. Shared by attemptLoad's disk-decode
+// path (called from inside its completion fyne.Do, which - like every
+// fyne.Do callback in this file - the real driver runs on the UI goroutine
+// but the fyne test driver runs synchronously on whatever goroutine called
+// it) and its cache-hit path (called directly from attemptLoad, always on
+// whichever goroutine called ShowImage()).
+func (v *viewer) finishLoad(token requestToken, _ int, u fyne.URI, loaded *imaging.LoadedImage, done func()) {
 	b := loaded.Frames[0].Bounds()
 
 	v.displayFrames = loaded.Frames
@@ -290,28 +289,28 @@ func (v *viewer) finishLoad(token requestToken, _ int, u fyne.URI, loaded *imagi
 	// calling goroutine, so spawning animate first let its own first-frame
 	// Refresh race with this goroutine's still-running ForceRepaint.
 	if len(loaded.Frames) > 1 {
-		stopped := make(chan struct{})
-		v.animStopped = stopped
+		stopped := v.anim.Begin()
 		go v.animate(token, loaded.Frames, loaded.Delays, stopped)
 	}
 
-	// Must run - and finish reading v.state.files/v.state.index - before done closes
-	// below: done's close is what a waiter (a test's waitUntilLoaded, or a
-	// future navigation) synchronizes on to know this call is finished
-	// touching viewer state. Under the fyne test driver, this whole
-	// function already runs on whatever goroutine called fyne.Do rather
-	// than a dedicated UI goroutine (see attemptLoad's token comment), so
-	// closing done first would let a waiter go on to mutate v.state.files - via
-	// reset() or a fresh drop - concurrently with this read.
+	// Must run - and finish reading v.state.files/v.state.index - before the
+	// load signal finishes below: that finish is what a waiter (a test's
+	// waitUntilLoaded, or a future navigation) synchronizes on to know
+	// this call is done touching viewer state. Under the fyne test
+	// driver, this whole function already runs on whatever goroutine
+	// called fyne.Do rather than a dedicated UI goroutine (see
+	// attemptLoad's token comment), so finishing the signal first would
+	// let a waiter go on to mutate v.state.files - via reset() or a fresh
+	// drop - concurrently with this read.
 	v.preloadNeighbors(token)
 
-	close(done)
+	done()
 }
 
 // preloadNeighbors speculatively decodes the files immediately before and
 // after v.state.index in the background, so stepping to either one next is a
 // cache hit instead of a fresh disk read + decode. Always called from
-// finishLoad before done closes - see its comment - so reading
+// finishLoad before the load signal finishes - see its comment - so reading
 // v.state.files/v.state.index here can't race a waiter that's about to mutate them.
 // token is the same one ShowImage created for this navigation - the
 // preloads it starts belong to the request that's now on screen, so
@@ -417,15 +416,15 @@ func (v *viewer) preloadOne(token requestToken, u fyne.URI) {
 
 // retryAfterLoadFailure reports msg, drops v.state.files[i], and either continues
 // the retry chain via attemptLoad or, if that emptied the set, falls back
-// to the empty-state error screen and finalizes done. See show/attemptLoad
-// for why token and done are threaded through unchanged rather than
-// starting a fresh chain.
-func (v *viewer) retryAfterLoadFailure(token requestToken, msg string, i int, done chan struct{}) {
+// to the empty-state error screen and finishes the load signal. See ShowImage/attemptLoad
+// for why the whole chain shares one token and one generation of v.load
+// rather than beginning fresh ones per retry.
+func (v *viewer) retryAfterLoadFailure(token requestToken, msg string, i int, done func()) {
 	v.RemoveFile(i)
 
 	if len(v.state.files) == 0 {
 		v.ShowEmptyStateError(msg)
-		close(done)
+		done()
 		return
 	}
 
@@ -437,15 +436,15 @@ func (v *viewer) retryAfterLoadFailure(token requestToken, msg string, i int, do
 // between frames for each one's delay and updating the canvas image via
 // fyne.Do. It stops once its load token is cancelled or superseded, the same
 // staleness contract ShowImage's decode goroutine uses, so a navigation or a
-// fresh drop wakes the previous animation immediately. stopped is closed right before it
+// fresh drop wakes the previous animation immediately. stopped is called right before it
 // returns, and animFrame is bumped after every frame write, so tests can
 // wait on those instead of reading v.img.Image from another goroutine - see
-// the animFrame/animStopped comment on the viewer struct. Frame delays go
+// the animFrame/anim comment on the viewer struct. Frame delays go
 // through v.frameAfter (time.After in production) so a test can step
 // frames instead of racing a live timer; the seam is write-once, set
 // before the first drop.
-func (v *viewer) animate(token requestToken, frames []image.Image, delays []time.Duration, stopped chan struct{}) {
-	defer close(stopped)
+func (v *viewer) animate(token requestToken, frames []image.Image, delays []time.Duration, stopped func()) {
+	defer stopped()
 
 	idx := 0
 

@@ -57,11 +57,10 @@ func (v *viewer) SyncFavoritePreviews(favDir string, files []fyne.URI) {
 	// the loser would be evicting the winner's entries.
 	token := v.favThumbLifecycle.begin()
 
-	done := make(chan struct{})
-	v.favThumbDone = done
+	done := v.favThumb.Begin()
 
 	go func() {
-		defer close(done)
+		defer done()
 
 		if err := favthumbs.Sync(token.context(), favDir, files, gridSink{v.grid}); err != nil {
 			// A superseded pass returns context.Canceled, which is this

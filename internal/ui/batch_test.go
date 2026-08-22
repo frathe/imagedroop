@@ -5,7 +5,6 @@ import (
 	"image/color"
 	"slices"
 	"testing"
-	"time"
 
 	"fyne.io/fyne/v2"
 
@@ -39,16 +38,12 @@ func openGridWith(t *testing.T, names ...string) *viewer {
 }
 
 // waitForClipboard waits out the goroutine a clipboard copy runs on -
-// clipboardDone is closed once it has fully finished, error toast included,
-// so reading widget state afterwards is race-free.
+// v.clipboard is finished once that goroutine has fully run, error toast
+// included, so reading widget state afterwards is race-free.
 func waitForClipboard(t *testing.T, v *viewer) {
 	t.Helper()
 
-	select {
-	case <-v.clipboardDone:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for the clipboard goroutine to finish")
-	}
+	waitFor(t, "the clipboard copy", &v.clipboard)
 }
 
 // --- delete ----------------------------------------------------------------

@@ -659,7 +659,7 @@ func TestWireExportShortcuts_OpensPromptAndSetsWallpaperWithoutColliding(t *test
 	if !v.exportPrompt.Visible() {
 		t.Fatal("expected Cmd/Ctrl+E to open the export prompt")
 	}
-	if v.wallpaperDone != nil {
+	if v.wallpaper.Begun() {
 		t.Error("Cmd/Ctrl+E must not also set the wallpaper")
 	}
 	v.exportPrompt.Hide()

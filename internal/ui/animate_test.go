@@ -22,7 +22,7 @@ import (
 // animate writes v.img.Image and bumps the v.animFrame atomic from its own
 // goroutine (see its comment in load.go), so a test goroutine may never read
 // v.img.Image until it has confirmed - via waitForAnimStopped, which waits
-// for v.animStopped to close - that animate has actually returned; polling
+// for v.anim to finish - that animate has actually returned; polling
 // animFrame with waitForAnimFrame is how a test observes progress in the
 // meantime without racing those writes. Both helpers stay in
 // harness_test.go as shared harness. Tests that need a known frame index
@@ -80,17 +80,17 @@ func TestViewerShow_AnimatesGIF(t *testing.T) {
 
 	dropAndWait(t, v, storage.NewFileURI(path))
 
-	// animate() writes v.img.Image from its own goroutine for as long as
-	// its load token stays current, which the fyne test driver never marshals onto
+	// animate() writes v.img.Image from its own goroutine for as long as its
+	// load token stays current, which the fyne test driver never marshals onto
 	// this one - so reading v.img.Image from here at any point before that
 	// goroutine has fully stopped would race with those writes, even right
-	// after waitForAnimFrame observes a given count: animate is free to
-	// keep writing further frames in between that observation and the next
-	// statement. animFrame reaching 2 (1 for attemptLoad's own first frame,
-	// 1 more for animate's first cycle) is proof the animation loop ran at
-	// all; invalidating loadLifecycle and waiting for animStopped then guarantees no
-	// further write can happen, at which point animFrame's final value is
-	// stable and it's finally safe to read v.img.Image.
+	// after waitForAnimFrame observes a given count: animate is free to keep
+	// writing further frames in between that observation and the next
+	// statement. animFrame reaching 2 (1 for attemptLoad's own first frame, 1
+	// more for animate's first cycle) is proof the animation loop ran at all;
+	// invalidating loadLifecycle and waiting for v.anim to finish then
+	// guarantees no further write can happen, at which point animFrame's final
+	// value is stable and it's finally safe to read v.img.Image.
 	waitForAnimFrame(t, v, 2)
 
 	v.loadLifecycle.invalidate()
@@ -143,16 +143,12 @@ func TestViewerShow_NavigatingAwayStopsAnimation(t *testing.T) {
 		t.Fatal("expected the blue frame on screen after one clock tick")
 	}
 
-	oldAnimStopped := v.animStopped
+	oldAnim := v.anim.Current()
 
 	v.ShowImage(1)
 	waitUntilLoaded(t, v)
 
-	select {
-	case <-oldAnimStopped:
-	case <-time.After(testTimeout):
-		t.Fatal("timed out waiting for the superseded animation to stop")
-	}
+	waitHandle(t, "the superseded animation to stop", oldAnim)
 
 	// JPEG is lossy, so a "solid green" square won't decode back to an exact
 	// R=0, but green should still clearly dominate; an animation frame
@@ -176,8 +172,8 @@ func TestInvalidateLoad_WakesAnimateImmediately(t *testing.T) {
 
 	dropAndWait(t, v, animURI)
 
-	if v.animStopped == nil {
-		t.Fatal("loading an animated GIF should arm animStopped")
+	if !v.anim.Begun() {
+		t.Fatal("loading an animated GIF should arm the animation signal")
 	}
 
 	v.loadLifecycle.invalidate()

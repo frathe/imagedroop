@@ -98,15 +98,11 @@ func TestCopyImageToClipboard_DispatchFailureShowsToast(t *testing.T) {
 	v.copyImageToClipboard()
 
 	// copyImageToClipboard reports failures from a background goroutine
-	// via fyne.Do; waiting on clipboardDone (closed after that goroutine
-	// has fully finished, error toast included) is what makes reading the
+	// via fyne.Do; waiting on v.clipboard (finished after that goroutine
+	// has fully run, error toast included) is what makes reading the
 	// toast widgets afterward race-free - polling them would read state
 	// the goroutine may still be writing.
-	select {
-	case <-v.clipboardDone:
-	case <-time.After(2 * time.Second):
-		t.Fatal("timed out waiting for the clipboard copy goroutine to finish")
-	}
+	waitFor(t, "the clipboard copy", &v.clipboard)
 
 	if !v.toast.card.Visible() {
 		t.Error("expected a toast for a clipboard copy failure")

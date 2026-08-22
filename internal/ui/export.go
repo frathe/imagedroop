@@ -121,15 +121,14 @@ func (v *viewer) exportAs(ext string) {
 	src, _, _ := v.CurrentFile()
 	img := v.img.Image
 
-	// chooserDone is shared with openFileDialog's own goroutine rather than
-	// given a twin of its own: it means "the native file dialog goroutine",
-	// and these two are never in flight at once - both panels are app-modal,
-	// so neither can be reached while the other is up.
-	done := make(chan struct{})
-	v.chooserDone = done
+	// chooser is shared with openFileDialog's own goroutine rather than
+	// given a twin of its own: it means "the native file dialog
+	// goroutine", and these two are never in flight at once - both panels
+	// are app-modal, so neither can be reached while the other is up.
+	done := v.chooser.Begin()
 
 	go func() {
-		defer close(done)
+		defer done()
 
 		v.runExport(src, img, ext)
 	}()

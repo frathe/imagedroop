@@ -7,6 +7,7 @@ import (
 
 	"fyne.io/fyne/v2"
 
+	"github.com/frathe/picfetch/internal/completion"
 	"github.com/frathe/picfetch/internal/filescan"
 	"github.com/frathe/picfetch/internal/filesort"
 	"github.com/frathe/picfetch/internal/uitest"
@@ -135,9 +136,9 @@ func TestStaleFileStateCompletionsDoNotOverwriteNewerState(t *testing.T) {
 
 	staleScanToken := v.scanOp.lifecycle.begin()
 	v.scanOp.lifecycle.begin()
-	scanDone := make(chan struct{})
-	v.applyScanResult(staleScanToken, false, stale, stale, false, filescan.DefaultMax, scanDone)
-	<-scanDone
+	var scanSignal completion.Signal
+	v.applyScanResult(staleScanToken, false, stale, stale, false, filescan.DefaultMax, scanSignal.Begin())
+	waitFor(t, "the stale scan completion", &scanSignal)
 	assertEquivalentFileSlices(t, v)
 	if got := namesOfURIs(v.state.files); !slices.Equal(got, []string{"current.jpg"}) {
 		t.Errorf("files = %v, want newer scan state retained", got)
@@ -149,12 +150,12 @@ func TestStaleFileStateCompletionsDoNotOverwriteNewerState(t *testing.T) {
 	v.sortOp.active = true
 	v.sortOp.spinner.Show()
 	v.sortOp.label.Show()
-	sortDone := make(chan struct{})
+	var sortSignal completion.Signal
 	called := false
-	v.finishSort(staleSortToken, stale, sortDone, func([]fyne.URI) {
+	v.finishSort(staleSortToken, stale, sortSignal.Begin(), func([]fyne.URI) {
 		called = true
 	})
-	<-sortDone
+	waitFor(t, "the stale sort completion", &sortSignal)
 
 	if called {
 		t.Error("stale sort completion should not invoke its state-writing callback")

@@ -6,42 +6,43 @@ package ui
 import (
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/widget"
+
+	"github.com/frathe/picfetch/internal/completion"
 )
 
 // asyncOpUI is the shape the folder scan (drop.go) and the background
 // reorder (sort.go) share: one cancellable lifecycle, a flag saying whether
-// that lifecycle's request is still meaningfully pending, a per-request done
-// channel the test suite waits on, and the progress widgets shown for as
-// long as it runs. Two instances of one type rather than two parallel sets
-// of fields, so the flag-versus-token bookkeeping lives in one place instead
-// of spread across drop.go, sort.go and keys.go.
+// that lifecycle's request is still meaningfully pending, a per-request
+// completion signal the test suite waits on, and the progress widgets shown
+// for as long as it runs. Two instances of one type rather than two parallel
+// sets of fields, so the flag-versus-token bookkeeping lives in one place
+// instead of spread across drop.go, sort.go and keys.go.
 //
 // Deliberately viewer-independent: what to *do* about a cancelled operation
 // - put the drop zone back, repaint, toast - differs between the two and
 // stays at the call sites.
 //
-// A value field on viewer, never copied: it holds a lifecycle mutex.
+// A value field on viewer, never copied: it holds a lifecycle mutex and a
+// completion mutex.
 type asyncOpUI struct {
 	lifecycle requestLifecycle
 	active    bool
-	done      chan struct{}
+	done      completion.Signal
 	art       *canvas.Image // the scan's Trane-digging art; nil for the sort
 	spinner   *widget.ProgressBarInfinite
 	label     *widget.Label
 }
 
 // begin supersedes any request already in flight, marks the operation
-// active, and installs a fresh done channel. The channel is returned as well
-// as stored so the caller can capture it: a superseded request must still
-// close its own channel without touching the field a newer one now owns.
-func (o *asyncOpUI) begin() (requestToken, chan struct{}) {
+// active, and begins a fresh completion generation. The finisher is
+// returned so the caller can capture it: a superseded request must still
+// finish its own generation without touching the one a newer request now
+// owns - see internal/completion.
+func (o *asyncOpUI) begin() (requestToken, func()) {
 	token := o.lifecycle.begin()
 	o.active = true
 
-	done := make(chan struct{})
-	o.done = done
-
-	return token, done
+	return token, o.done.Begin()
 }
 
 // show reveals the progress widgets. Separate from begin because the scan

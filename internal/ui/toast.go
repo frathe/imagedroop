@@ -9,6 +9,7 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/canvas"
 	"fyne.io/fyne/v2/container"
+	"github.com/frathe/picfetch/internal/completion"
 	"github.com/frathe/picfetch/internal/ui/widgets"
 )
 
@@ -42,11 +43,15 @@ type toast struct {
 	duration time.Duration
 
 	// stop cancels the pending auto-hide goroutine without hiding
-	// anything (closed by the next show call, or by a test's settleToast);
-	// done is closed when that goroutine exits, whichever way it went.
-	// Both are per-show and only ever swapped on the UI goroutine.
-	stop chan struct{}
-	done chan struct{}
+	// anything (closed by the next show call, or by a test's
+	// settleToast). It stays a raw channel: it is a cancel signal, not a
+	// completion, and cancelAutoHide's nil-out is what makes "is one
+	// pending" answerable. hidden is finished when that goroutine exits,
+	// whichever way it went - see internal/completion.
+	//
+	// stop is per-show and only ever swapped on the UI goroutine.
+	stop   chan struct{}
+	hidden completion.Signal
 
 	// repaint forces the whole window to redraw after the card shows or
 	// hides - the viewer's ForceRepaint, injected so this component
@@ -82,8 +87,9 @@ func (t *toast) show(msg string) {
 	t.cancelAutoHide()
 
 	stop := make(chan struct{})
-	done := make(chan struct{})
-	t.stop, t.done = stop, done
+	t.stop = stop
+
+	done := t.hidden.Begin()
 
 	t.text.Text = msg
 	t.text.Refresh()
@@ -91,7 +97,7 @@ func (t *toast) show(msg string) {
 	t.repaint()
 
 	go func() {
-		defer close(done)
+		defer done()
 
 		select {
 		case <-time.After(t.duration):

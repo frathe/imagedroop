@@ -204,8 +204,8 @@ func TestAttemptLoad_ToastsAndFallsBackToAStaticFrameForAnOversizedAnimation(t *
 	if len(v.displayFrames) != 1 {
 		t.Errorf("displayFrames = %d, want 1 - the animation should not have been composited", len(v.displayFrames))
 	}
-	if v.animStopped != nil {
-		t.Error("animStopped is armed, want no animation goroutine for a refused animation")
+	if v.anim.Begun() {
+		t.Error("the animation signal is armed, want no animation goroutine for a refused animation")
 	}
 	if len(v.state.files) != 1 {
 		t.Errorf("files = %v, want the file kept - it is valid, just too big to animate", v.state.files)

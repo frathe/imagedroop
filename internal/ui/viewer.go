@@ -12,6 +12,7 @@ import (
 	"fyne.io/fyne/v2/lang"
 	"fyne.io/fyne/v2/widget"
 
+	"github.com/frathe/picfetch/internal/completion"
 	"github.com/frathe/picfetch/internal/decodepool"
 	"github.com/frathe/picfetch/internal/filesort"
 	"github.com/frathe/picfetch/internal/imaging"
@@ -193,19 +194,24 @@ type viewer struct {
 	// finished, found nothing, or was cancelled. A scan superseded by a
 	// newer drop (stale gen) never touches it, since the newer scan already
 	// owns the flag by the time the stale one's closure would run.
-	// scanOp.done is closed by handleDrop's fyne.Do completion block, once
+	// scanOp.done is finished by handleDrop's fyne.Do completion block, once
 	// that call's generation has finished applying its result. Tests wait
 	// on it directly instead of polling widget state, which otherwise races
 	// with the fyne test driver's synchronous fyne.Do under -race. Each
-	// call replaces it with a fresh channel before starting its async work;
-	// a stale request's own channel still gets closed, it just leaves the
-	// shared state untouched.
+	// call begins a fresh completion generation before starting its async
+	// work; a stale request's own generation still gets finished, it just
+	// leaves the shared state untouched.
 	scanOp asyncOpUI
 
-	// loadDone mirrors scanOp.done: closed by ShowImage's fyne.Do
-	// completion block for the same reason and under the same discipline -
-	// see scanOp's own comment above.
-	loadDone chan struct{}
+	// load is begun by ShowImage and finished by whichever step of that
+	// call's decode/retry chain ends it - see load.go. The whole chain
+	// shares one generation rather than beginning a new one per retry, so
+	// a waiter sees the chain as finished only once it truly settles
+	// instead of racing whichever retry finishes first.
+	// See internal/completion for the contract.
+	//
+	// A value field, never copied: it holds a mutex.
+	load completion.Signal
 
 	// sortOp is the background-reorder progress UI - see asyncop.go's
 	// asyncOpUI for the shape it shares with the scan. sortOp.active is
@@ -224,26 +230,29 @@ type viewer struct {
 	// the still-computing reorder. sortOp.lifecycle owns the cancellable
 	// filesort.Order request, staying separate from loadLifecycle so
 	// reordering cannot stop an unrelated decode, preload, or playing GIF.
-	// sortOp.done is closed by finishSort once that request's reorder has
-	// finished applying (or been discarded as stale), mirroring
-	// scanOp.done/loadDone so tests can wait on it deterministically.
+	// sortOp.done is finished by finishSort once that request's reorder has
+	// finished applying (or been discarded as stale), mirroring v.scanOp.done
+	// and v.load so tests can wait on it deterministically.
 	sortOp asyncOpUI
 
 	// animFrame counts every write to v.img.Image - attemptLoad's initial
-	// frame plus each one animate cycles to afterwards - and animStopped is
-	// closed by animate once its load token is cancelled or stale and
-	// returns. Both exist so tests can synchronize on frame changes and
-	// animation shutdown via atomics and channel-close instead of reading
-	// v.img.Image directly from another goroutine, which would race with
-	// attemptLoad's/animate's writes under the fyne test driver: it runs
-	// fyne.Do synchronously on the calling goroutine rather than marshaling
-	// onto a single UI thread, so even a read sequenced after done/loadDone
-	// closes has no happens-before edge against a concurrently running
-	// animate call - only observing animFrame's new value does. Each
-	// animate call gets its own captured animStopped (see attemptLoad), so
-	// a superseded request's close can't be mistaken for a newer one's.
-	animFrame   atomic.Uint64
-	animStopped chan struct{}
+	// frame plus each one animate cycles to afterwards - and anim is
+	// finished by animate once its load token is cancelled or stale and
+	// it returns. Both exist so tests can synchronize on frame changes
+	// and animation shutdown via an atomic and a completion.Signal
+	// instead of reading v.img.Image directly from another goroutine,
+	// which would race with attemptLoad's/animate's writes under the fyne
+	// test driver: it runs fyne.Do synchronously on the calling goroutine
+	// rather than marshaling onto a single UI thread, so even a read
+	// sequenced after the load signal finishes has no happens-before edge
+	// against a concurrently running animate call - only observing
+	// animFrame's new value does. Each animate call gets its own captured
+	// finisher (see finishLoad), so a superseded request's completion
+	// can't be mistaken for a newer one's.
+	//
+	// anim is a value field, never copied: it holds a mutex.
+	animFrame atomic.Uint64
+	anim      completion.Signal
 
 	// frameAfter is time.After behind a per-viewer seam so a test can
 	// release GIF frames one at a time instead of racing a live timer.
@@ -367,19 +376,28 @@ type viewer struct {
 	// instant-swap view.
 	fadeAnim *fyne.Animation
 
-	// clipboardDone is closed once copyImageToClipboard's background
-	// shell-out goroutine has fully finished, error reporting included -
-	// the same wait-channel discipline scanOp.done/loadDone give tests for
-	// drops and loads. chooserDone is the same for openFileDialog's
-	// native-dialog goroutine, and wallpaperDone for setAsWallpaper's.
-	clipboardDone chan struct{}
-	chooserDone   chan struct{}
-	wallpaperDone chan struct{}
+	// clipboard is begun by copyImageToClipboard (clipboard.go) and
+	// copyGridSelection (batch.go) and finished once that goroutine has
+	// fully run, error reporting included. chooser is the same for the
+	// native file dialog, shared by openFileDialog (openfiles.go) and
+	// exportAs (export.go) - they mean "the native dialog goroutine" and
+	// are never in flight at once, since both panels are app-modal.
+	// See internal/completion for the contract all of these keep.
+	//
+	// Value fields, never copied: each holds a mutex.
+	clipboard completion.Signal
+	chooser   completion.Signal
 
-	// favThumbDone is the same for SyncFavoritePreviews' pass over a
-	// favorite's previews (favthumbs.go). Replaced on every pass, so a test
-	// reads it after triggering one rather than holding one across two.
-	favThumbDone chan struct{}
+	// wallpaper is begun by setAsWallpaper (wallpaper.go) and finished
+	// once the change has fully landed, toast included. favThumb is the
+	// same for SyncFavoritePreviews' pass over a favorite's previews
+	// (favthumbs.go); it is begun on every pass, so a test waits on it
+	// after triggering one rather than holding it across two.
+	// See internal/completion for the contract.
+	//
+	// Value fields, never copied: each holds a mutex.
+	wallpaper completion.Signal
+	favThumb  completion.Signal
 
 	// wallpaperDir is where setAsWallpaper (wallpaper.go) writes the PNG it
 	// hands to the OS - defaultWallpaperDir in production, a t.TempDir() in

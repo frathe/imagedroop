@@ -57,14 +57,13 @@ func (v *viewer) setAsWallpaper() {
 	src, _, _ := v.CurrentFile()
 	img := v.img.Image
 
-	// wallpaperDone mirrors clipboardDone/chooserDone: closed once this
-	// change has fully finished, toast included, so a test can read widget
-	// state without racing the goroutine that writes it.
-	done := make(chan struct{})
-	v.wallpaperDone = done
+	// wallpaper is finished once this change has fully landed, toast
+	// included, so a test can read widget state without racing the
+	// goroutine that writes it.
+	done := v.wallpaper.Begin()
 
 	go func() {
-		defer close(done)
+		defer done()
 
 		v.applyWallpaper(src, img)
 	}()

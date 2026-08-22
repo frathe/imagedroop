@@ -40,15 +40,14 @@ func (v *viewer) copyImageToClipboard() {
 	}
 	data := buf.Bytes()
 
-	// clipboardDone mirrors scanDone/loadDone: closed once this copy's
-	// goroutine has fully finished, error reporting included, so a test
-	// can wait for the whole operation instead of polling widget state
-	// the goroutine may still be writing.
-	done := make(chan struct{})
-	v.clipboardDone = done
+	// clipboard is finished once this copy's goroutine has fully run,
+	// error reporting included, so a test can wait for the whole
+	// operation instead of polling widget state the goroutine may still
+	// be writing.
+	done := v.clipboard.Begin()
 
 	go func() {
-		defer close(done)
+		defer done()
 
 		if err := clipboard.CopyImage(data); err != nil {
 			v.reportClipboardError(err)

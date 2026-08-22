@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
-	"time"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/storage"
@@ -524,16 +523,12 @@ func TestHandleDrop_SupersededScanGoroutineExits(t *testing.T) {
 	}
 
 	v.handleDrop([]fyne.URI{storage.NewFileURI(rootA)})
-	scanDoneA := v.scanOp.done
+	scanA := v.scanOp.done.Current()
 
 	jpegB := uitest.TempJPEGURI(t, "b.jpg", 4, 4, color.White)
 	dropAndWait(t, v, jpegB)
 
-	select {
-	case <-scanDoneA:
-	case <-time.After(5 * time.Second):
-		t.Fatal("superseded scan's goroutine never exited - scanOp.done was never closed")
-	}
+	waitHandle(t, "the superseded scan's goroutine to exit", scanA)
 
 	if len(v.state.files) != 1 || v.state.files[0].String() != jpegB.String() {
 		t.Errorf("files = %v, want only the second drop's file applied", v.state.files)

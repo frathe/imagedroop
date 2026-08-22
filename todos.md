@@ -44,23 +44,38 @@ cell recycling, none of which a general-purpose pool should know about — it
 answers only whether identical work is already in flight, not whether that
 work still matters.
 
+### 5. Unify the test-synchronization channels behind one small type
+
+The viewer's nine ad-hoc `chan struct{}` fields that shared the same
+replace-on-start / close-on-finish / wait-in-test contract — `loadDone`,
+`animStopped`, the scan/sort `asyncOpUI` instances' own `done` field,
+`toast.done`, `clipboardDone`, `chooserDone`, `wallpaperDone`, `favThumbDone`
+— are now one type, `internal/completion.Signal`: `Begin() (done func())`,
+`Wait(ctx) error`, `Begun() bool`, and `Current() Handle` for the one case a
+bare `Wait` can't cover — proving a *specific*, since-superseded
+generation's goroutine actually exited, not just that whatever generation is
+current has finished. Mirrors `internal/decodepool`'s precedent exactly: one
+audited type replacing N hand-rolled copies of the same contract, with the
+type owning the mechanism and each caller keeping its own staleness rules on
+top of it. Nine field-comment restatements of "a superseded generation must
+still finish its own channel" and eleven hand-rolled `select`/`time.After`
+waiters collapsed into the type itself plus one pair of test helpers,
+`waitFor`/`waitHandle` in `harness_test.go`.
+
+Three things deliberately stayed behind, not folded into `Signal`: `animFrame`
+stayed a plain `atomic.Uint64` — it's an N-event counter a test polls (every
+frame `animate` writes one), not a one-shot completion. `toast.stop` stayed a
+raw cancel channel next to the new `toast.hidden` Signal — a cancel is a
+different contract from a completion, and `cancelAutoHide`'s nil-out of
+`stop` is load-bearing: it's what answers "is an auto-hide currently
+pending", which a Signal (monotonic, never un-begins) can't express.
+`vector.pending`, `preloads`, and `grid.Settle`/`slides.Settle` stayed
+N-goroutine `sync.WaitGroup` waits — `Signal` is a one-shot, not a shape that
+generalizes to "wait out however many goroutines happen to be in flight".
+
 ## ACTIVE DEVELOPMENT
 
 ## TODO
-
-### 5. Unify the test-synchronization channels behind one small type
-
-The viewer carries nine ad-hoc `chan struct{}` fields with the same
-replace-on-start / close-on-finish / wait-in-test contract — `scanDone`,
-`loadDone`, `sortDone`, `clipboardDone`, `chooserDone`, `wallpaperDone`,
-`favThumbDone`, `animStopped` (plus `animFrame`'s atomic counter) — each
-re-documenting the same discipline in its field comment, each with its own
-hand-rolled waiter in `harness_test.go`. A tiny `completion` type (e.g.
-`begin() (done func())` + `wait(ctx)`) would collapse nine fields and
-seven waiter helpers into one audited implementation, and make it
-impossible for a new async feature to get the "stale generation must still
-close its own channel" rule subtly wrong — a rule currently enforced only
-by prose. Pairs naturally with the `asyncOpUI` grouping in item 2.
 
 ### Bug: When saving a rotated image the EXIF data is not being preserved
 
@@ -71,6 +86,19 @@ encoding.
 ### Feature: Button in the exit window: Remove Metadata from file
 This would remove the EXIF data from the file. A confirmation dialog would be
 shown.
+
+### Migrate `internal/ui/exifwin`'s `warmDone` onto `internal/completion.Signal`
+
+`internal/ui/exifwin/exifwin.go`'s `warmDone chan struct{}` (field at
+`exifwin.go:84`, set in `startWarm` at `exifwin.go:278`) is a tenth
+hand-rolled copy of the same replace-on-start / close-on-finish / wait-in-test
+contract that item 5's nine fields on `viewer` collapsed into
+`internal/completion.Signal` — `exifwin_test.go:265-270`'s `waitForWarm` still
+hand-rolls the nil-guard-plus-`select` that `waitFor` replaced everywhere
+else. `internal/completion` is viewer-independent (no Fyne types, no
+`fyne.Do`), so `exifwin` could import it with no cycle. It stayed out of item
+5's scope because that plan named only the nine fields on `viewer`. Not
+migrated here — a separate change.
 
 ## not deemed worth implementing (edge cases)
 
