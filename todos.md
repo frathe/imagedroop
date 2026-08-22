@@ -2,7 +2,7 @@
 
 ## Done
 
-## 3. Extract the directory-scan walker out of `handleDrop`
+### 3. Extract the directory-scan walker out of `handleDrop`
 
 The recursive folder scan — symlink-cycle guard, per-scan dedupe, the
 `maxScan` cap, the throttled progress callback — is now `internal/filescan`'s
@@ -12,7 +12,7 @@ UI glue: snapshot merge mode and the cap, show the spinner, call `Images`,
 apply the result. Both drop paths now share the one walker, so the `maxScan`
 cap applies to loose-file drops too, not just recursive folder scans.
 
-## 4. Split `internal/ui/grid/grid.go` into four files
+### 4. Split `internal/ui/grid/grid.go` into four files
 
 `internal/ui/grid/grid.go` (995 lines, one file holding four separable
 concerns) is now four files in the same package, with no API change:
@@ -26,7 +26,7 @@ pipeline. `grid_test.go` split the same four ways plus a new
 declaration moved byte-identical, nothing renamed, no visibility change, no
 exported API change.
 
-## Extract the shared bounded decode pool into `internal/decodepool` (item 4's stretch goal)
+### Extract the shared bounded decode pool into `internal/decodepool` (item 4's stretch goal)
 
 The grid's thumbnail decode pool (`thumbs.go`) and the viewer's preload pool
 (`preloadSem`/`preloading`/`preloadPending`) duplicated the same
@@ -48,7 +48,7 @@ work still matters.
 
 ## TODO
 
-## 5. Unify the test-synchronization channels behind one small type
+### 5. Unify the test-synchronization channels behind one small type
 
 The viewer carries nine ad-hoc `chan struct{}` fields with the same
 replace-on-start / close-on-finish / wait-in-test contract — `scanDone`,
@@ -61,6 +61,16 @@ seven waiter helpers into one audited implementation, and make it
 impossible for a new async feature to get the "stale generation must still
 close its own channel" rule subtly wrong — a rule currently enforced only
 by prose. Pairs naturally with the `asyncOpUI` grouping in item 2.
+
+### Bug: When saving a rotated image the EXIF data is not being preserved
+
+When saving a rotated image, the EXIF data is not being preserved. This is
+because the `image/jpeg` package does not preserve EXIF data when decoding and
+encoding.
+
+### Feature: Button in the exit window: Remove Metadata from file
+This would remove the EXIF data from the file. A confirmation dialog would be
+shown.
 
 ## not deemed worth implementing (edge cases)
 
