@@ -16,6 +16,7 @@ import (
 	"fyne.io/fyne/v2/test"
 
 	"github.com/frathe/picfetch/internal/favstore"
+	"github.com/frathe/picfetch/internal/filescan"
 	"github.com/frathe/picfetch/internal/filesort"
 	"github.com/frathe/picfetch/internal/imaging"
 	"github.com/frathe/picfetch/internal/preferences"
@@ -170,7 +171,7 @@ func TestStartup_OmittedPreferencesUseShippedDefaults(t *testing.T) {
 	if v.slides.Shuffle() {
 		t.Error("slides.Shuffle() = true, want false (the shipped default)")
 	}
-	if got, want := v.MaxScan(), defaultMaxScannedFiles; got != want {
+	if got, want := v.MaxScan(), filescan.DefaultMax; got != want {
 		t.Errorf("MaxScan() = %d, want %d (the shipped default)", got, want)
 	}
 	if got, want := v.MaxWindowWidth(), float32(defaultMaxWindowWidth); got != want {
@@ -198,7 +199,7 @@ func TestStartup_OmittedPreferencesUseShippedDefaults(t *testing.T) {
 
 func TestNormalizePreferenceDefaults(t *testing.T) {
 	defaults := preferences.State{
-		MaxScanFiles:    defaultMaxScannedFiles,
+		MaxScanFiles:    filescan.DefaultMax,
 		MaxWindowWidth:  defaultMaxWindowWidth,
 		MaxWindowHeight: defaultMaxWindowHeight,
 		MaxImageCacheMB: defaultMaxImageCacheMB,
@@ -234,7 +235,7 @@ func TestNormalizePreferenceDefaults(t *testing.T) {
 		},
 	}
 	sentinelsWithDefaults := sentinels
-	sentinelsWithDefaults.MaxScanFiles = defaultMaxScannedFiles
+	sentinelsWithDefaults.MaxScanFiles = filescan.DefaultMax
 	sentinelsWithDefaults.MaxWindowWidth = defaultMaxWindowWidth
 	sentinelsWithDefaults.MaxWindowHeight = defaultMaxWindowHeight
 	sentinelsWithDefaults.MaxImageCacheMB = defaultMaxImageCacheMB

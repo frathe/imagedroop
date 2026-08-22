@@ -7,6 +7,7 @@ import (
 
 	"fyne.io/fyne/v2"
 
+	"github.com/frathe/picfetch/internal/filescan"
 	"github.com/frathe/picfetch/internal/filesort"
 	"github.com/frathe/picfetch/internal/uitest"
 )
@@ -135,7 +136,7 @@ func TestStaleFileStateCompletionsDoNotOverwriteNewerState(t *testing.T) {
 	staleScanToken := v.scanOp.lifecycle.begin()
 	v.scanOp.lifecycle.begin()
 	scanDone := make(chan struct{})
-	v.applyScanResult(staleScanToken, false, stale, stale, false, scanDone)
+	v.applyScanResult(staleScanToken, false, stale, stale, false, filescan.DefaultMax, scanDone)
 	<-scanDone
 	assertEquivalentFileSlices(t, v)
 	if got := namesOfURIs(v.state.files); !slices.Equal(got, []string{"current.jpg"}) {

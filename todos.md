@@ -2,26 +2,19 @@
 
 ## Done
 
+## 3. Extract the directory-scan walker out of `handleDrop`
+
+The recursive folder scan — symlink-cycle guard, per-scan dedupe, the
+`maxScan` cap, the throttled progress callback — is now `internal/filescan`'s
+`Images(ctx, uris, max, progress)`, tested with just `test.NewApp()` in
+`TestMain` instead of a full viewer. `handleDrop` (`internal/ui/drop.go`) is
+UI glue: snapshot merge mode and the cap, show the spinner, call `Images`,
+apply the result. Both drop paths now share the one walker, so the `maxScan`
+cap applies to loose-file drops too, not just recursive folder scans.
+
 ## ACTIVE DEVELOPMENT
 
 ## TODO
-
-## 3. Extract the directory-scan walker out of `handleDrop` (`internal/ui/drop.go:94-271`)
-
-The recursive folder scan — symlink-cycle guard (`visitedDirs`), per-scan
-dedupe (`seenFiles`), the `maxScan` cap, the throttled progress callback —
-is an anonymous-closure state machine inside a goroutine inside a 180-line
-viewer method. Its logic is pure (URIs in, image URIs + truncated flag
-out) but its tests (`TestHandleDrop_SymlinkCycleDoesNotHang`,
-`_DedupesOverlappingDirectories`, `_CapsFileCountForLargeTrees`, …) each
-need a full viewer, a Fyne test app, and the drain machinery.
-
-Extract a `scanImages(ctx, uris, max, progress func(n int)) ([]fyne.URI,
-bool)` — as a package-local file or a small `internal/scan` package —
-leaving `handleDrop` as UI glue: snapshot merge mode, show spinner, call
-walker, apply result. This also removes the duplication between the
-no-directories fast path and the goroutine path, which today each carry
-their own `seen` map + `IsSupportedImage` + `realPathOf` dedupe loop.
 
 ## not deemed worth implementing (edge cases)
 

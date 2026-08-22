@@ -6,6 +6,7 @@ package ui
 import (
 	"fyne.io/fyne/v2"
 
+	"github.com/frathe/picfetch/internal/filescan"
 	"github.com/frathe/picfetch/internal/preferences"
 	"github.com/frathe/picfetch/internal/session"
 )
@@ -41,7 +42,7 @@ func buildStartupViewer(application fyne.App) (*viewer, fyne.Window) {
 // window's built-in placement and size.
 func normalizePreferenceDefaults(prefs preferences.State) preferences.State {
 	if prefs.MaxScanFiles <= 0 {
-		prefs.MaxScanFiles = defaultMaxScannedFiles
+		prefs.MaxScanFiles = filescan.DefaultMax
 	}
 	if prefs.MaxWindowWidth <= 0 {
 		prefs.MaxWindowWidth = defaultMaxWindowWidth

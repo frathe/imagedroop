@@ -12,24 +12,27 @@ import (
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/storage"
 
+	"github.com/frathe/picfetch/internal/filescan"
 	"github.com/frathe/picfetch/internal/uitest"
 )
 
 // This file covers drop.go: the path from a dropped or opened set of paths
-// to a loaded file set. That includes handleDrop's synchronous behaviour,
-// the recursive folder scan and its three guards - a symlink back to an
-// ancestor directory would loop forever without tracking each directory's
-// real, resolved path; the same folder reached via two dropped paths must
-// not double-count its images; and maxScan stops a runaway tree before it
-// stalls the scan goroutine - merge vs. replace (the M key toggles whether a
-// second drop adds to the current set or starts over, and a merge that
-// finds nothing supported must leave the existing set untouched), and scan
-// cancellation: Escape during an in-flight scan cancels it rather than
-// resetting the session, clearToDropzone must finish the scan overlay the
-// same way invalidateSort finishes a reorder (reset and ShowEmptyStateError
-// have no cancelScan of their own), and a superseded scan's goroutine must
-// notice it's stale and stop touching the filesystem instead of racing a
-// large tree to completion for a result that will be discarded.
+// to a loaded file set, one layer above the walk itself. The recursive
+// scan's own guards - the symlink-cycle visited-dirs check, per-scan
+// dedupe across overlapping or duplicate dropped paths, and the maxScan cap
+// - now live in internal/filescan, provable there with plain, fast tests
+// that need no viewer; see internal/filescan/filescan_test.go. What's left
+// here is UI glue: handleDrop's synchronous behaviour, merge vs. replace
+// (the M key toggles whether a second drop adds to the current set or
+// starts over, and a merge that finds nothing supported must leave the
+// existing set untouched), scan cancellation (Escape during an in-flight
+// scan cancels it rather than resetting the session, clearToDropzone must
+// finish the scan overlay the same way invalidateSort finishes a reorder -
+// reset and ShowEmptyStateError have no cancelScan of their own - and a
+// superseded scan's goroutine must notice it's stale and stop touching the
+// filesystem instead of racing a large tree to completion for a result that
+// will be discarded), and the drop-to-UI wiring itself (a folder drop's
+// background scan must actually land its files and hide the drop zone).
 //
 // toggleMergeMode and SetMergeMode themselves live in viewer.go, not
 // drop.go, but their tests belong here: what they assert is entirely about
@@ -268,8 +271,16 @@ func TestMergeModeGetterSetter(t *testing.T) {
 	}
 }
 
-// --- directory recursion and the scan cap -----------------------------------
+// --- the async scan path and its truncation toast ---------------------------
 
+// TestHandleDrop_RecursesIntoNestedDirectories is the only test proving the
+// *asynchronous* drop path - the background-goroutine branch of handleDrop -
+// actually reaches the UI: files loaded, dropzone hidden. The walker half of
+// this scenario (recursing into nested directories, and filtering the
+// .DS_Store clutter that shouldn't be opened to find out it isn't an image)
+// is what TestImages_RecursesIntoNestedDirectories in internal/filescan
+// covers now; what still earns this one its keep is the goroutine-to-UI
+// wiring, not the walk itself.
 func TestHandleDrop_RecursesIntoNestedDirectories(t *testing.T) {
 	v := newTestViewer(t)
 
@@ -301,34 +312,14 @@ func TestHandleDrop_RecursesIntoNestedDirectories(t *testing.T) {
 	}
 }
 
-// TestHandleDrop_SymlinkCycleDoesNotHang guards the visitedDirs check in
-// handleDrop: a symlink back to an ancestor directory turns the recursive
-// expansion into a cycle (listing root/loop lists root again, including
-// root/loop, forever) unless each directory's real, symlink-resolved path is
-// tracked and a repeat visit is skipped.
-func TestHandleDrop_SymlinkCycleDoesNotHang(t *testing.T) {
-	v := newTestViewer(t)
-
-	root := t.TempDir()
-	if err := os.WriteFile(filepath.Join(root, "photo.jpg"), uitest.EncodeJPEG(t, 4, 4, color.White), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.Symlink(root, filepath.Join(root, "loop")); err != nil {
-		t.Skipf("symlinks not supported on this filesystem: %v", err)
-	}
-
-	dropAndWait(t, v, storage.NewFileURI(root))
-
-	if len(v.state.files) != 1 {
-		t.Fatalf("files = %v, want the 1 real photo, not one entry per pass through the symlink cycle", v.state.files)
-	}
-}
-
-// TestHandleDrop_CapsFileCountForLargeTrees exercises maxScan, the safety
-// valve that stops a recursive scan once it's gathered enough images -
-// shrunk here so the test doesn't need to create tens of thousands of temp
-// files to hit it. A per-viewer field, so no global to save and restore.
-func TestHandleDrop_CapsFileCountForLargeTrees(t *testing.T) {
+// TestHandleDrop_TruncatedScanToastNamesTheCap covers the UI half of a
+// truncated scan: that it surfaces to the user as a toast naming the cap it
+// stopped at. It was TestHandleDrop_CapsFileCountForLargeTrees and asserted
+// the cap itself; TestImages_CapsAtMax in internal/filescan owns that now,
+// without needing a viewer, so this one is renamed for what it still
+// asserts rather than left with a name promising a file count it no longer
+// checks.
+func TestHandleDrop_TruncatedScanToastNamesTheCap(t *testing.T) {
 	v := newTestViewer(t)
 	v.settings.maxScan = 3
 
@@ -341,10 +332,6 @@ func TestHandleDrop_CapsFileCountForLargeTrees(t *testing.T) {
 	}
 
 	dropAndWait(t, v, storage.NewFileURI(root))
-
-	if len(v.state.files) != 3 {
-		t.Fatalf("files = %d, want the scan to stop at maxScan (3)", len(v.state.files))
-	}
 
 	if !v.toast.card.Visible() {
 		t.Fatal("want a toast warning that the scan was truncated")
@@ -362,8 +349,8 @@ func TestHandleDrop_CapsFileCountForLargeTrees(t *testing.T) {
 func TestMaxScanGetterSetter(t *testing.T) {
 	v := newTestViewer(t)
 
-	if got := v.MaxScan(); got != defaultMaxScannedFiles {
-		t.Errorf("MaxScan() = %d, want the shipped default %d", got, defaultMaxScannedFiles)
+	if got := v.MaxScan(); got != filescan.DefaultMax {
+		t.Errorf("MaxScan() = %d, want the shipped default %d", got, filescan.DefaultMax)
 	}
 
 	v.SetMaxScan(5)
@@ -389,7 +376,7 @@ func TestSetMaxScan_FloorsAtOne(t *testing.T) {
 	}
 }
 
-// --- scan cancellation and dedupe -------------------------------------------
+// --- scan cancellation ------------------------------------------------------
 
 // TestCancelScan_NoOpWhenNotScanning covers the guard at the top of
 // cancelScan: calling it with no scan in flight (the common case - Escape's
@@ -578,46 +565,4 @@ func TestNavigationDoesNotInvalidateScan(t *testing.T) {
 
 	v.cancelScan()
 	settleToast(t, v)
-}
-
-// TestHandleDrop_DedupesOverlappingDirectories drops a folder together with
-// one of its own subfolders in the same call - a folder tree reached via two
-// different dropped paths - and checks the subfolder's photo isn't counted
-// twice in the resulting set.
-func TestHandleDrop_DedupesOverlappingDirectories(t *testing.T) {
-	v := newTestViewer(t)
-
-	root := t.TempDir()
-	sub := filepath.Join(root, "sub")
-	if err := os.MkdirAll(sub, 0o755); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(root, "top.jpg"), uitest.EncodeJPEG(t, 4, 4, color.White), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(filepath.Join(sub, "nested.jpg"), uitest.EncodeJPEG(t, 4, 4, color.White), 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	dropAndWait(t, v, storage.NewFileURI(root), storage.NewFileURI(sub))
-
-	if len(v.state.files) != 2 {
-		t.Fatalf("files = %v, want top.jpg and nested.jpg once each, not nested.jpg twice from the overlapping drop", v.state.files)
-	}
-}
-
-// TestHandleDrop_DedupesDuplicateURIsInDirectDrop covers the fast (no
-// directories) path in handleDrop: passing the same file twice in one drop -
-// which os.Args launch or a native chooser's output could in principle
-// produce - should not add it to v.state.files twice.
-func TestHandleDrop_DedupesDuplicateURIsInDirectDrop(t *testing.T) {
-	v := newTestViewer(t)
-
-	photo := uitest.TempJPEGURI(t, "photo.jpg", 4, 4, color.White)
-
-	dropAndWait(t, v, photo, photo)
-
-	if len(v.state.files) != 1 {
-		t.Fatalf("files = %v, want the duplicate URI collapsed to a single entry", v.state.files)
-	}
 }

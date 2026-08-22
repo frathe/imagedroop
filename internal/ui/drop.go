@@ -1,16 +1,15 @@
-// Drop handling and the recursive folder scan.
+// Drop handling: the recursive folder scan itself lives in internal/filescan.
 
 package ui
 
 import (
 	"fmt"
-	"path/filepath"
 
 	"fyne.io/fyne/v2"
 	"fyne.io/fyne/v2/lang"
 	"fyne.io/fyne/v2/storage"
 
-	"github.com/frathe/picfetch/internal/imaging"
+	"github.com/frathe/picfetch/internal/filescan"
 )
 
 // cancelScan aborts a scan in progress (Escape while v.scanOp.active is true).
@@ -37,28 +36,6 @@ func (v *viewer) cancelScan() {
 	v.ShowToast(lang.L("cancelled scanning"))
 }
 
-// realPathOf resolves u's filesystem path through any symlinks, falling
-// back to the URI's own path if that fails (a broken symlink, or a
-// filesystem race between the scan and something else touching the same
-// path) so callers always have something to key a visited-set on.
-func realPathOf(u fyne.URI) string {
-	symlinkPath, err := filepath.EvalSymlinks(u.Path())
-	if err != nil {
-		return u.Path()
-	}
-	return symlinkPath
-}
-
-// defaultMaxScannedFiles caps how many images a single recursive folder
-// scan will gather (the viewer's settings.maxScan field, which tests shrink
-// per-viewer instead of creating hundreds of thousands of temp files to
-// exercise the cap). It's a safety valve for pathological trees (a runaway
-// symlink cycle EvalSymlinks doesn't resolve to a repeat, or a genuinely
-// enormous archive) - past this, stat-ing and holding URIs would stall the
-// scan goroutine and bloat v.state.files well past anything the viewer or its
-// sort/preload paths are meant to handle.
-const defaultMaxScannedFiles = 200_000
-
 // MaxScan is the current recursive-folder-scan cap - the settings window's
 // getter for SetMaxScan below.
 func (v *viewer) MaxScan() int {
@@ -67,10 +44,12 @@ func (v *viewer) MaxScan() int {
 
 // SetMaxScan sets the recursive-folder-scan cap directly - the settings
 // window's binding. Floored at 1 rather than 0, since a 0 cap would stop a
-// scan before it gathered anything at all - not a "no limit" the rest of
-// the scan path (n >= v.settings.maxScan below) is written to understand.
-// Applies to the next scan; one already in flight keeps running under
-// whatever cap it started with.
+// scan before it gathered anything at all - not a "no limit" filescan.Images
+// is written to understand (it floors again itself, defence in depth rather
+// than a replacement for this floor). Applies to the next scan; one already
+// in flight keeps running under whatever cap it started with - handleDrop
+// snapshots v.settings.maxScan once, before starting the scan, so this
+// setter can't retroactively change a scan that's already running.
 func (v *viewer) SetMaxScan(n int) {
 	if n < 1 {
 		n = 1
@@ -119,6 +98,13 @@ func (v *viewer) handleDrop(uris []fyne.URI) {
 	v.emptyStateArt.Hide()
 	v.ForceRepaint()
 
+	// Snapshotted once, here, rather than read live from v.settings.maxScan
+	// by whichever path runs below: the settings window can write that field
+	// while a scan is in flight, and both handleDrop's goroutine and its
+	// synchronous fast path need a stable cap for the lifetime of this one
+	// scan. See SetMaxScan's doc comment.
+	maxScan := v.settings.maxScan
+
 	// Fast path for drops that contain no directories – keep tests synchronous
 	// and avoid spawning a goroutine for simple file drops.
 	hasDirs := false
@@ -129,132 +115,33 @@ func (v *viewer) handleDrop(uris []fyne.URI) {
 		}
 	}
 	if !hasDirs {
-		var images []fyne.URI
-		seen := make(map[string]bool)
-		for _, u := range uris {
-			if !imaging.IsSupportedImage(u) {
-				continue
-			}
-			pathOf := realPathOf(u)
-			if seen[pathOf] {
-				continue
-			}
-			seen[pathOf] = true
-			images = append(images, u)
-		}
+		// nil progress: this path is synchronous and instantaneous, so
+		// there's nothing to show, and it avoids calling fyne.Do from the
+		// UI goroutine.
+		images, truncated := filescan.Images(token.context(), uris, maxScan, nil)
 		fyne.Do(func() {
-			v.applyScanResult(token, merging, uris, images, false, scanDone)
+			v.applyScanResult(token, merging, uris, images, truncated, maxScan, scanDone)
 		})
 		return
 	}
 
 	go func() {
-		var images []fyne.URI
-		dirs := make([]fyne.URI, 0, len(uris))
-		count := 0
-		truncated := false
-
-		// visitedDirs guards against symlink cycles (e.g. a symlink inside a
-		// dropped folder pointing back at one of its own ancestors), which
-		// would otherwise send this scan into an unbounded loop: each visit
-		// resolves the directory to its real, symlink-free path and only
-		// descends into a given real path once. A plain map of dropped URIs
-		// wouldn't catch this - a cycle keeps producing new, ever-longer
-		// URIs (a/link, a/link/link, ...) that all resolve to the same real
-		// directory.
-		visitedDirs := make(map[string]bool)
-		visitDir := func(u fyne.URI) bool {
-			pathOf := realPathOf(u)
-			if visitedDirs[pathOf] {
-				return false
-			}
-			visitedDirs[pathOf] = true
-			return true
-		}
-
-		// seenFiles dedupes images within this one scan, keyed the same way
-		// as visitedDirs: dropping a folder together with one of its own
-		// subfolders, or a symlinked file reachable via two different
-		// directory paths, would otherwise add the same picture to v.state.files
-		// twice. This is scoped to a single handleDrop call, not across
-		// drops - merge mode has always allowed re-merging a file that's
-		// already loaded (see RemoveFile's comment on why it removes by
-		// index rather than URI match), and that's left alone here.
-		seenFiles := make(map[string]bool)
-
-		process := func(u fyne.URI) {
-			if truncated || !token.current() {
-				return
-			}
-
-			// Checked before IsSupportedImage so directories - which have no
-			// extension and would otherwise fall through to MimeType()'s
-			// open-and-sniff fallback - are recognized via a cheap stat
-			// instead of a wasted file open.
-			if canList, err := storage.CanList(u); err == nil && canList {
-				if visitDir(u) {
-					dirs = append(dirs, u)
-				}
-				return
-			}
-
-			if imaging.IsSupportedImage(u) {
-				pathOf := realPathOf(u)
-				if seenFiles[pathOf] {
+		// token.context() is what lets a superseded scan (a newer drop, or
+		// an explicit cancel - see cancelScan) stop walking the tree instead
+		// of racing storage.List calls to completion for a result nobody
+		// will see; the trailing fyne.Do below re-checks the token and would
+		// discard the result anyway.
+		images, truncated := filescan.Images(token.context(), uris, maxScan, func(n int) {
+			fyne.Do(func() {
+				if !token.current() {
 					return
 				}
-				seenFiles[pathOf] = true
-
-				images = append(images, u)
-				count++
-				n := count
-				if n >= v.settings.maxScan {
-					truncated = true
-				}
-				// update counter periodically to avoid flooding the UI thread
-				if n == 1 || n%10 == 0 || truncated {
-					fyne.Do(func() {
-						if !token.current() {
-							return
-						}
-						v.scanOp.label.SetText(fmt.Sprintf(lang.L("Scanning... %d images"), n))
-					})
-				}
-			}
-		}
-
-		for _, u := range uris {
-			process(u)
-		}
-
-		for len(dirs) > 0 && !truncated {
-			// A newer drop (or an explicit cancel - see cancelScan) superseded
-			// this scan's token: stop walking the tree instead of
-			// racing storage.List calls to completion for a result nobody
-			// will see. The trailing fyne.Do below re-checks the token and would
-			// discard the result anyway; bailing here just stops the wasted
-			// I/O sooner. scanDone is still closed directly, skipping
-			// fyne.Do, to honor its documented contract of always closing
-			// for a stale generation - even though nothing currently waits
-			// on this particular (already-overwritten) channel value.
-			if !token.current() {
-				token.cancelContext()
-				close(scanDone)
-				return
-			}
-			d := dirs[len(dirs)-1]
-			dirs = dirs[:len(dirs)-1]
-			children, err := storage.List(d)
-			if err != nil {
-				continue
-			}
-			for _, child := range children {
-				process(child)
-			}
-		}
+				v.scanOp.label.SetText(fmt.Sprintf(lang.L("Scanning... %d images"), n))
+			})
+		})
 
 		fyne.Do(func() {
-			v.applyScanResult(token, merging, uris, images, truncated, scanDone)
+			v.applyScanResult(token, merging, uris, images, truncated, maxScan, scanDone)
 		})
 	}()
 }
@@ -263,8 +150,11 @@ func (v *viewer) handleDrop(uris []fyne.URI) {
 // paths - the synchronous no-directories fast path and the folder-scan
 // goroutine. It must run on the UI goroutine (both callers wrap it in
 // fyne.Do) and always closes scanDone, honoring that channel's contract
-// even when a newer generation has made this result stale.
-func (v *viewer) applyScanResult(token requestToken, merging bool, uris, images []fyne.URI, truncated bool, scanDone chan struct{}) {
+// even when a newer generation has made this result stale. maxScan is the
+// cap the scan actually ran under (handleDrop's snapshot), so the
+// truncation toast below reports it accurately even if the settings window
+// has since changed v.settings.maxScan.
+func (v *viewer) applyScanResult(token requestToken, merging bool, uris, images []fyne.URI, truncated bool, maxScan int, scanDone chan struct{}) {
 	defer close(scanDone)
 	defer token.cancelContext()
 
@@ -298,7 +188,7 @@ func (v *viewer) applyScanResult(token requestToken, merging bool, uris, images 
 	v.win.RequestFocus()
 
 	if truncated {
-		v.ShowToast(fmt.Sprintf(lang.L("stopped scanning after %d images - the dropped folder tree is very large"), v.settings.maxScan))
+		v.ShowToast(fmt.Sprintf(lang.L("stopped scanning after %d images - the dropped folder tree is very large"), maxScan))
 	}
 
 	// Deliberately last: applyScannedFiles hands the reorder to a background
